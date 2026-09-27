@@ -37,7 +37,7 @@ własny VPN (nie serwery WD).
 
 ## Etap 2 — dostęp lokalny (w domu)
 
-**PC (Windows):** Eksplorator → *Ten komputer* → *Mapuj dysk sieciowy* →
+**PC (Windows):** automatycznie — `windows/mapuj-dysk.ps1` (instrukcja w pliku). Ręcznie: Eksplorator → *Ten komputer* → *Mapuj dysk sieciowy* →
 `\\192.168.1.50\NazwaUdziału` (lub `\\WDMYCLOUD\NazwaUdziału`),
 zaznacz *Połącz ponownie przy logowaniu*.
 
