@@ -48,6 +48,22 @@ Filmy: *VLC for Android* → Przeglądaj → Sieć lokalna.
 
 ## Etap 3 — dostęp zdalny (poza domem) — później
 
+### Wariant tymczasowy (działa, gdy PC jest włączony) — AKTUALNY
+
+Sieć: światłowód → Huawei HG8245H (ONT operatora, brak dostępu) → TP-Link
+AX3000 → dysk + PC. Tailscale omija NAT i nie wymaga otwierania portów.
+
+1. Załóż konto na <https://tailscale.com> (np. logowanie przez Google).
+2. **PC:** zainstaluj Tailscale for Windows, zaloguj się. Następnie PowerShell
+   jako Administrator: `windows/tailscale-podsiec.ps1`
+   (udostępnia sieć domową i wyłącza usypianie PC przy zasilaniu).
+3. **Panel Tailscale** (<https://login.tailscale.com/admin/machines>) → przy PC:
+   *Edit route settings* → zatwierdź podsieć; *Disable key expiry*.
+4. **Android:** aplikacja Tailscale (to samo konto) → włącz; w menedżerze plików
+   serwer SMB pod lokalnym IP dysku — działa także na LTE poza domem.
+
+### Wariant docelowy (24/7)
+
 Wymaga czegoś, co działa w domu 24/7. Opcje, od najprostszej:
 
 1. **VPN w routerze** — jeśli router ma serwer WireGuard/OpenVPN
