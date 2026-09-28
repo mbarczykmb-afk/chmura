@@ -90,7 +90,9 @@ Gotowy **etap 1: skaner + raport** (niczego nie przenosi ani nie zmienia).
 2. Rozpakuj i kliknij dwukrotnie **Katalogator.exe**. Przy pierwszym uruchomieniu
    Windows SmartScreen może ostrzec o nieznanym wydawcy → *Więcej informacji* →
    *Uruchom mimo to*.
-3. Otworzy się okno programu: dodaj foldery → *Skanuj* → raport.
+3. Otworzy się okno programu. W sekcji *Co porządkujemy?* rozwiń dysk
+   (np. `Z:` — dyski sieciowe mają ikonę 🌐) i zaznacz ✓ foldery; *Dokąd?* →
+   *Wybierz folder…* (można utworzyć nowy) → *Skanuj* → raport.
 4. **Duplikaty:** *Szukaj duplikatów* → zakładka *Duplikaty* → w każdej grupie
    zaznacz plik, który zostaje → *Odłóż zaznaczone kopie*. Kopie trafiają do
    folderu `_Duplikaty_Katalogator` (nic nie jest kasowane; *Cofnij* przywraca).

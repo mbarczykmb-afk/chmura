@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, duplikaty, raport, skaner
+from . import __version__, duplikaty, dyski, raport, skaner
 
 UI = Path(__file__).parent / "ui"
 BEZ_PINGU_ZAMKNIJ_PO = 150  # s; przeglądarka spowalnia timery w zminimalizowanym oknie
@@ -52,8 +52,9 @@ class Stan:
         self.ostatni_ping = time.time()
 
     def zapisz_ustawienia(self, dane: dict) -> None:
-        zrodla = [str(z).strip() for z in dane.get("zrodla", []) if str(z).strip()]
-        self.ustawienia = {"zrodla": list(dict.fromkeys(zrodla)), "cel": str(dane.get("cel", "")).strip()}
+        zrodla = dyski.normalizuj_wybor([str(z) for z in dane.get("zrodla", [])])
+        cel = str(dane.get("cel", "")).strip()
+        self.ustawienia = {"zrodla": zrodla, "cel": os.path.normpath(cel) if cel else ""}
         self.plik_ustawien.write_text(json.dumps(self.ustawienia, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def ma_wyniki(self) -> bool:
@@ -74,7 +75,7 @@ class Stan:
         with self.blokada:
             skan, dup = dict(self.skan), dict(self.dup)
         ma = self.ma_wyniki()
-        dane = {"wersja": __version__, **self.ustawienia, "skan": skan, "dup": dup, "ma_wyniki": ma,
+        dane = {"wersja": __version__, "windows": dyski.WINDOWS, "sep": os.sep, **self.ustawienia, "skan": skan, "dup": dup, "ma_wyniki": ma,
                 "duplikaty": None, "do_cofniecia": None}
         if ma:
             db = self.db()
@@ -93,8 +94,9 @@ class Stan:
     # --- skan w tle ----------------------------------------------------
     def rozpocznij_skan(self) -> str | None:
         foldery = list(self.ustawienia["zrodla"])
-        if self.ustawienia["cel"]:
-            foldery.append(self.ustawienia["cel"])  # miejsce docelowe też skanujemy
+        cel = self.ustawienia["cel"]
+        if cel and not any(dyski.zawiera(z, cel) for z in foldery):
+            foldery.append(cel)  # miejsce docelowe też skanujemy (o ile nie leży w źródle)
         if not foldery:
             return "Najpierw wybierz folder do uporządkowania."
         brak = [f for f in foldery if not os.path.isdir(f)]
@@ -223,24 +225,6 @@ class Stan:
             db.close()
 
 
-def wybierz_folder(poczatkowy: str = "") -> str | None:
-    """Systemowe okno wyboru folderu (działa na tym samym komputerze co aplikacja)."""
-    try:
-        import tkinter
-        from tkinter import filedialog
-    except ImportError:
-        return None
-    okno = tkinter.Tk()
-    okno.withdraw()
-    okno.attributes("-topmost", True)
-    try:
-        wynik = filedialog.askdirectory(parent=okno, initialdir=poczatkowy or None,
-                                        title="Wybierz folder", mustexist=True)
-    finally:
-        okno.destroy()
-    return os.path.normpath(wynik) if wynik else None
-
-
 def _handler(stan: Stan, token: str, zamknij):
     class H(BaseHTTPRequestHandler):
         server_version = "Katalogator"
@@ -283,6 +267,10 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij(stan.stan())
             if u.path == "/raport":
                 return self._wyslij(stan.raport_html(), "text/html; charset=utf-8")
+            if u.path == "/api/dyski":
+                return self._wyslij({"dyski": dyski.lista_dyskow()})
+            if u.path == "/api/foldery":
+                return self._wyslij(dyski.podfoldery(q.get("sciezka", [""])[0]))
             if u.path == "/api/duplikaty":
                 try:
                     od, ile = int(q.get("od", ["0"])[0]), min(int(q.get("ile", ["40"])[0]), 200)
@@ -308,8 +296,9 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/ustawienia":
                 stan.zapisz_ustawienia(dane)
                 return self._wyslij(stan.stan())
-            if u.path == "/api/wybierz-folder":
-                return self._wyslij({"folder": wybierz_folder(dane.get("od", ""))})
+            if u.path == "/api/nowy-folder":
+                w = dyski.nowy_folder(str(dane.get("w", "")), str(dane.get("nazwa", "")))
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/skanuj":
                 blad = stan.rozpocznij_skan()
                 return self._wyslij({"blad": blad} if blad else stan.stan(),

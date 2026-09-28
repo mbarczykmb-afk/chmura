@@ -28,7 +28,7 @@ header .odstep{flex:1}
 .krok.akt{background:var(--akc-miekki);color:var(--fg)} .krok.akt b{background:var(--akc);color:var(--akc-fg)}
 .krok.gotowy b{background:var(--ok);color:#fff}
 .krok.wkrotce{opacity:.55}
-main{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:20px;padding:16px 24px 24px;align-items:start}
+main{display:grid;grid-template-columns:minmax(340px,460px) 1fr;gap:20px;padding:16px 24px 24px;align-items:start}
 @media (max-width:900px){main{grid-template-columns:1fr}}
 section{background:var(--panel);border:1px solid var(--lin);border-radius:12px;padding:18px;box-shadow:var(--cien)}
 section+section{margin-top:16px}
@@ -63,6 +63,26 @@ button.ikonowy:hover{color:var(--blad)}
 .raport .zachęta{flex:1;display:grid;place-items:center;text-align:center;color:var(--mut);padding:40px}
 .raport .zachęta strong{display:block;color:var(--fg);font-size:16px;margin-bottom:6px}
 .wkrotce-box{border-style:dashed;color:var(--mut);font-size:13px}
+.drzewo{border:1px solid var(--lin);border-radius:8px;background:var(--bg);height:300px;overflow:auto;padding:4px 0;font-size:13px;resize:vertical}
+.wezel-w{display:flex;align-items:center;gap:6px;padding:3px 8px 3px 4px;white-space:nowrap;border-radius:4px}
+.wezel-w:hover{background:var(--panel)}
+.wezel-w.wybrany{background:var(--akc-miekki)}
+.wezel-w .nazwa{overflow:hidden;text-overflow:ellipsis;cursor:pointer;user-select:none}
+.wezel-w .info{color:var(--mut);font-size:12px;margin-left:auto;padding-left:12px;overflow:hidden;text-overflow:ellipsis}
+.wezel-w.pusty{color:var(--mut);font-style:italic;padding-left:30px}
+.wezel-w input{margin:0;cursor:pointer}
+.strz{width:18px;height:18px;border:none;background:none;padding:0;color:var(--mut);font-size:11px;flex:none}
+.strz:hover{color:var(--fg)}
+.dzieci{padding-left:16px}
+.wybrane-nagl{margin:12px 0 6px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+details.reczne{margin-top:10px;font-size:13px;color:var(--mut)}
+details.reczne summary{cursor:pointer;margin-bottom:6px}
+.nakladka{position:fixed;inset:0;background:rgba(0,0,0,.4);display:grid;place-items:center;z-index:10}
+.okno{background:var(--panel);border:1px solid var(--lin);border-radius:12px;width:min(680px,92vw);height:min(640px,88vh);display:flex;flex-direction:column;gap:10px;padding:18px}
+.okno .drzewo{flex:1;height:auto;resize:none}
+.okno .dol{display:flex;gap:8px;align-items:center}
+.okno .dol .wybor{flex:1;font-size:13px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.okno .dol .glowny{width:auto}
 .zakladki{display:flex;gap:4px;flex:1}
 .zakladka{border:none;background:none;padding:6px 12px;border-radius:8px;color:var(--mut);font-weight:600}
 .zakladka.akt{background:var(--akc-miekki);color:var(--fg)}
@@ -116,26 +136,29 @@ button.ikonowy:hover{color:var(--blad)}
   <div>
     <section>
       <h2>Co porządkujemy?</h2>
-      <p class="opis">Foldery ze zdjęciami, filmami, muzyką i plikami — np. zmapowany dysk <code>Z:\</code>.</p>
+      <p class="opis">Rozwiń dysk i zaznacz ✓ foldery. Zaznaczony folder obejmuje wszystkie swoje podfoldery.</p>
+      <div class="drzewo" id="drzewo-zrodla"></div>
+      <div class="wybrane-nagl">Wybrane (<span id="ile-zrodel">0</span>)</div>
       <div class="lista" id="zrodla"></div>
-      <div class="wiersz">
-        <button id="dodaj-zrodlo">+ Dodaj folder…</button>
-      </div>
-      <div class="wiersz" style="margin-top:8px">
-        <input type="text" id="wklej-zrodlo" placeholder="lub wklej ścieżkę, np. \\192.168.1.50\Public">
-        <button id="dodaj-wklejone">Dodaj</button>
-      </div>
+      <details class="reczne"><summary>Wpisz ścieżkę ręcznie (np. \\192.168.1.50\Public)</summary>
+        <div class="wiersz">
+          <input type="text" id="wklej-zrodlo" placeholder="\\192.168.1.50\Public">
+          <button id="dodaj-wklejone">Dodaj</button>
+        </div>
+      </details>
     </section>
 
     <section>
       <h2>Dokąd?</h2>
       <p class="opis">Miejsce docelowe. Jeśli są tam już pliki, też je przeskanuję, żeby pokazać wynikowe drzewo.</p>
       <div class="lista" id="cel"></div>
-      <div class="wiersz">
-        <button id="wybierz-cel">Wybierz folder…</button>
-        <input type="text" id="wklej-cel" placeholder="lub wklej ścieżkę">
-        <button id="ustaw-cel">Ustaw</button>
-      </div>
+      <button id="wybierz-cel">Wybierz folder…</button>
+      <details class="reczne"><summary>Wpisz ścieżkę ręcznie</summary>
+        <div class="wiersz">
+          <input type="text" id="wklej-cel" placeholder="np. Z:\Uporządkowane">
+          <button id="ustaw-cel">Ustaw</button>
+        </div>
+      </details>
     </section>
 
     <section>
@@ -215,6 +238,20 @@ button.ikonowy:hover{color:var(--blad)}
   </section>
 </main>
 
+<div class="nakladka" id="okno-cel" hidden>
+  <div class="okno" role="dialog" aria-labelledby="okno-cel-tytul">
+    <h2 id="okno-cel-tytul">Wybierz miejsce docelowe</h2>
+    <p class="opis" style="margin:0">Zaznacz folder. Możesz też utworzyć nowy w zaznaczonym miejscu.</p>
+    <div class="drzewo" id="drzewo-cel"></div>
+    <div class="dol">
+      <span class="wybor" id="cel-wybor">Nic nie zaznaczono</span>
+      <button id="nowy-folder" disabled>Nowy folder…</button>
+      <button id="anuluj-cel">Anuluj</button>
+      <button class="glowny" id="zatwierdz-cel" disabled>Wybierz</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const TOKEN = new URLSearchParams(location.search).get("t") || "";
 const $ = id => document.getElementById(id);
@@ -250,10 +287,12 @@ function wierszFolderu(sciezka, usun) {
 function rysuj() {
   $("wersja").textContent = stan.wersja ? "wersja " + stan.wersja : "";
   const zr = $("zrodla"); zr.replaceChildren();
-  if (!stan.zrodla.length) zr.innerHTML = '<div class="pusto">Nie wybrano jeszcze żadnego folderu.</div>';
+  if (!stan.zrodla.length) zr.innerHTML = '<div class="pusto">Zaznacz foldery w drzewie powyżej.</div>';
   stan.zrodla.forEach((z, i) => zr.append(wierszFolderu(z, () => {
     zapisz({zrodla: stan.zrodla.filter((_, j) => j !== i), cel: stan.cel});
   })));
+  $("ile-zrodel").textContent = stan.zrodla.length;
+  drzewoZrodel.odswiezZnaczniki();
   const cel = $("cel"); cel.replaceChildren();
   if (stan.cel) cel.append(wierszFolderu(stan.cel, () => zapisz({zrodla: stan.zrodla, cel: ""})));
   else cel.innerHTML = '<div class="pusto">Nie wybrano (możesz ustawić później).</div>';
@@ -296,23 +335,134 @@ async function zapisz(ust) {
   catch (e) { alert(e.message); }
 }
 
-async function wybierz(od) {
-  const r = await api("/api/wybierz-folder", {od: od || ""});
-  return r.folder;
-}
-
-$("dodaj-zrodlo").onclick = async () => {
-  const f = await wybierz(stan.zrodla[0]);
-  if (f) zapisz({zrodla: [...stan.zrodla, f], cel: stan.cel});
-};
 $("dodaj-wklejone").onclick = () => {
   const v = $("wklej-zrodlo").value.trim();
   if (v) { $("wklej-zrodlo").value = ""; zapisz({zrodla: [...stan.zrodla, v], cel: stan.cel}); }
 };
 $("wklej-zrodlo").onkeydown = e => { if (e.key === "Enter") $("dodaj-wklejone").click(); };
+// ---------- drzewo folderów (jak w commanderze) ----------
+function norm(p) { return stan.windows ? p.toLowerCase() : p; }
+function zPrefiksem(p) { const s = stan.sep || "\\"; return p.endsWith(s) ? p : p + s; }
+function wewnatrz(rodzic, dziecko) {
+  const r = norm(rodzic), d = norm(dziecko);
+  return r === d || d.startsWith(norm(zPrefiksem(rodzic)));
+}
+
+function utworzDrzewo(kontener, opcje) {
+  const wiersze = new Map();
+  function stanWezla(p) {
+    const wyb = opcje.wybrane();
+    if (wyb.some(w => norm(w) === norm(p))) return "tak";
+    if (opcje.tryb === "multi" && wyb.some(w => wewnatrz(w, p))) return "dziedziczy";
+    if (wyb.some(w => wewnatrz(p, w))) return "czesciowo";
+    return "nie";
+  }
+  function odswiezZnaczniki() {
+    for (const [p, {w, input}] of wiersze) {
+      if (!w.isConnected) { wiersze.delete(p); continue; }
+      const st = stanWezla(p);
+      input.checked = st === "tak" || st === "dziedziczy";
+      input.indeterminate = st === "czesciowo" && opcje.tryb === "multi";
+      input.disabled = st === "dziedziczy";
+      input.title = st === "dziedziczy" ? "Wybrany razem z folderem nadrzędnym" : "";
+      w.classList.toggle("wybrany", st === "tak");
+    }
+  }
+  function komunikat(el, tekst) {
+    const d = document.createElement("div"); d.className = "wezel-w pusty"; d.textContent = tekst; el.append(d);
+  }
+  function wezel(el, dane, ikona, info) {
+    const box = document.createElement("div");
+    const w = document.createElement("div"); w.className = "wezel-w";
+    const strz = document.createElement("button"); strz.className = "strz"; strz.textContent = "▶"; strz.title = "Rozwiń";
+    const input = document.createElement("input");
+    input.type = opcje.tryb === "multi" ? "checkbox" : "radio"; input.name = "drzewo-" + kontener.id;
+    const ik = document.createElement("span"); ik.textContent = ikona;
+    const n = document.createElement("span"); n.className = "nazwa"; n.textContent = dane.nazwa; n.title = dane.sciezka;
+    w.append(strz, input, ik, n);
+    if (info) { const i = document.createElement("span"); i.className = "info"; i.textContent = info; i.title = info; w.append(i); }
+    const dzieci = document.createElement("div"); dzieci.className = "dzieci"; dzieci.hidden = true;
+    let wczytane = false;
+    async function wczytaj() {
+      wczytane = true;
+      dzieci.replaceChildren(); komunikat(dzieci, "Wczytuję…");
+      let r;
+      try { r = await api("/api/foldery?sciezka=" + encodeURIComponent(dane.sciezka)); }
+      catch (e) { r = {foldery: [], blad: e.message}; }
+      dzieci.replaceChildren();
+      if (r.blad) komunikat(dzieci, "⚠ " + r.blad);
+      else if (!r.foldery.length) komunikat(dzieci, "brak podfolderów");
+      r.foldery.forEach(f => wezel(dzieci, f, "📁"));
+      odswiezZnaczniki();
+    }
+    async function rozwin() {
+      if (!dzieci.hidden) { dzieci.hidden = true; strz.textContent = "▶"; return; }
+      dzieci.hidden = false; strz.textContent = "▼";
+      if (!wczytane) await wczytaj();
+    }
+    strz.onclick = rozwin;
+    n.onclick = rozwin;
+    input.onchange = () => opcje.przelacz(dane.sciezka, input.checked);
+    wiersze.set(dane.sciezka, {w, input, przeladuj: async () => { if (!dzieci.hidden) await wczytaj(); else wczytane = false; }});
+    box.append(w, dzieci); el.append(box);
+  }
+  async function start() {
+    kontener.replaceChildren(); wiersze.clear(); komunikat(kontener, "Wczytuję dyski…");
+    const r = await api("/api/dyski");
+    kontener.replaceChildren();
+    for (const d of r.dyski) {
+      const nazwa = d.litera
+        ? `${d.litera}:  ${d.etykieta || (d.rodzaj === "sieciowy" ? "Dysk sieciowy" : "Dysk lokalny")}`
+        : (d.etykieta || d.sciezka);
+      const info = !d.dostepny ? "niedostępny"
+        : [d.siec, d.wolne != null ? `${rozmiar(d.wolne)} wolne z ${rozmiar(d.razem)}` : ""].filter(Boolean).join(" · ");
+      wezel(kontener, {nazwa, sciezka: d.sciezka},
+            d.rodzaj === "sieciowy" ? "🌐" : d.rodzaj === "wymienny" ? "🔌" : "💽", info);
+    }
+    if (!r.dyski.length) komunikat(kontener, "Nie znaleziono dysków.");
+    odswiezZnaczniki();
+  }
+  return {start, odswiezZnaczniki, przeladuj: p => wiersze.get(p) && wiersze.get(p).przeladuj()};
+}
+
+const drzewoZrodel = utworzDrzewo($("drzewo-zrodla"), {
+  tryb: "multi",
+  wybrane: () => stan.zrodla,
+  przelacz: (p, wl) => zapisz({
+    zrodla: wl ? [...stan.zrodla, p] : stan.zrodla.filter(z => norm(z) !== norm(p)),
+    cel: stan.cel,
+  }),
+});
+
+let celWybor = "";
+const drzewoCelu = utworzDrzewo($("drzewo-cel"), {
+  tryb: "single",
+  wybrane: () => celWybor ? [celWybor] : [],
+  przelacz: p => { celWybor = p; rysujWyborCelu(); },
+});
+function rysujWyborCelu() {
+  $("cel-wybor").textContent = celWybor || "Nic nie zaznaczono";
+  $("cel-wybor").title = celWybor;
+  $("zatwierdz-cel").disabled = !celWybor;
+  $("nowy-folder").disabled = !celWybor;
+  drzewoCelu.odswiezZnaczniki();
+}
 $("wybierz-cel").onclick = async () => {
-  const f = await wybierz(stan.cel);
-  if (f) zapisz({zrodla: stan.zrodla, cel: f});
+  celWybor = stan.cel || ""; $("okno-cel").hidden = false; rysujWyborCelu();
+  await drzewoCelu.start(); rysujWyborCelu();
+};
+$("anuluj-cel").onclick = () => { $("okno-cel").hidden = true; };
+$("okno-cel").onclick = e => { if (e.target === $("okno-cel")) $("okno-cel").hidden = true; };
+document.addEventListener("keydown", e => { if (e.key === "Escape") $("okno-cel").hidden = true; });
+$("zatwierdz-cel").onclick = () => { $("okno-cel").hidden = true; zapisz({zrodla: stan.zrodla, cel: celWybor}); };
+$("nowy-folder").onclick = async () => {
+  const nazwa = prompt("Nazwa nowego folderu w:\n" + celWybor, "Uporządkowane");
+  if (!nazwa) return;
+  try {
+    const r = await api("/api/nowy-folder", {w: celWybor, nazwa});
+    await drzewoCelu.przeladuj(celWybor);
+    celWybor = r.sciezka; rysujWyborCelu();
+  } catch (e) { alert(e.message); }
 };
 $("ustaw-cel").onclick = () => {
   const v = $("wklej-cel").value.trim();
@@ -489,6 +639,7 @@ function rysujDup() {
 
 (async () => {
   await odswiez();
+  drzewoZrodel.start();
   pokazRaport();
   setInterval(odswiez, 1000);
 })();

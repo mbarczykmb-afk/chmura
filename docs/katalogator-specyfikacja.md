@@ -11,7 +11,10 @@ Program niczego nie przenosi ani nie kopiuje bez zatwierdzenia planu.
 
 ## Przebieg
 
-1. **Wskazanie źródła** (jeden lub kilka folderów) i **miejsca docelowego**.
+1. **Wskazanie źródła** (jeden lub kilka folderów) i **miejsca docelowego** —
+   drzewo jak w commanderze: podpięte dyski (także sieciowe), rozwijanie,
+   ptaszki przy folderach (folder obejmuje podfoldery); cel wybierany
+   w tym samym drzewie, z możliwością utworzenia nowego folderu.
 2. **Skan** źródła i miejsca docelowego (czytane są tylko nagłówki plików:
    EXIF, metadane filmów, tagi muzyki; pełna zawartość tylko przy
    sprawdzaniu duplikatów o identycznym rozmiarze). Skan można przerwać
