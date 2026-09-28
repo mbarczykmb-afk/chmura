@@ -85,13 +85,25 @@ def test_baza_nie_blokuje_sie_przy_dlugim_zapisie(tmp_path):
     import time
     from katalogator import skaner
     baza = tmp_path / "k.db"
-    zadanie = skaner.otworz_baze(baza)
-    zadanie.execute("INSERT INTO skany(korzen, start) VALUES ('x', 1)")  # transakcja otwarta
+    skaner.otworz_baze(baza).close()
+    otwarta, koniec = threading.Event(), threading.Event()
+
+    def zadanie():
+        db = skaner.otworz_baze(baza)
+        db.execute("INSERT INTO skany(korzen, start) VALUES ('x', 1)")  # transakcja otwarta
+        otwarta.set()
+        time.sleep(1.5)
+        db.commit()
+        db.close()
+        koniec.set()
+
+    threading.Thread(target=zadanie).start()
+    otwarta.wait(5)
     okno = skaner.otworz_baze(baza)
     t0 = time.time()
     assert okno.execute("SELECT COUNT(*) FROM pliki").fetchone()[0] == 0  # odczyt bez czekania (WAL)
     assert time.time() - t0 < 1
-    threading.Timer(1.5, zadanie.commit).start()
-    okno.execute("INSERT INTO skany(korzen, start) VALUES ('y', 2)")  # czeka na zakończenie, bez błędu
+    okno.execute("INSERT INTO skany(korzen, start) VALUES ('y', 2)")  # czeka na zadanie, bez błędu
     okno.commit()
+    assert koniec.wait(5)
     assert okno.execute("SELECT COUNT(*) FROM skany").fetchone()[0] == 2
