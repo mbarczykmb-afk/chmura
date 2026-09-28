@@ -110,11 +110,26 @@ jobs:
             dist/Katalogator-Setup-*.exe
           retention-days: 90
 
-      - name: Wydanie na GitHubie (tylko tag v*)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Czy wydanie tej wersji już istnieje
+        id: wydanie
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "v${{ steps.wersja.outputs.wersja }}" --repo "${{ github.repository }}" *> $null
+          $nowe = if ($LASTEXITCODE -eq 0) { "nie" } else { "tak" }
+          "nowe=$nowe" >> $env:GITHUB_OUTPUT
+          "Nowe wydanie: $nowe"
+          exit 0
+
+      - name: Wydanie na GitHubie (nowa wersja programu)
+        if: steps.wydanie.outputs.nowe == 'tak'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.wersja.outputs.wersja }}
+          target_commitish: ${{ github.sha }}
           name: Katalogator ${{ steps.wersja.outputs.wersja }}
+          make_latest: "true"
           files: |
             dist/Katalogator-Setup-*.exe
             dist/Katalogator.exe
