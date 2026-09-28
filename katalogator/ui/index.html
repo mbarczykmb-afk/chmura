@@ -134,7 +134,7 @@ body.pelny main{grid-template-columns:1fr} body.pelny main>div:first-child{displ
 .widok{display:flex;flex-direction:column;flex:1;min-height:70vh}
 .pasek-edytora{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--lin);flex-wrap:wrap;font-size:13px}
 .pasek-edytora .opis-op{color:var(--mut);flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.leg-plan{display:flex;gap:10px;color:var(--mut);font-size:12px}
+.leg-plan{display:flex;gap:4px 12px;color:var(--mut);font-size:12px;flex-wrap:wrap} .leg-plan span{white-space:nowrap}
 .edytor{display:grid;grid-template-columns:minmax(260px,38%) 1fr;flex:1;min-height:0}
 .edytor-drzewo{border-right:1px solid var(--lin);overflow:auto;padding:6px 0;max-height:calc(100vh - 300px);font-size:13px}
 body.pelny .edytor-drzewo,body.pelny .edytor-pliki .siatka{max-height:calc(100vh - 250px)}
@@ -168,6 +168,16 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 .grupa-pod{border:1px solid var(--lin);border-radius:10px;padding:10px;background:var(--bg)}
 .grupa-pod .gl{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
 .grupa-pod .gl strong{flex:1}
+.projekt-btn{border:1px solid var(--lin);background:var(--bg);padding:5px 12px;border-radius:999px;font-weight:600;max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px solid var(--lin);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;font-size:13px}
+.dziennik{max-height:180px;overflow:auto;font-size:12px;color:var(--mut);margin-top:6px}
+.dziennik div{padding:3px 0;border-bottom:1px dashed var(--lin)} .dziennik b{color:var(--fg);font-weight:500}
+.lista-proj{display:flex;flex-direction:column;gap:8px;overflow:auto;flex:1}
+.proj{border:1px solid var(--lin);border-radius:10px;padding:10px 12px;display:grid;grid-template-columns:1fr auto;gap:4px 10px;background:var(--bg)}
+.proj.akt{border-color:var(--akc);background:var(--akc-miekki)}
+.proj .nz{font-weight:600} .proj .inf{font-size:12px;color:var(--mut);grid-column:1} .proj .akcje{grid-row:1/span 2;grid-column:2;display:flex;gap:6px;align-items:center}
+.postep-proj{height:6px;border-radius:3px;background:var(--lin);overflow:hidden;margin-top:6px} .postep-proj i{display:block;height:100%;background:var(--ok)}
+.pw .ok{color:var(--ok);font-weight:700;margin-left:2px}
 .grupa-pod .siatka{padding:0;max-height:none;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 .wkrotce-box h2{color:var(--fg)}
 </style>
@@ -175,6 +185,7 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 <body>
 <header>
   <h1>Katalogator</h1><span class="wersja" id="wersja"></span>
+  <button class="projekt-btn" id="projekt-btn" title="Zmień projekt">📁 <span id="projekt-nazwa">…</span> ▾</button>
   <span class="odstep"></span>
   <button id="zamknij" title="Zamyka program">Zamknij</button>
 </header>
@@ -188,6 +199,15 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 
 <main>
   <div>
+    <section>
+      <h2>Projekt: <span id="proj-tytul"></span></h2>
+      <p class="opis" id="proj-postep-opis"></p>
+      <div class="postep-proj" id="proj-postep" hidden><i></i></div>
+      <textarea id="proj-notatki" placeholder="Notatki do projektu — np. co zostało do zrobienia, na czym skończyłeś…"></textarea>
+      <details style="margin-top:8px;font-size:13px"><summary style="cursor:pointer;color:var(--mut)">Dziennik prac</summary>
+        <div class="dziennik" id="proj-dziennik"></div></details>
+    </section>
+
     <section>
       <h2>Co porządkujemy?</h2>
       <p class="opis">Rozwiń dysk i zaznacz ✓ przy folderze, co zrobić z jego plikami.
@@ -277,6 +297,30 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
         <span id="cofnij-wyk-opis"></span><button class="maly" id="cofnij-wyk">Cofnij porządkowanie</button>
       </div>
     </section>
+
+    <section>
+      <h2>Nowe pliki (folder przychodzący)</h2>
+      <p class="opis">Np. folder, do którego zrzucasz zdjęcia z telefonu. Nowe pliki zostaną <b>przeniesione</b>
+        do biblioteki (<i>Dokąd?</i>) według tych samych zasad. Pliki z niepewną datą zostają do ręcznego przejrzenia.</p>
+      <div class="lista" id="przych-lista"></div>
+      <button id="przych-dodaj">+ Dodaj folder przychodzący…</button>
+      <div class="wiersz" style="margin-top:10px;align-items:center;font-size:13px">
+        <span style="flex:none">Mieszkam w:</span>
+        <input type="text" id="proj-dom" placeholder="np. Olkusz — wtedy zdjęcia stąd trafią do „… w domu”">
+      </div>
+      <div class="wiersz" style="margin-top:10px">
+        <button class="glowny" id="przych-sprawdz">Sprawdź nowe pliki</button>
+      </div>
+      <div id="zad-przychodzace"></div>
+      <div class="podsum" id="przych-podsum" hidden></div>
+      <div class="wiersz" style="margin-top:10px;align-items:center;font-size:13px">
+        <span style="flex:none">Automatycznie codziennie o:</span>
+        <input type="time" id="przych-godzina" style="flex:0 0 110px">
+        <button class="maly" id="przych-harm">Ustaw</button>
+        <button class="maly" id="przych-harm-wyl">Wyłącz</button>
+      </div>
+      <p class="opis" id="przych-harm-opis" style="margin-top:6px"></p>
+    </section>
   </div>
 
   <section class="raport">
@@ -302,7 +346,12 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
         <button class="maly" id="plan-cofnij" title="Cofnij (Ctrl+Z)">↶ Cofnij</button>
         <button class="maly" id="plan-ponow" title="Ponów (Ctrl+Y)">↷ Ponów</button>
         <span class="opis-op" id="plan-opis-op"></span>
-        <span class="leg-plan"><span>🟢 nowe</span><span>⚪ już są</span><span>🔵 do sprawdzenia</span><span>🟡 ta sama nazwa</span><span>⛔ pominięte</span></span>
+        <input type="search" id="plan-q" placeholder="Szukaj pliku lub folderu…" style="flex:0 1 200px;padding:4px 8px">
+        <select id="plan-filtr" style="padding:4px;border-radius:6px;border:1px solid var(--lin);background:var(--bg);color:var(--fg)">
+          <option value="">Wszystkie</option><option value="uwagi">🔵 Do sprawdzenia</option>
+          <option value="bez_gps">Bez GPS</option><option value="data_z_pliku">Data z pliku</option>
+          <option value="kolizje">🟡 Ta sama nazwa</option><option value="pominiete">⛔ Pominięte</option>
+          <option value="bledy">⚠ Błędy</option></select>
         <button class="maly" id="pelny-ekran" title="Ukryj lewą kolumnę">⤢ Pełny ekran</button>
       </div>
       <div class="edytor">
@@ -314,15 +363,23 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
             <button class="maly" id="f-przenies">Przenieś folder…</button>
             <button class="maly" id="f-wyklucz">Wyklucz</button>
             <button class="maly" id="f-przywroc">Przywróć</button>
+            <button class="maly" id="f-wszystkie">Zaznacz wszystkie</button>
+            <button class="maly" id="f-przejrzany" title="Oznacz, że ten folder jest już sprawdzony">✓ Przejrzany</button>
+            <button class="maly" id="f-nastepny" title="Przejdź do następnego folderu, którego jeszcze nie przejrzałeś">Następny →</button>
           </div>
           <div class="akcje-zazn" id="akcje-zazn" hidden>
             <span id="ile-zazn"></span>
             <button class="maly" id="z-przenies">Przenieś do…</button>
             <button class="maly" id="z-nowy">Nowy folder z zaznaczonych…</button>
+            <button class="maly" id="z-miejsce">Ustaw miejsce…</button>
+            <button class="maly" id="z-data">Ustaw datę…</button>
             <button class="maly" id="z-wyklucz">Wyklucz</button>
             <button class="maly" id="z-przywroc">Przywróć</button>
             <button class="maly" id="z-odznacz">Odznacz</button>
           </div>
+          <div class="leg-plan" style="padding:6px 12px;border-bottom:1px solid var(--lin)"><span>🟢 nowe</span><span>⚪ już są</span>
+            <span>🔵 do sprawdzenia</span><span>🟡 ta sama nazwa</span><span>⛔ pominięte</span>
+            <span style="margin-left:auto">Shift+klik — zaznacz zakres · przeciągnij na folder — przenieś</span></div>
           <div class="siatka" id="plan-pliki"></div>
         </div>
       </div>
@@ -378,6 +435,20 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
       <button id="nowy-folder" disabled>Nowy folder…</button>
       <button id="anuluj-cel">Anuluj</button>
       <button class="glowny" id="zatwierdz-cel" disabled>Wybierz</button>
+    </div>
+  </div>
+</div>
+
+<div class="nakladka" id="okno-proj" hidden>
+  <div class="okno" role="dialog" aria-labelledby="okno-proj-tytul">
+    <h2 id="okno-proj-tytul">Projekty</h2>
+    <p class="opis" style="margin:0">Każdy projekt ma własne foldery, skan, propozycję drzewa, notatki i historię —
+      możesz przerwać pracę i wrócić do niej za kilka dni.</p>
+    <div class="lista-proj" id="lista-proj"></div>
+    <div class="dol">
+      <input type="text" id="nowy-proj" placeholder="Nazwa nowego projektu, np. Zdjęcia rodziców" style="flex:1">
+      <button class="glowny" id="nowy-proj-ok">Utwórz</button>
+      <button id="okno-proj-zamknij">Zamknij</button>
     </div>
   </div>
 </div>
@@ -648,14 +719,19 @@ function rysujWyborCelu() {
   $("nowy-folder").disabled = !celWybor;
   drzewoCelu.odswiezZnaczniki();
 }
-$("wybierz-cel").onclick = async () => {
-  celWybor = stan.cel || ""; $("okno-cel").hidden = false; rysujWyborCelu();
+let naWyborFolderu = null;
+async function otworzWyborFolderu(tytul, poczatek, gotowe) {
+  $("okno-cel-tytul").textContent = tytul;
+  naWyborFolderu = gotowe;
+  celWybor = poczatek || ""; $("okno-cel").hidden = false; rysujWyborCelu();
   await drzewoCelu.start(); rysujWyborCelu();
-};
+}
+$("wybierz-cel").onclick = () => otworzWyborFolderu("Wybierz miejsce docelowe", stan.cel,
+  p => zapisz({zrodla: stan.zrodla, cel: p}));
 $("anuluj-cel").onclick = () => { $("okno-cel").hidden = true; };
 $("okno-cel").onclick = e => { if (e.target === $("okno-cel")) $("okno-cel").hidden = true; };
 document.addEventListener("keydown", e => { if (e.key === "Escape") $("okno-cel").hidden = true; });
-$("zatwierdz-cel").onclick = () => { $("okno-cel").hidden = true; zapisz({zrodla: stan.zrodla, cel: celWybor}); };
+$("zatwierdz-cel").onclick = () => { $("okno-cel").hidden = true; if (naWyborFolderu) naWyborFolderu(celWybor); };
 $("nowy-folder").onclick = async () => {
   const nazwa = prompt("Nazwa nowego folderu w:\n" + celWybor, "Uporządkowane");
   if (!nazwa) return;
@@ -874,5 +950,6 @@ function rysujDup() {
 </script>
 <script src="/ui/plan.js"></script>
 <script src="/ui/analiza.js"></script>
+<script src="/ui/projekt.js"></script>
 </body>
 </html>

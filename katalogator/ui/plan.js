@@ -3,7 +3,14 @@
 "use strict";
 
 const plan = {foldery: [], podsum: null, folder: "", pliki: [], razem: 0, zazn: new Set(), rozwiniete: new Set([""]),
-              wczytany: false};
+              wczytany: false, q: "", filtr: "", ostatni: null, przejrzane: new Set(), przejrzaneLicz: null};
+
+function policzPrzejrzane() {
+  const doSprawdzenia = plan.foldery.filter(f => f.nowe > 0).map(f => f.sciezka);
+  plan.przejrzaneLicz = {wszystkie: doSprawdzenia.length,
+                         przejrzane: doSprawdzenia.filter(f => plan.przejrzane.has(f)).length,
+                         kolejka: doSprawdzenia.filter(f => !plan.przejrzane.has(f))};
+}
 
 // ---------- lewa kolumna: przyciski i podsumowanie ----------
 function rysujPlanLewa() {
@@ -91,6 +98,7 @@ async function wczytajDrzewo() {
   }
   const r = await api("/api/plan/drzewo");
   plan.foldery = r.foldery; plan.podsum = r.podsumowanie; plan.wczytany = true;
+  plan.przejrzane = new Set(r.przejrzane || []); policzPrzejrzane();
   rysujDrzewo(); rysujPasek();
   await wczytajPliki(true);
 }
@@ -146,8 +154,13 @@ function rysujDrzewo() {
     const n = document.createElement("span"); n.className = "nz";
     n.textContent = (sc === "" ? "💾 " : "📁 ") + (sc === "" ? cel : w.nazwa); n.title = sc || celPelny;
     const o = document.createElement("span"); o.className = "odz"; o.innerHTML = odznaki(w.s);
-    r.append(strz, n, o);
-    r.onclick = () => { plan.folder = sc; plan.rozwiniete.add(sc); rysujDrzewo(); wczytajPliki(true); };
+    r.append(strz, n);
+    if (plan.przejrzane.has(sc)) { const ok = document.createElement("span"); ok.className = "ok"; ok.textContent = "✓"; ok.title = "Przejrzany"; r.append(ok); }
+    r.append(o);
+    r.onclick = () => {
+      plan.folder = sc; plan.rozwiniete.add(sc); plan.q = ""; plan.filtr = "";
+      $("plan-q").value = ""; $("plan-filtr").value = ""; rysujDrzewo(); wczytajPliki(true);
+    };
     // przeciąganie folderów i upuszczanie plików/folderów
     if (sc !== "" && w.s.nowe + w.s.pominiete > 0) {
       r.draggable = true;
@@ -192,23 +205,33 @@ function rysujPasek() {
 naStan.push(() => { if (zakladka === "drzewo") rysujPasek(); });
 
 // ---------- edytor: pliki w folderze ----------
+function trybSzukania() { return !!(plan.q || plan.filtr); }
 async function wczytajPliki(odNowa) {
-  if (odNowa) { plan.pliki = []; plan.zazn.clear(); }
-  const r = await api(`/api/plan/pliki?folder=${encodeURIComponent(plan.folder)}&od=${plan.pliki.length}&ile=200`);
+  if (odNowa) { plan.pliki = []; plan.zazn.clear(); plan.ostatni = null; }
+  const r = trybSzukania()
+    ? await api(`/api/plan/szukaj?q=${encodeURIComponent(plan.q)}&filtr=${plan.filtr}&od=${plan.pliki.length}&ile=200`)
+    : await api(`/api/plan/pliki?folder=${encodeURIComponent(plan.folder)}&od=${plan.pliki.length}&ile=200`);
   plan.pliki = plan.pliki.concat(r.pliki); plan.razem = r.razem;
   rysujPliki();
 }
 
 function rysujPliki() {
-  $("plan-folder").textContent = plan.folder || ((stan.plan && stan.plan.cel) || "Miejsce docelowe");
+  const szuk = trybSzukania();
+  $("plan-folder").textContent = szuk ? `🔍 Wyniki: ${plan.razem}` : (plan.folder || ((stan.plan && stan.plan.cel) || "Miejsce docelowe"));
   $("plan-folder").title = $("plan-folder").textContent;
-  const korzen = plan.folder === "";
+  const korzen = plan.folder === "" || szuk;
   for (const id of ["f-zmien", "f-przenies", "f-wyklucz", "f-przywroc"]) $(id).disabled = korzen;
+  const przejrz = plan.przejrzane.has(plan.folder);
+  $("f-przejrzany").disabled = szuk || !plan.pliki.some(f => f.tryb !== "istniejacy");
+  $("f-przejrzany").textContent = przejrz ? "✓ Przejrzany (cofnij)" : "✓ Oznacz jako przejrzany";
+  const lz = plan.przejrzaneLicz;
+  $("f-nastepny").disabled = !lz || !lz.kolejka.length;
+  $("f-nastepny").textContent = lz ? `Następny → (${lz.przejrzane}/${lz.wszystkie})` : "Następny →";
   const s = $("plan-pliki"); s.replaceChildren();
   if (!plan.pliki.length) {
     s.innerHTML = '<div class="pusto">W tym folderze nie ma bezpośrednio plików — wybierz podfolder.</div>';
   }
-  for (const f of plan.pliki) {
+  for (const [idx, f] of plan.pliki.entries()) {
     const k = document.createElement("div");
     const ist = f.tryb === "istniejacy";
     k.className = "karta" + (plan.zazn.has(f.id) ? " zazn" : "") + (f.pominiety ? " pom" : "") + (ist ? " ist" : "");
@@ -219,12 +242,18 @@ function rysujPliki() {
       img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${f.plik_id}`;
       img.onerror = () => { ob.textContent = IKONY.zdjecie; };
       ob.append(img);
+    } else if (f.rodzaj === "film" && f.plik_id != null) {
+      ob.append(podgladFilmu(f.plik_id));
     } else ob.textContent = IKONY[f.rodzaj] || "📄";
     const op = document.createElement("div"); op.className = "op";
     const n = document.createElement("div"); n.className = "n"; n.textContent = f.nazwa;
     const m = document.createElement("div"); m.className = "m";
     m.textContent = (f.data ? f.data.slice(0, 10) : "") + " · " + rozmiar(f.rozmiar);
     op.append(n, m);
+    if (szuk) {
+      const fo = document.createElement("div"); fo.className = "m"; fo.textContent = "📁 " + (f.cel.includes("/") ? f.cel.slice(0, f.cel.lastIndexOf("/")) : "/");
+      fo.title = f.cel; op.append(fo);
+    }
     if (f.wynik && f.wynik.startsWith("blad")) {
       const b = document.createElement("div"); b.className = "m bl"; b.textContent = "⚠ " + f.wynik.slice(6); op.append(b);
     } else if (f.wynik === "ok") {
@@ -236,11 +265,17 @@ function rysujPliki() {
     if (!ist) {
       const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = plan.zazn.has(f.id);
       cb.onclick = e => e.stopPropagation();
-      cb.onchange = () => { cb.checked ? plan.zazn.add(f.id) : plan.zazn.delete(f.id); rysujPliki(); };
+      cb.onchange = () => { cb.checked ? plan.zazn.add(f.id) : plan.zazn.delete(f.id); plan.ostatni = idx; rysujPliki(); };
       const zn = document.createElement("span"); zn.className = "zn " + (f.tryb === "przenies" ? "p" : "k");
       zn.textContent = f.pominiety ? "pominięty" : (f.tryb === "przenies" ? "P" : "K");
       k.append(cb, zn);
-      k.onclick = () => { plan.zazn.has(f.id) ? plan.zazn.delete(f.id) : plan.zazn.add(f.id); rysujPliki(); };
+      k.onclick = e => {
+        if (e.shiftKey && plan.ostatni != null) {   // zaznaczenie zakresu
+          const [a, b] = [Math.min(plan.ostatni, idx), Math.max(plan.ostatni, idx)];
+          plan.pliki.slice(a, b + 1).forEach(x => { if (x.tryb !== "istniejacy") plan.zazn.add(x.id); });
+        } else plan.zazn.has(f.id) ? plan.zazn.delete(f.id) : plan.zazn.add(f.id);
+        plan.ostatni = idx; rysujPliki();
+      };
       k.draggable = true;
       k.ondragstart = e => {
         const ids = plan.zazn.has(f.id) ? [...plan.zazn] : [f.id];
@@ -260,16 +295,41 @@ function rysujPliki() {
   $("ile-zazn").textContent = `Zaznaczono: ${plan.zazn.size}`;
 }
 
+// Klatka z filmu (przeglądarka czyta tylko początek pliku); dwuklik = odtwarzanie
+function podgladFilmu(id) {
+  const v = document.createElement("video");
+  v.muted = true; v.preload = "metadata"; v.playsInline = true;
+  v.src = `/plik?t=${encodeURIComponent(TOKEN)}&id=${id}#t=1`;
+  v.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover";
+  const znak = document.createElement("span"); znak.textContent = "▶";
+  znak.style.cssText = "position:absolute;bottom:6px;left:8px;font-size:16px;color:#fff;text-shadow:0 0 4px #000";
+  const box = document.createElement("div"); box.style.cssText = "position:absolute;inset:0";
+  v.onerror = () => { box.replaceChildren(); box.style.cssText = "display:grid;place-items:center;font-size:34px"; box.textContent = IKONY.film; };
+  box.ondblclick = e => { e.stopPropagation(); odtworz(id); };
+  box.append(v, znak);
+  return box;
+}
+function odtworz(id) {
+  const n = document.createElement("div"); n.className = "nakladka";
+  const v = document.createElement("video"); v.controls = true; v.autoplay = true;
+  v.src = `/plik?t=${encodeURIComponent(TOKEN)}&id=${id}`;
+  v.style.cssText = "max-width:90vw;max-height:85vh;border-radius:8px;background:#000";
+  n.append(v); n.onclick = e => { if (e.target === n) { v.pause(); n.remove(); } };
+  document.body.append(n);
+}
+
 // ---------- operacje ----------
 async function edycja(sciezka, dane) {
   let w;
   try { w = await api(sciezka, dane); }
   catch (e) { toast(e.message); return null; }
   if (w.scalono) toast("Scalono z istniejącym folderem.");
+  else if (w.foldery) toast(`Zmieniono ${w.zmienione} plików` + (w.pominiete ? ` (pominięto ${w.pominiete} — to nie zdjęcia/filmy lub brak daty)` : "") + ".");
   else if (w.opis) toast((sciezka.endsWith("cofnij") ? "Cofnięto: " : "Ponowiono: ") + w.opis);
   plan.zazn.clear();
   const r = await api("/api/plan/drzewo");
   plan.foldery = r.foldery; plan.podsum = r.podsumowanie;
+  plan.przejrzane = new Set(r.przejrzane || []); policzPrzejrzane();
   if (!plan.foldery.some(f => f.sciezka === plan.folder || f.sciezka.startsWith(plan.folder + "/")) && plan.folder) {
     plan.folder = plan.folder.includes("/") ? plan.folder.slice(0, plan.folder.lastIndexOf("/")) : "";
   }
@@ -320,6 +380,40 @@ $("z-nowy").onclick = async () => {
 $("z-wyklucz").onclick = () => edycja("/api/plan/wyklucz", {ids: [...plan.zazn], wartosc: true});
 $("z-przywroc").onclick = () => edycja("/api/plan/wyklucz", {ids: [...plan.zazn], wartosc: false});
 $("z-odznacz").onclick = () => { plan.zazn.clear(); rysujPliki(); };
+$("f-przejrzany").onclick = async () => {
+  const wart = !plan.przejrzane.has(plan.folder);
+  try {
+    await api("/api/plan/przejrzany", {folder: plan.folder, wartosc: wart});
+    wart ? plan.przejrzane.add(plan.folder) : plan.przejrzane.delete(plan.folder);
+    policzPrzejrzane(); rysujDrzewo(); rysujPliki(); rysujProjekt();
+    if (wart && plan.przejrzaneLicz.kolejka.length) toast("Przejrzane. „Następny →” przeniesie Cię do kolejnego folderu.");
+    else if (wart) toast("Wszystkie foldery przejrzane! 🎉 Możesz uporządkować pliki.");
+  } catch (e) { toast(e.message); }
+};
+$("f-nastepny").onclick = () => {
+  const lz = plan.przejrzaneLicz; if (!lz || !lz.kolejka.length) return;
+  const nast = lz.kolejka.find(f => f.localeCompare(plan.folder, "pl", {numeric: true}) > 0) || lz.kolejka[0];
+  plan.folder = nast; plan.q = ""; plan.filtr = ""; $("plan-q").value = ""; $("plan-filtr").value = "";
+  let x = nast; while (x.includes("/")) { x = x.slice(0, x.lastIndexOf("/")); plan.rozwiniete.add(x); }
+  rysujDrzewo(); wczytajPliki(true);
+};
+$("f-wszystkie").onclick = () => { plan.pliki.forEach(f => { if (f.tryb !== "istniejacy") plan.zazn.add(f.id); }); rysujPliki(); };
+$("z-miejsce").onclick = () => {
+  const m = prompt(`Miejsce dla ${plan.zazn.size} zaznaczonych zdjęć/filmów (np. Hel, Zakopane, dom).\n` +
+                   "Pliki trafią do folderów „<Miesiąc> na Helu” według swojej daty.", "");
+  if (m && m.trim()) edycja("/api/plan/ustaw-miejsce", {ids: [...plan.zazn], miejsce: m.trim()});
+};
+$("z-data").onclick = () => {
+  const d = prompt(`Nowa data dla ${plan.zazn.size} zaznaczonych (RRRR-MM-DD albo RRRR-MM).\n` +
+                   "Zmieni się tylko miejsce w drzewie (rok/miesiąc) — plik nie jest modyfikowany.", "");
+  if (d && d.trim()) edycja("/api/plan/ustaw-date", {ids: [...plan.zazn], data: d.trim()});
+};
+let czasSzukania = null;
+$("plan-q").oninput = () => {
+  clearTimeout(czasSzukania);
+  czasSzukania = setTimeout(() => { plan.q = $("plan-q").value.trim(); wczytajPliki(true); }, 300);
+};
+$("plan-filtr").onchange = () => { plan.filtr = $("plan-filtr").value; wczytajPliki(true); };
 $("plan-cofnij").onclick = () => edycja("/api/plan/cofnij", {});
 $("plan-ponow").onclick = () => edycja("/api/plan/ponow", {});
 $("pelny-ekran").onclick = () => {

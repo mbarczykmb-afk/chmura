@@ -46,6 +46,13 @@ jobs:
           Stop-Process -Id $p.Id -Force
           Get-Item dist\Katalogator.exe | Select-Object Name, Length
 
+      - name: Test trybu automatycznego (--auto, bez okna)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\Katalogator.exe -ArgumentList "--auto","nie-ma-takiego" -PassThru
+          if (-not $p.WaitForExit(60000)) { Stop-Process -Id $p.Id -Force; throw "--auto nie zakonczyl sie w 60 s" }
+          if ($p.ExitCode -ne 0) { throw "--auto zwrocil kod $($p.ExitCode)" }
+
       - uses: actions/upload-artifact@v4
         with:
           name: Katalogator-windows

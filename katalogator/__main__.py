@@ -1,6 +1,7 @@
 """Bez parametrów: aplikacja okienkowa. Z parametrami: python -m katalogator skanuj|raport ..."""
 
 import argparse
+import os
 import sys
 import webbrowser
 from pathlib import Path
@@ -9,7 +10,15 @@ from . import raport, skaner
 
 
 def main(argv=None) -> int:
-    if not (sys.argv[1:] if argv is None else argv):
+    args = sys.argv[1:] if argv is None else argv
+    if sys.stdout is None:  # Katalogator.exe bez konsoli
+        sys.stdout = sys.stderr = open(os.devnull, "w")
+    if args[:1] == ["--auto"] and len(args) == 2:
+        from .aplikacja import katalog_danych
+        from .przychodzace import automat
+        print(automat(katalog_danych(), args[1]))
+        return 0
+    if not args:
         from .aplikacja import main as aplikacja  # bez parametrów: okno aplikacji
         aplikacja()
         return 0

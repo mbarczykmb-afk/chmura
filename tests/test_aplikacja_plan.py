@@ -1,5 +1,7 @@
 import json
 import time
+
+import pytest
 from urllib.parse import quote
 
 from test_aplikacja import app  # noqa: F401
@@ -55,6 +57,31 @@ def test_skrypty_ui_bez_tokenu(app):
     api, url, _ = app
     import urllib.request
     baza = url.split("/?")[0]
-    for plik in ("plan.js", "analiza.js"):
+    for plik in ("plan.js", "analiza.js", "projekt.js"):
         with urllib.request.urlopen(f"{baza}/ui/{plik}", timeout=5) as r:
             assert r.status == 200
+
+
+def test_film_z_zakresem(app, tmp_path):  # noqa: F811
+    api, url, stan = app
+    import urllib.request
+    from test_katalogator import _mp4
+    from datetime import datetime, timezone
+    k = tmp_path / "f"; k.mkdir()
+    _mp4(k / "VID_1.mp4", datetime(2022, 1, 1, tzinfo=timezone.utc))
+    api("/api/ustawienia", {"zrodla": [str(k)]})
+    api("/api/skanuj", {})
+    _czekaj(api, "skan")
+    fid = stan.z_db(lambda db: db.execute("SELECT rowid FROM pliki WHERE rodzaj='film'").fetchone()[0])
+    baza, token = url.split("/?t=")
+    req = urllib.request.Request(f"{baza}/plik?t={token}&id={fid}", headers={"Range": "bytes=4-11"})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        assert r.status == 206 and r.headers["Content-Range"].endswith("/" + str((k / "VID_1.mp4").stat().st_size))
+        assert r.read() == (k / "VID_1.mp4").read_bytes()[4:12]
+    import urllib.error
+    with pytest.raises(urllib.error.HTTPError) as e:
+        urllib.request.urlopen(f"{baza}/plik?t={token}&id=999999", timeout=5)
+    assert e.value.code == 404
+    with pytest.raises(urllib.error.HTTPError) as e:  # bez tokenu
+        urllib.request.urlopen(f"{baza}/plik?id={fid}", timeout=5)
+    assert e.value.code == 403

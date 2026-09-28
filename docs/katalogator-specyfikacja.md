@@ -115,5 +115,21 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
    najlepsze w grupie = największa rozdzielczość i ostrość; lista najmniej ostrych;
    odkładanie do `_Duplikaty_Katalogator` z cofaniem
 
+7. **Projekty** ✅ (1.1) — osobne foldery, skan, propozycja, decyzje i historia dla każdego projektu;
+   notatki (zapis automatyczny), dziennik prac, oznaczanie folderów jako przejrzanych
+   i „Następny →” do kolejnego nieprzejrzanego; pasek postępu; przełączanie między projektami
+8. **Edytor: wyszukiwanie i zmiany zbiorcze** ✅ (1.1) — szukanie po nazwie/folderze/źródle,
+   filtry (do sprawdzenia, bez GPS, data z pliku, ta sama nazwa, pominięte, błędy),
+   Shift+klik, „Ustaw miejsce…” (np. Hel → „<Miesiąc> na Helu”), „Ustaw datę…” (zmienia
+   rok/miesiąc w drzewie, bez modyfikacji pliku) — wszystko z cofaniem
+9. **Formaty** ✅ (1.1) — daty/aparat/GPS z RAW (TIFF: DNG, CR2, NEF, ARW, ORF, RW2, PEF, SRW;
+   RAF przez wbudowany JPEG; CR3 jak MP4), daty z AVI (IDIT/ICRD) i MKV/WebM (DateUTC),
+   HEIC (pillow-heif); podgląd klatki filmu w edytorze (przeglądarka czyta tylko fragment pliku),
+   dwuklik = odtwarzanie
+10. **Folder przychodzący** ✅ (1.1) — nowe pliki przenoszone do biblioteki wg tych samych zasad,
+    pliki z niepewną datą zostają do przejrzenia; identyczny plik już obecny w bibliotece nie
+    tworzy kopii „(2)”; ustawiane „Mieszkam w”; tryb `Katalogator.exe --auto <projekt>` i zadanie
+    w Harmonogramie zadań Windows (codziennie o wybranej godzinie), wynik w dzienniku i auto.log
+
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

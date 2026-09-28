@@ -170,3 +170,36 @@ def test_nie_nadpisuje(swiat):
     wykonawca.wykonaj(db)
     assert (cel / "Praca" / "umowa.pdf").read_bytes() == b"inna tresc"
     assert (cel / "Praca" / "umowa (2).pdf").exists()
+
+
+def test_szukaj_i_filtry(swiat):
+    k, cel, db = swiat
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
+    assert {p["nazwa"] for p in planista.szukaj(db, "hel")["pliki"]} >= {"IMG_hel1.jpg", "IMG_hel_bez_gps.jpg"}
+    assert planista.szukaj(db, "HELU")["razem"] >= 4  # szukanie także po nazwie folderu, bez wielkości liter
+    assert [p["nazwa"] for p in planista.szukaj(db, "", "bez_gps")["pliki"]] == ["IMG_hel_bez_gps.jpg"]
+    assert {p["nazwa"] for p in planista.szukaj(db, "", "pominiete")["pliki"]} == {"IMG_rzym.jpg"}
+    assert planista.szukaj(db, "", "uwagi")["razem"] >= 2
+
+
+def test_ustaw_miejsce_i_date(swiat):
+    k, cel, db = swiat
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
+    ids = [r["id"] for r in db.execute("SELECT id FROM plan WHERE sciezka LIKE '%IMG_2023031%'")]
+    w = planista.ustaw_miejsce(db, ids, "Zakopane")
+    assert w["zmienione"] == 4 and w["foldery"] == ["Zdjęcia/Zdjęcia z 2023/Marzec w Zakopanem"]
+    assert planista.ustaw_miejsce(db, ids, "dom")["foldery"] == ["Zdjęcia/Zdjęcia z 2023/Marzec w domu"]
+    pdf = db.execute("SELECT id FROM plan WHERE sciezka LIKE '%umowa.pdf'").fetchone()[0]
+    assert planista.ustaw_miejsce(db, [pdf], "Hel")["pominiete"] == 1  # nie-media pomijane
+    # data: zmiana roku/miesiąca zachowuje miejsce
+    hel = [r["id"] for r in db.execute("SELECT id FROM plan WHERE sciezka LIKE '%IMG_hel1.jpg'")]
+    w = planista.ustaw_date(db, hel, "2019-08-03")
+    assert w["foldery"] == ["Zdjęcia/Zdjęcia z 2019/Sierpień na Helu"]
+    assert db.execute("SELECT data FROM plan WHERE id=?", hel).fetchone()[0].startswith("2019-08-03")
+    planista.cofnij(db)
+    r = db.execute("SELECT cel, data FROM plan WHERE id=?", hel).fetchone()
+    assert r[0] == "Zdjęcia/Zdjęcia z 2023/Lipiec na Helu/IMG_hel1.jpg" and r[1].startswith("2023-07-10")
+    planista.ponow(db)
+    assert db.execute("SELECT data FROM plan WHERE id=?", hel).fetchone()[0].startswith("2019-08-03")
+    assert "blad" in planista.ustaw_date(db, hel, "03.08.2019")
+    assert "blad" in planista.ustaw_miejsce(db, hel, " ")

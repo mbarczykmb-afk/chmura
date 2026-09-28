@@ -82,9 +82,10 @@ Konfiguracje i skrypty dla wybranej opcji trafią do tego repozytorium.
 ## Katalogator — porządkowanie zdjęć, filmów, muzyki i plików
 
 Specyfikacja: [`docs/katalogator-specyfikacja.md`](docs/katalogator-specyfikacja.md).
-Wersja 1.0: skan i raport, duplikaty, analiza zdjęć (dokumenty, podobne, nieostre),
-propozycja drzewa („Zdjęcia z 2023 → Marzec w Olkuszu”), edytor drzewa i porządkowanie
-z weryfikacją i cofaniem. Nazwy miejscowości: © GeoNames, CC BY 4.0.
+Wersja 1.1: projekty (praca na kilka dni: notatki, dziennik, przejrzane foldery), skan
+i raport, duplikaty, analiza zdjęć (dokumenty, podobne, nieostre), propozycja drzewa
+(„Zdjęcia z 2023 → Marzec w Olkuszu”), edytor z wyszukiwarką i zmianami zbiorczymi,
+porządkowanie z weryfikacją i cofaniem, folder przychodzący z harmonogramem. Nazwy miejscowości: © GeoNames, CC BY 4.0.
 
 **Uruchomienie (aplikacja okienkowa, bez instalacji):**
 1. GitHub → zakładka **Actions** → „Katalogator.exe (Windows)” → ostatnie
@@ -106,8 +107,14 @@ z weryfikacją i cofaniem. Nazwy miejscowości: © GeoNames, CC BY 4.0.
    pliki i foldery, wykluczaj; *Cofnij/Ponów* (Ctrl+Z/Y).
 7. **Uporządkuj pliki…** → kopiowanie/przenoszenie wg ptaszków K/P z weryfikacją każdej
    kopii; *Cofnij porządkowanie* przywraca stan sprzed operacji.
+8. **Projekty** (przycisk z nazwą projektu u góry) → każdy projekt ma własne foldery,
+   propozycję, notatki i dziennik; w *Drzewie* oznaczaj foldery „✓ Przejrzany” i przechodź
+   do kolejnych przyciskiem *Następny →* — możesz wrócić do pracy za kilka dni.
+9. **Nowe pliki** → dodaj folder przychodzący (np. zrzuty z telefonu), wpisz *Mieszkam w*,
+   *Sprawdź nowe pliki* → *Przenieś do biblioteki*; opcjonalnie *Automatycznie codziennie o…*
+   (Harmonogram zadań Windows uruchamia `Katalogator.exe --auto <projekt>`).
 
-Ustawienia i baza skanu: `%LOCALAPPDATA%\Katalogator\`. Program działa tylko
+Projekty (ustawienia, bazy, dziennik): `%LOCALAPPDATA%\Katalogator\projekty\`. Program działa tylko
 lokalnie (127.0.0.1), nic nie wysyła do internetu. Zamknięcie okna kończy
 program; przerwany skan wznawia się od miejsca przerwania.
 

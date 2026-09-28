@@ -54,6 +54,10 @@ DOKUMENTY = "Zdjęcia/Dokumenty"
 
 def przygotuj(db: sqlite3.Connection) -> None:
     db.executescript(SCHEMAT)
+    kol = {r[1] for r in db.execute("PRAGMA table_info(plan_zmiany)")}
+    if "stara_data" not in kol:  # baza z wersji 1.0
+        db.execute("ALTER TABLE plan_zmiany ADD COLUMN stara_data TEXT")
+        db.execute("ALTER TABLE plan_zmiany ADD COLUMN nowa_data TEXT")
     duplikaty.przygotuj(db)
     analiza.przygotuj(db)
 
@@ -82,7 +86,9 @@ def _dt(iso: str | None) -> datetime | None:
 
 # --- generowanie propozycji ---------------------------------------------------------
 
-def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, przerwij=None) -> dict:
+def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, przerwij=None,
+            dom: str | None = None) -> dict:
+    """dom: nazwa miejscowości zamieszkania (np. „Olkusz”) — gdy pusta, wykrywana z najczęstszego miejsca."""
     przygotuj(db)
     if not cel:
         raise ValueError("Najpierw wybierz miejsce docelowe.")
@@ -122,7 +128,7 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
 
     media = [p for p in zrodlowe if p["id"] not in prowadzacy and p["sciezka"] not in dokumenty
              and (p["rodzaj"] == "zdjecie" or (p["rodzaj"] == "film" and _wlasne_nagranie(p)))]
-    etykiety, dom = _etykiety_miejsc(media)
+    etykiety, dom = _etykiety_miejsc(media, dom)
 
     folder: dict[int, str] = {}
     uwagi: dict[int, str | None] = {}
@@ -212,14 +218,15 @@ def _wlasne_nagranie(p: dict) -> bool:
     return p["lat"] is not None or p["zrodlo_daty"] == "nazwa" or bool(_NAGRANIE.search(os.path.basename(p["sciezka"])))
 
 
-def _etykiety_miejsc(media: list[dict]) -> tuple[dict[int, tuple[str, str | None]], str | None]:
+def _etykiety_miejsc(media: list[dict], dom_wymuszony: str | None = None
+                    ) -> tuple[dict[int, tuple[str, str | None]], str | None]:
     """Dla każdego zdjęcia/filmu: (fraza miejsca, uwaga). Wykrywa dom i wyjazdy."""
     for p in media:
         p["_dt"] = _dt(p["data"]) or datetime.fromtimestamp(p["mtime"])
         p["_m"] = miejsca.etykieta(p["lat"], p["lon"]) if p["lat"] is not None else None
     z_gps = sorted((p for p in media if p["_m"]), key=lambda p: p["_dt"])
     licz = Counter(p["_m"] for p in z_gps)
-    dom = licz.most_common(1)[0][0] if licz else None
+    dom = (dom_wymuszony or "").strip() or (licz.most_common(1)[0][0] if licz else None)
 
     # wyjazdy: kolejne zdjęcia poza domem, bez przerwy dłuższej niż 48 h
     wyjazdy: list[dict] = []
@@ -391,22 +398,30 @@ def _ostatnia_op(db, cofnieta: int) -> dict | None:
     return dict(r) if r else None
 
 
-def _zastosuj(db, opis: str, zmiany: list[tuple[int, str, int]]) -> dict:
-    """zmiany: [(id, nowy_cel, nowy_pom)] — zapisuje historię i usuwa możliwość „ponów”."""
+def _zastosuj(db, opis: str, zmiany: list[tuple]) -> dict:
+    """zmiany: [(id, nowy_cel, nowy_pom[, nowa_data])] — zapisuje historię, kasuje możliwość „ponów”."""
     stare = {r["id"]: r for r in db.execute(
-        f"SELECT id, cel, pominiety FROM plan WHERE id IN ({','.join('?' * len(zmiany))}) AND tryb != 'istniejacy'",
-        [z[0] for z in zmiany])} if zmiany else {}
-    zmiany = [z for z in zmiany if z[0] in stare and (stare[z[0]]["cel"], stare[z[0]]["pominiety"]) != (z[1], z[2])]
-    if not zmiany:
+        f"SELECT id, cel, pominiety, data FROM plan WHERE id IN ({','.join('?' * len(zmiany))}) "
+        f"AND tryb != 'istniejacy'", [z[0] for z in zmiany])} if zmiany else {}
+    pelne = []
+    for z in zmiany:
+        if z[0] not in stare:
+            continue
+        st = stare[z[0]]
+        nowa_data = z[3] if len(z) > 3 else st["data"]
+        if (st["cel"], st["pominiety"], st["data"]) != (z[1], z[2], nowa_data):
+            pelne.append((z[0], z[1], z[2], nowa_data))
+    if not pelne:
         return {"zmienione": 0}
     db.execute("DELETE FROM plan_zmiany WHERE op IN (SELECT op FROM plan_ops WHERE cofnieta=1)")
     db.execute("DELETE FROM plan_ops WHERE cofnieta=1")
     op = db.execute("INSERT INTO plan_ops(opis, czas) VALUES (?,?)", (opis, time.time())).lastrowid
-    db.executemany("INSERT INTO plan_zmiany VALUES (?,?,?,?,?,?)",
-                   [(op, i, stare[i]["cel"], stare[i]["pominiety"], c, p) for i, c, p in zmiany])
-    db.executemany("UPDATE plan SET cel=?, pominiety=? WHERE id=?", [(c, p, i) for i, c, p in zmiany])
+    db.executemany("INSERT INTO plan_zmiany(op, id, stary_cel, stary_pom, nowy_cel, nowy_pom, stara_data, nowa_data) "
+                   "VALUES (?,?,?,?,?,?,?,?)",
+                   [(op, i, stare[i]["cel"], stare[i]["pominiety"], c, p, stare[i]["data"], d) for i, c, p, d in pelne])
+    db.executemany("UPDATE plan SET cel=?, pominiety=?, data=? WHERE id=?", [(c, p, d, i) for i, c, p, d in pelne])
     db.commit()
-    return {"zmienione": len(zmiany), "op": op}
+    return {"zmienione": len(pelne), "op": op}
 
 
 def _wolne_w_folderze(db, folder: str, nazwy: list[tuple[int, str]]) -> list[tuple[int, str]]:
@@ -482,8 +497,10 @@ def cofnij(db: sqlite3.Connection) -> dict:
     op = _ostatnia_op(db, 0)
     if not op:
         return {"zmienione": 0}
-    zm = db.execute("SELECT id, stary_cel, stary_pom FROM plan_zmiany WHERE op=?", (op["op"],)).fetchall()
-    db.executemany("UPDATE plan SET cel=?, pominiety=? WHERE id=?", [(r[1], r[2], r[0]) for r in zm])
+    zm = db.execute("SELECT id, stary_cel, stary_pom, stara_data, nowa_data FROM plan_zmiany WHERE op=?",
+                    (op["op"],)).fetchall()
+    db.executemany("UPDATE plan SET cel=?, pominiety=?, data=COALESCE(?, data) WHERE id=?",
+                   [(r[1], r[2], r[3] if r[4] is not None else None, r[0]) for r in zm])
     db.execute("UPDATE plan_ops SET cofnieta=1 WHERE op=?", (op["op"],))
     db.commit()
     return {"zmienione": len(zm), "opis": op["opis"]}
@@ -494,8 +511,9 @@ def ponow(db: sqlite3.Connection) -> dict:
     op = _ostatnia_op(db, 1)
     if not op:
         return {"zmienione": 0}
-    zm = db.execute("SELECT id, nowy_cel, nowy_pom FROM plan_zmiany WHERE op=?", (op["op"],)).fetchall()
-    db.executemany("UPDATE plan SET cel=?, pominiety=? WHERE id=?", [(r[1], r[2], r[0]) for r in zm])
+    zm = db.execute("SELECT id, nowy_cel, nowy_pom, nowa_data FROM plan_zmiany WHERE op=?", (op["op"],)).fetchall()
+    db.executemany("UPDATE plan SET cel=?, pominiety=?, data=COALESCE(?, data) WHERE id=?",
+                   [(r[1], r[2], r[3], r[0]) for r in zm])
     db.execute("UPDATE plan_ops SET cofnieta=0 WHERE op=?", (op["op"],))
     db.commit()
     return {"zmienione": len(zm), "opis": op["opis"]}
@@ -510,3 +528,104 @@ def oznacz_dokumenty(db: sqlite3.Connection, sciezki: set[str]) -> dict:
     ids = [r["id"] for r in db.execute(f"SELECT id, cel FROM plan WHERE id IN ({','.join('?' * len(ids))})", ids)
            if not r["cel"].startswith(DOKUMENTY + "/")] if ids else []
     return przenies_pliki(db, ids, DOKUMENTY, f"Dokumenty: {len(ids)} zdjęć") if ids else {"zmienione": 0}
+
+
+# --- wyszukiwanie i zmiany zbiorcze --------------------------------------------------
+
+FILTRY = {
+    "": "1",
+    "uwagi": "uwaga IS NOT NULL AND tryb!='istniejacy' AND pominiety=0",
+    "bez_gps": "uwaga LIKE '%bez GPS%' AND pominiety=0",
+    "data_z_pliku": "uwaga LIKE '%data z pliku%' AND pominiety=0",
+    "pominiete": "pominiety=1 AND tryb!='istniejacy'",
+    "bledy": "wynik LIKE 'blad%'",
+    "kolizje": "pominiety=0 AND lower(cel) IN (SELECT lower(cel) FROM plan WHERE pominiety=0 GROUP BY lower(cel) "
+               "HAVING COUNT(*) > 1)",
+}
+
+
+def szukaj(db: sqlite3.Connection, tekst: str = "", filtr: str = "", od: int = 0, ile: int = 200) -> dict:
+    przygotuj(db)
+    warunek = FILTRY.get(filtr, "1")
+    tekst = (tekst or "").strip().casefold()
+    wiersze = [dict(r) for r in db.execute(
+        f"""SELECT id, plik_id, sciezka, rodzaj, rozmiar, data, cel, tryb, stan, pominiety, uwaga, wynik
+            FROM plan WHERE {warunek} ORDER BY cel""")]
+    if tekst:
+        wiersze = [w for w in wiersze if tekst in w["cel"].casefold() or tekst in w["sciezka"].casefold()]
+    for w in wiersze:
+        w["nazwa"] = w["cel"].rsplit("/", 1)[-1]
+    return {"folder": None, "razem": len(wiersze), "pliki": wiersze[od:od + ile]}
+
+
+def _data_pliku(w) -> datetime | None:
+    d = _dt(w["data"])
+    if d:
+        return d
+    m = re.search(r"(?:Zdjęcia|Filmy) z (\d{4})/(\S+)", w["cel"])
+    if m and m.group(2) in MIESIACE:
+        return datetime(int(m.group(1)), MIESIACE.index(m.group(2)) + 1, 1)
+    return None
+
+
+def _fraza_folderu(cel: str) -> str:
+    """„Marzec w Olkuszu” -> „w Olkuszu” (fraza miejsca z nazwy folderu miesiąca)."""
+    folder = cel.rsplit("/", 1)[0].rsplit("/", 1)[-1] if "/" in cel else ""
+    slowa = folder.split(" ", 1)
+    return slowa[1] if len(slowa) > 1 and slowa[0] in MIESIACE else ""
+
+
+def _folder_mediow(w, d: datetime, fraza: str) -> str:
+    rodz = "Zdjęcia" if w["rodzaj"] == "zdjecie" else "Filmy"
+    return f"{rodz}/{rodz} z {d.year}/" + czysta_nazwa(f"{MIESIACE[d.month - 1]} {fraza}".strip())
+
+
+def ustaw_miejsce(db: sqlite3.Connection, ids: list[int], miejsce: str) -> dict:
+    """„Te zdjęcia to też Hel” — przenosi do <Miesiąc> na Helu (miesiąc z daty każdego pliku)."""
+    przygotuj(db)
+    m = (miejsce or "").strip()
+    if not m:
+        return {"blad": "Podaj nazwę miejsca, np. Hel albo dom."}
+    if m.casefold() in ("dom", "w domu"):
+        fraza = "w domu"
+    elif re.match(r"^(w|we|na)\s", m):
+        fraza = m  # użytkownik podał już odmienioną formę
+    else:
+        fraza = miejsca.miejscownik(m[0].upper() + m[1:])[0]
+    return _przeloz_media(db, ids, lambda w, d: (d, fraza), f"Miejsce „{fraza}” dla")
+
+
+def ustaw_date(db: sqlite3.Connection, ids: list[int], data: str) -> dict:
+    """Poprawia datę (np. skany ze złą datą) i przenosi do właściwego roku/miesiąca, zachowując miejsce."""
+    przygotuj(db)
+    mm = re.fullmatch(r"\s*(\d{4})-(\d{1,2})(?:-(\d{1,2}))?\s*", data or "")
+    if not mm:
+        return {"blad": "Podaj datę w formacie RRRR-MM-DD albo RRRR-MM."}
+    try:
+        d = datetime(int(mm.group(1)), int(mm.group(2)), int(mm.group(3) or 1), 12)
+    except ValueError:
+        return {"blad": "Nieprawidłowa data."}
+    return _przeloz_media(db, ids, lambda w, _d: (d, _fraza_folderu(w["cel"])), f"Data {d:%Y-%m-%d} dla",
+                          nowa_data=d.isoformat(timespec="seconds"))
+
+
+def _przeloz_media(db, ids, wybor, opis: str, nowa_data: str | None = None) -> dict:
+    wiersze = db.execute(f"SELECT id, cel, rodzaj, data, pominiety FROM plan WHERE tryb!='istniejacy' AND id IN "
+                         f"({','.join('?' * len(ids))})", [int(i) for i in ids]).fetchall() if ids else []
+    grupy, pominiete = defaultdict(list), 0
+    for w in wiersze:
+        d = _data_pliku(w)
+        if w["rodzaj"] not in ("zdjecie", "film") or (d is None and nowa_data is None):
+            pominiete += 1
+            continue
+        dd, fraza = wybor(w, d)
+        grupy[_folder_mediow(w, dd, fraza)].append(w)
+    zmiany = []
+    for folder, lista in grupy.items():
+        for (i, c), w in zip(_wolne_w_folderze(db, folder, [(w["id"], w["cel"].rsplit("/", 1)[-1]) for w in lista]),
+                             lista):
+            zmiany.append((i, c, w["pominiety"], nowa_data or w["data"]))
+    wynik = _zastosuj(db, f"{opis} {len(zmiany)} plików", zmiany)
+    wynik["pominiete"] = pominiete
+    wynik["foldery"] = sorted(grupy)
+    return wynik

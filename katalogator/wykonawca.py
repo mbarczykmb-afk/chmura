@@ -172,6 +172,24 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
             if st.st_size != w["rozmiar"]:
                 raise OSError("plik zmienił się od skanu — przeskanuj ponownie")
             os.makedirs(os.path.dirname(dst), exist_ok=True)
+            tryb_logu = w["tryb"]
+            if os.path.exists(dst) and os.path.getsize(dst) == w["rozmiar"] and \
+                    _hash(dst, przerwij) == _hash(w["sciezka"], przerwij, licz):
+                # identyczny plik już jest w bibliotece — nie tworzymy kopii „ (2)”
+                usuniete = 0
+                if w["tryb"] == "przenies":
+                    os.remove(w["sciezka"])
+                    usuniete = 1
+                    przeniesione_foldery.add(os.path.dirname(w["sciezka"]))
+                    if w["plik_id"] is not None:
+                        db.execute("DELETE FROM pliki WHERE rowid=?", (w["plik_id"],))
+                db.execute("INSERT INTO wykonanie(partia, plan_id, zrodlo, cel, tryb, usuniete, rozmiar, mtime, czas) "
+                           "VALUES (?,?,?,?,?,?,?,?,?)",
+                           (partia, w["id"], w["sciezka"], dst, "juz_byl", usuniete, w["rozmiar"], st.st_mtime,
+                            time.time()))
+                db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
+                ok += 1
+                continue
             dst = _wolna(dst)
             usuniete = 0
             if w["tryb"] == "przenies" and ten_sam_wolumin(w["sciezka"], os.path.dirname(dst)):
@@ -192,7 +210,7 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
                     db.execute("DELETE FROM pliki WHERE rowid=?", (w["plik_id"],))
             db.execute("INSERT INTO wykonanie(partia, plan_id, zrodlo, cel, tryb, usuniete, rozmiar, mtime, czas) "
                        "VALUES (?,?,?,?,?,?,?,?,?)",
-                       (partia, w["id"], w["sciezka"], dst, w["tryb"], usuniete, w["rozmiar"], st.st_mtime, time.time()))
+                       (partia, w["id"], w["sciezka"], dst, tryb_logu, usuniete, w["rozmiar"], st.st_mtime, time.time()))
             db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
             ok += 1
         except Przerwano:
@@ -262,7 +280,12 @@ def cofnij(db: sqlite3.Connection, postep=None, przerwij=None) -> dict:
                 raise OSError(f"nie ma już pliku {w['cel']}")
             if os.path.getsize(w["cel"]) != w["rozmiar"]:
                 raise OSError(f"plik zmieniony po uporządkowaniu: {w['cel']}")
-            if w["usuniete"]:
+            if w["tryb"] == "juz_byl":
+                # plik był w bibliotece wcześniej — zostaje; przywracamy tylko usunięty oryginał
+                if w["usuniete"] and not os.path.exists(w["zrodlo"]):
+                    os.makedirs(os.path.dirname(w["zrodlo"]), exist_ok=True)
+                    kopiuj_z_weryfikacja(w["cel"], w["zrodlo"], przerwij)
+            elif w["usuniete"]:
                 if os.path.exists(w["zrodlo"]):
                     raise OSError(f"w miejscu oryginału jest już plik: {w['zrodlo']}")
                 os.makedirs(os.path.dirname(w["zrodlo"]), exist_ok=True)
@@ -273,7 +296,8 @@ def cofnij(db: sqlite3.Connection, postep=None, przerwij=None) -> dict:
                     os.remove(w["cel"])
             else:
                 os.remove(w["cel"])
-            foldery_celu.add(os.path.dirname(w["cel"]))
+            if w["tryb"] != "juz_byl":
+                foldery_celu.add(os.path.dirname(w["cel"]))
             db.execute("UPDATE wykonanie SET cofniete=1 WHERE id=?", (w["id"],))
             db.execute("UPDATE plan SET wynik=NULL WHERE id=?", (w["plan_id"],))
             cofniete += 1
