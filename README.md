@@ -87,12 +87,14 @@ i raport, duplikaty, analiza zdjęć (dokumenty, podobne, nieostre), propozycja 
 („Zdjęcia z 2023 → Marzec w Olkuszu”), edytor z wyszukiwarką i zmianami zbiorczymi,
 porządkowanie z weryfikacją i cofaniem, folder przychodzący z harmonogramem. Nazwy miejscowości: © GeoNames, CC BY 4.0.
 
-**Uruchomienie (aplikacja okienkowa, bez instalacji):**
-1. GitHub → zakładka **Actions** → „Katalogator.exe (Windows)” → ostatnie
-   zielone uruchomienie → na dole **Artifacts → Katalogator-windows** (pobierze ZIP).
-2. Rozpakuj i kliknij dwukrotnie **Katalogator.exe**. Przy pierwszym uruchomieniu
-   Windows SmartScreen może ostrzec o nieznanym wydawcy → *Więcej informacji* →
-   *Uruchom mimo to*.
+**Instalacja:**
+1. Wejdź na <https://github.com/mbarczykmb-afk/chmura/releases> i pobierz najnowszy
+   **Katalogator-Setup-X.Y.Z.exe**.
+2. Uruchom instalator (bez uprawnień administratora). Windows SmartScreen może ostrzec
+   o nieznanym wydawcy → *Więcej informacji* → *Uruchom mimo to*. Instalator tworzy skrót
+   w menu Start (i opcjonalnie na pulpicie); program trafia do `%LOCALAPPDATA%\Programs\Katalogator`.
+   Wersja przenośna bez instalacji: `Katalogator.exe` z tej samej strony.
+   Program sam powiadomi o nowej wersji (*? → O programie* — można wyłączyć) i zainstaluje ją jednym kliknięciem.
 3. Otworzy się okno programu. W sekcji *Co porządkujemy?* rozwiń dysk
    (np. `Z:` — dyski sieciowe mają ikonę 🌐) i przy folderach zaznacz ✓
    **K** (kopiuj — oryginały zostają) albo **P** (przenieś); *Dokąd?* →
@@ -110,6 +112,10 @@ porządkowanie z weryfikacją i cofaniem, folder przychodzący z harmonogramem. 
 8. **Projekty** (przycisk z nazwą projektu u góry) → każdy projekt ma własne foldery,
    propozycję, notatki i dziennik; w *Drzewie* oznaczaj foldery „✓ Przejrzany” i przechodź
    do kolejnych przyciskiem *Następny →* — możesz wrócić do pracy za kilka dni.
+10. **Problemy:** *? → Zgłoś problem* pokazuje raport diagnostyczny (wersja, ustawienia,
+   dziennik błędów — bez zawartości plików). *Kopiuj* / *Zapisz plik* i wyślij go w rozmowie
+   z Claude albo *Utwórz zgłoszenie na GitHubie*. Dziennik błędów:
+   `%LOCALAPPDATA%\Katalogator\logi\katalogator.log`.
 9. **Nowe pliki** → dodaj folder przychodzący (np. zrzuty z telefonu), wpisz *Mieszkam w*,
    *Sprawdź nowe pliki* → *Przenieś do biblioteki*; opcjonalnie *Automatycznie codziennie o…*
    (Harmonogram zadań Windows uruchamia `Katalogator.exe --auto <projekt>`).

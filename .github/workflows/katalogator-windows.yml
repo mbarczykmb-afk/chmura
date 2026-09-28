@@ -2,14 +2,20 @@ name: Katalogator.exe (Windows)
 
 on:
   push:
+    branches: ["**"]
+    tags: ["v*"]
     paths:
       - "katalogator/**"
       - "tests/**"
       - "uruchom.py"
       - "requirements.txt"
       - "narzedzia/**"
+      - "instalator/**"
       - ".github/workflows/katalogator-windows.yml"
   workflow_dispatch:
+
+permissions:
+  contents: write   # publikacja wydania (tylko przy tagu v*)
 
 jobs:
   build:
@@ -29,9 +35,20 @@ jobs:
       - name: Testy (na Windows)
         run: python -m pytest -q tests
 
+      - name: Wersja
+        id: wersja
+        shell: pwsh
+        run: |
+          $w = python -c "import katalogator; print(katalogator.__version__)"
+          "wersja=$w" >> $env:GITHUB_OUTPUT
+          if ("${{ github.ref }}" -like "refs/tags/v*" -and "${{ github.ref_name }}" -ne "v$w") {
+            throw "Tag ${{ github.ref_name }} nie zgadza się z wersją programu $w"
+          }
+
       - name: Budowanie Katalogator.exe
         run: >
           pyinstaller --noconfirm --onefile --windowed --name Katalogator
+          --icon katalogator/dane/ikona.ico
           --add-data "katalogator/ui;katalogator/ui"
           --add-data "katalogator/dane;katalogator/dane"
           --collect-all pillow_heif
@@ -43,18 +60,67 @@ jobs:
           $p = Start-Process -FilePath dist\Katalogator.exe -PassThru
           Start-Sleep -Seconds 8
           if ($p.HasExited) { throw "Katalogator.exe zakonczyl sie od razu (kod $($p.ExitCode))" }
-          Stop-Process -Id $p.Id -Force
+          taskkill /PID $p.Id /T /F | Out-Null
+          Get-Process msedge -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 2
           Get-Item dist\Katalogator.exe | Select-Object Name, Length
 
       - name: Test trybu automatycznego (--auto, bez okna)
         shell: pwsh
         run: |
           $p = Start-Process -FilePath dist\Katalogator.exe -ArgumentList "--auto","nie-ma-takiego" -PassThru
-          if (-not $p.WaitForExit(60000)) { Stop-Process -Id $p.Id -Force; throw "--auto nie zakonczyl sie w 60 s" }
+          if (-not $p.WaitForExit(90000)) { taskkill /PID $p.Id /T /F | Out-Null; throw "--auto nie zakonczyl sie w 90 s" }
           if ($p.ExitCode -ne 0) { throw "--auto zwrocil kod $($p.ExitCode)" }
+
+      - name: Instalator (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress | Out-Null
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DWersja=${{ steps.wersja.outputs.wersja }}" instalator\katalogator.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC zwrocil kod $LASTEXITCODE" }
+
+      - name: Test instalacji i odinstalowania
+        shell: pwsh
+        run: |
+          $setup = "dist\Katalogator-Setup-${{ steps.wersja.outputs.wersja }}.exe"
+          $p = Start-Process -FilePath $setup -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/TASKS=pulpit" -PassThru -Wait
+          if ($p.ExitCode -ne 0) { throw "Instalacja zwrocila kod $($p.ExitCode)" }
+          $exe = "$env:LOCALAPPDATA\Programs\Katalogator\Katalogator.exe"
+          if (-not (Test-Path $exe)) { throw "Brak zainstalowanego programu: $exe" }
+          $skrot = Get-ChildItem "$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Filter "Katalogator.lnk" -Recurse
+          if (-not $skrot) { throw "Brak skrotu w menu Start" }
+          if (-not (Test-Path "$([Environment]::GetFolderPath('Desktop'))\Katalogator.lnk")) { throw "Brak skrotu na pulpicie" }
+          $u = Start-Process -FilePath "$env:LOCALAPPDATA\Programs\Katalogator\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES" -PassThru -Wait
+          Start-Sleep -Seconds 3
+          if (Test-Path $exe) { throw "Program nie zostal odinstalowany" }
+          if (-not (Test-Path "$env:LOCALAPPDATA\Katalogator")) { throw "Odinstalowanie usunelo dane uzytkownika" }
+
+      - name: Dziennik błędów (diagnostyka)
+        if: always()
+        shell: pwsh
+        run: |
+          $log = "$env:LOCALAPPDATA\Katalogator\logi\katalogator.log"
+          if (Test-Path $log) { Get-Content $log -Tail 120 } else { "Brak dziennika" }
 
       - uses: actions/upload-artifact@v4
         with:
           name: Katalogator-windows
-          path: dist/Katalogator.exe
+          path: |
+            dist/Katalogator.exe
+            dist/Katalogator-Setup-*.exe
           retention-days: 90
+
+      - name: Wydanie na GitHubie (tylko tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Katalogator ${{ steps.wersja.outputs.wersja }}
+          files: |
+            dist/Katalogator-Setup-*.exe
+            dist/Katalogator.exe
+          body: |
+            **Instalacja:** pobierz `Katalogator-Setup-${{ steps.wersja.outputs.wersja }}.exe` i uruchom
+            (instaluje się bez uprawnień administratora, tworzy skrót w menu Start).
+            `Katalogator.exe` to wersja przenośna — bez instalacji.
+
+            Program sam powiadomi o kolejnych wersjach.

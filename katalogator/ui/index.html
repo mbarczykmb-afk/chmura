@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Katalogator</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232f6fdb'/%3E%3Cpath d='M3 5h4l1 1h5v6H3z' fill='white'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/ui/ikona.png">
 <style>
 :root{
   --bg:#f4f4f2; --panel:#ffffff; --fg:#1c1c1e; --mut:#6c6c72; --lin:#e2e2de;
@@ -20,7 +20,15 @@
 [hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 "Segoe UI",system-ui,sans-serif}
 header{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--lin);background:var(--panel)}
-header h1{font-size:18px;margin:0;font-weight:600}
+header h1{font-size:18px;margin:0;font-weight:600;display:flex;align-items:center;gap:8px}
+header h1 img{width:26px;height:26px}
+.menu{position:absolute;right:0;top:calc(100% + 6px);background:var(--panel);border:1px solid var(--lin);border-radius:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,.15);padding:6px;z-index:15;display:flex;flex-direction:column;min-width:260px}
+.menu button{border:none;background:none;text-align:left;padding:8px 10px;border-radius:6px}
+.menu button:hover{background:var(--akc-miekki)}
+.baner{display:flex;align-items:center;gap:8px;padding:10px 24px;background:var(--akc-miekki);border-bottom:1px solid var(--lin);flex-wrap:wrap;font-size:14px}
+.baner span{flex:1}
+.glowny-maly{background:var(--akc);border-color:var(--akc);color:var(--akc-fg);font-weight:600}
 header .wersja{color:var(--mut);font-size:12px}
 header .odstep{flex:1}
 .kroki{display:flex;gap:6px;padding:14px 24px 0;flex-wrap:wrap}
@@ -184,11 +192,25 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
 </head>
 <body>
 <header>
-  <h1>Katalogator</h1><span class="wersja" id="wersja"></span>
+  <h1><img src="/ui/ikona.png" alt="">Katalogator</h1><span class="wersja" id="wersja"></span>
   <button class="projekt-btn" id="projekt-btn" title="Zmień projekt">📁 <span id="projekt-nazwa">…</span> ▾</button>
   <span class="odstep"></span>
+  <div style="position:relative">
+    <button id="pomoc-btn" title="Pomoc, zgłaszanie problemów, aktualizacje">?</button>
+    <div class="menu" id="pomoc-menu" hidden>
+      <button id="m-zglos">🐞 Zgłoś problem / wyślij raport…</button>
+      <button id="m-aktualizacje">⟳ Sprawdź aktualizacje</button>
+      <button id="m-o">ℹ O programie</button>
+    </div>
+  </div>
   <button id="zamknij" title="Zamyka program">Zamknij</button>
 </header>
+<div class="baner" id="baner-akt" hidden>
+  <span id="baner-tekst"></span>
+  <button class="maly" id="baner-co">Co nowego</button>
+  <button class="maly glowny-maly" id="baner-instaluj">Pobierz i zainstaluj</button>
+  <button class="maly" id="baner-pozniej">Później</button>
+</div>
 
 <nav class="kroki">
   <div class="krok akt" id="k1"><b>1</b>Foldery</div>
@@ -439,6 +461,34 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
   </div>
 </div>
 
+<div class="nakladka" id="okno-raport" hidden>
+  <div class="okno" role="dialog" aria-labelledby="okno-raport-tytul" style="width:min(820px,94vw)">
+    <h2 id="okno-raport-tytul">Zgłoś problem</h2>
+    <p class="opis" style="margin:0">Opisz, co robiłeś i co poszło nie tak. Raport poniżej zawiera wersję programu,
+      ustawienia projektu (ścieżki folderów), statystyki i dziennik błędów — <b>bez zawartości Twoich plików</b>.
+      Wyślij go w rozmowie z Claude (wklej lub załącz plik) albo utwórz zgłoszenie na GitHubie.</p>
+    <textarea id="raport-opis" placeholder="Np. „Skan zatrzymał się na folderze Filmy, pokazał błąd …”" style="min-height:60px"></textarea>
+    <textarea id="raport-tekst" readonly style="flex:1;min-height:200px;font:12px/1.4 Consolas,monospace;white-space:pre"></textarea>
+    <div class="dol">
+      <span class="wybor" id="raport-info"></span>
+      <button id="raport-kopiuj">Kopiuj</button>
+      <button id="raport-zapisz">Zapisz plik…</button>
+      <button class="glowny" id="raport-github">Utwórz zgłoszenie na GitHubie</button>
+      <button id="raport-zamknij">Zamknij</button>
+    </div>
+  </div>
+</div>
+
+<div class="nakladka" id="okno-o" hidden>
+  <div class="okno" role="dialog" aria-labelledby="okno-o-tytul" style="height:auto">
+    <h2 id="okno-o-tytul" style="display:flex;align-items:center;gap:10px"><img src="/ui/ikona.png" alt="" width="40" height="40">Katalogator <span id="o-wersja"></span></h2>
+    <div id="o-szczegoly" style="font-size:13px;line-height:1.7"></div>
+    <label style="font-size:13px;display:flex;gap:6px;align-items:center">
+      <input type="checkbox" id="o-akt"> Sprawdzaj automatycznie, czy jest nowa wersja (raz na 12 godzin, tylko zapytanie do GitHuba)</label>
+    <div class="dol"><span class="wybor">Nazwy miejscowości: © GeoNames (CC BY 4.0)</span><button id="o-zamknij">Zamknij</button></div>
+  </div>
+</div>
+
 <div class="nakladka" id="okno-proj" hidden>
   <div class="okno" role="dialog" aria-labelledby="okno-proj-tytul">
     <h2 id="okno-proj-tytul">Projekty</h2>
@@ -482,6 +532,18 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
 </div>
 
 <script>
+// Błędy JavaScript trafiają do dziennika programu (do raportu), najwyżej 20 na sesję.
+(() => {
+  let ile = 0;
+  const wyslij = t => {
+    if (ile++ >= 20) return;
+    const tok = new URLSearchParams(location.search).get("t") || "";
+    fetch("/api/log", {method: "POST", headers: {"X-Token": tok, "Content-Type": "application/json"},
+                       body: JSON.stringify({tekst: t})}).catch(() => {});
+  };
+  window.addEventListener("error", e => wyslij(`${e.message} (${(e.filename || "").split("/").pop()}:${e.lineno}:${e.colno})`));
+  window.addEventListener("unhandledrejection", e => wyslij("Promise: " + (e.reason && (e.reason.stack || e.reason.message) || e.reason)));
+})();
 const TOKEN = new URLSearchParams(location.search).get("t") || "";
 const $ = id => document.getElementById(id);
 let stan = {zrodla: [], cel: "", skan: {}, ma_wyniki: false};
@@ -951,5 +1013,6 @@ function rysujDup() {
 <script src="/ui/plan.js"></script>
 <script src="/ui/analiza.js"></script>
 <script src="/ui/projekt.js"></script>
+<script src="/ui/pomoc.js"></script>
 </body>
 </html>

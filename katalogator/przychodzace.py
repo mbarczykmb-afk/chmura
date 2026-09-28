@@ -177,3 +177,15 @@ def ustaw_harmonogram(proj: projekty.Projekty, pid: str, godzina: str) -> dict:
             raise ValueError("Nie udało się utworzyć zadania: " + (w.stderr or w.stdout).strip())
     proj.zapisz(pid, {"harmonogram": godzina})
     return {"harmonogram": godzina}
+
+
+def usun_wszystkie_harmonogramy(katalog: Path) -> None:
+    """Przy odinstalowaniu: usuwa zadania Harmonogramu wszystkich projektów."""
+    if sys.platform != "win32":
+        return
+    proj = projekty.Projekty(katalog)
+    flagi = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    for p in proj.lista():
+        if p.get("harmonogram"):
+            subprocess.run(polecenia_harmonogramu(p["id"], "")[0], capture_output=True, creationflags=flagi)
+            proj.zapisz(p["id"], {"harmonogram": ""})

@@ -57,7 +57,7 @@ def test_skrypty_ui_bez_tokenu(app):
     api, url, _ = app
     import urllib.request
     baza = url.split("/?")[0]
-    for plik in ("plan.js", "analiza.js", "projekt.js"):
+    for plik in ("plan.js", "analiza.js", "projekt.js", "pomoc.js", "ikona.png"):
         with urllib.request.urlopen(f"{baza}/ui/{plik}", timeout=5) as r:
             assert r.status == 200
 

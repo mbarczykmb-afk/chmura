@@ -13,11 +13,32 @@ def main(argv=None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if sys.stdout is None:  # Katalogator.exe bez konsoli
         sys.stdout = sys.stderr = open(os.devnull, "w")
-    if args[:1] == ["--auto"] and len(args) == 2:
+    if args[:1] in (["--auto"], ["--usun-harmonogramy"]) or not args:
+        # tryby bez konsoli: wszystko (także błędy) do pliku dziennika, nigdy okienko z błędem
+        from . import logi
         from .aplikacja import katalog_danych
-        from .przychodzace import automat
-        print(automat(katalog_danych(), args[1]))
-        return 0
+        katalog = katalog_danych()
+        logi.konfiguruj(katalog)
+        try:
+            if args[:1] == ["--auto"] and len(args) == 2:
+                from .przychodzace import automat
+                logi.LOG.info("Tryb automatyczny: projekt %s", args[1])
+                wynik = automat(katalog, args[1])
+                logi.LOG.info("Tryb automatyczny zakończony: %s", wynik)
+                print(wynik)
+                return 0
+            if args[:1] == ["--usun-harmonogramy"]:
+                from .przychodzace import usun_wszystkie_harmonogramy
+                usun_wszystkie_harmonogramy(katalog)
+                return 0
+            if not args:
+                from .aplikacja import main as aplikacja  # bez parametrów: okno aplikacji
+                aplikacja()
+                return 0
+            return 2
+        except Exception:
+            logi.LOG.exception("Błąd programu (parametry: %s)", args)
+            return 1
     if not args:
         from .aplikacja import main as aplikacja  # bez parametrów: okno aplikacji
         aplikacja()

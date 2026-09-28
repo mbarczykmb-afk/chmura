@@ -20,7 +20,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, analiza, duplikaty, dyski, planista, projekty, przychodzace, raport, skaner, wykonawca
+from . import __version__, aktualizacje, analiza, duplikaty, dyski, logi, planista, projekty, przychodzace, raport, skaner, wykonawca
+from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
 BEZ_PINGU_ZAMKNIJ_PO = 150  # s; przeglądarka spowalnia timery w zminimalizowanym oknie
@@ -54,7 +55,7 @@ class Stan:
         self.skan = {"trwa": False, "przejrzano": 0, "folder": "", "komunikat": "", "blad": ""}
         self.dup = {"trwa": False, "etap": "", "zrobione": 0, "wszystkie": 0, "bajty": 0,
                     "komunikat": "", "blad": ""}
-        self.zad = {n: self._pusty() for n in ("analiza", "plan", "wykonanie", "przychodzace")}
+        self.zad = {n: self._pusty() for n in ("analiza", "plan", "wykonanie", "przychodzace", "aktualizacja")}
         self.miniatury: dict[int, bytes] = {}
         self.projekty.ustaw_ostatni(pid)
         self.wersja_danych += 1
@@ -195,6 +196,7 @@ class Stan:
             except skaner.Przerwano:
                 komunikat, blad = "Przerwano. Postęp zapisany — możesz dokończyć później.", ""
             except Exception as e:
+                LOG.exception("Zadanie „%s” nie powiodło się", nazwa)
                 komunikat, blad = "Nie powiodło się.", f"{e}" if isinstance(e, (OSError, ValueError)) else \
                     f"{type(e).__name__}: {e}"
             finally:
@@ -203,6 +205,7 @@ class Stan:
                 self.zad[nazwa].update(trwa=False, komunikat=komunikat, blad=blad)
                 self.wersja_danych += 1
             self.dziennik(nazwa, komunikat + (" " + blad if blad else ""))
+            LOG.info("Zadanie „%s”: %s %s", nazwa, komunikat, blad)
 
         threading.Thread(target=praca, daemon=True).start()
         return None
@@ -241,6 +244,7 @@ class Stan:
         except skaner.Przerwano:
             komunikat, blad = "Przerwano. Postęp zapisany — kolejny skan dokończy resztę.", ""
         except Exception as e:  # pokaż błąd w oknie zamiast cichej awarii
+            LOG.exception("Skan nie powiódł się")
             komunikat, blad = "Skan nie powiódł się.", f"{type(e).__name__}: {e}"
         finally:
             db.close()
@@ -276,6 +280,7 @@ class Stan:
         except skaner.Przerwano:
             komunikat, blad = "Przerwano. Sprawdzone pliki są zapamiętane.", ""
         except Exception as e:
+            LOG.exception("Wyszukiwanie duplikatów nie powiodło się")
             komunikat, blad = "Wyszukiwanie nie powiodło się.", f"{type(e).__name__}: {e}"
         finally:
             db.close()
@@ -404,6 +409,82 @@ class Stan:
             return f"Cofnięto {w['cofniete']} plików." + (" Problemy: " + "; ".join(w["bledy"][:3]) if w["bledy"] else "")
         return self.uruchom("przychodzace", f)
 
+    # --- raport diagnostyczny ----------------------------------------------------
+    def raport_diagnostyczny(self) -> str:
+        w = ["=== Raport Katalogatora ===", f"Wersja: {__version__}"]
+        w += [f"{k}: {v}" for k, v in logi.system().items()]
+        w += [f"Katalog danych: {self.katalog}", f"Dziennik błędów: {logi.plik()}", "",
+              "=== Projekt ===", f"Nazwa: {self.projekt.get('nazwa')} ({self.pid})",
+              "Źródła: " + "; ".join(f"{z['sciezka']} [{z['tryb']}]" for z in self.ustawienia["zrodla"]),
+              f"Miejsce docelowe: {self.ustawienia['cel']}",
+              "Foldery przychodzące: " + "; ".join(self.projekt.get("przychodzace") or []),
+              f"Harmonogram: {self.projekt.get('harmonogram') or 'wyłączony'}", ""]
+        try:
+            st = self.stan()
+            w.append("=== Stan ===")
+            for k in ("skan", "dup"):
+                w.append(f"{k}: {st[k].get('komunikat')} {st[k].get('blad')}")
+            for k, z in st["zad"].items():
+                if z.get("komunikat") or z.get("blad"):
+                    w.append(f"{k}: {z.get('komunikat')} {z.get('blad')}")
+            for k in ("plan", "analiza", "duplikaty", "przychodzace"):
+                if st.get(k):
+                    krotko = {a: b for a, b in st[k].items() if not isinstance(b, (list, dict))}
+                    w.append(f"{k}: {krotko}")
+            db = self.db()
+            try:
+                w.append("Pliki wg rodzaju: " + ", ".join(
+                    f"{r[0]} {r[1]}" for r in db.execute("SELECT rodzaj, COUNT(*) FROM pliki GROUP BY rodzaj")))
+                bledy = db.execute("SELECT wzgledna, blad FROM pliki WHERE blad IS NOT NULL LIMIT 15").fetchall()
+                n_bledow = db.execute("SELECT COUNT(*) FROM pliki WHERE blad IS NOT NULL").fetchone()[0]
+                if n_bledow:
+                    w += ["", f"=== Pliki z nieczytelnymi metadanymi ({n_bledow}) ==="]
+                    w += [f"{r[0]}: {r[1]}" for r in bledy]
+                bl_wyk = db.execute("SELECT sciezka, wynik FROM plan WHERE wynik LIKE 'blad%' LIMIT 15").fetchall()
+                if bl_wyk:
+                    w += ["", "=== Błędy porządkowania ==="] + [f"{r[0]}: {r[1]}" for r in bl_wyk]
+                w += ["", "=== Dziennik prac (ostatnie) ==="]
+                w += [time.strftime("%Y-%m-%d %H:%M", time.localtime(x["czas"])) + f"  [{x['typ']}] {x['opis']}"
+                      for x in projekty.dziennik(db, 20)]
+            finally:
+                db.close()
+        except Exception as e:
+            w.append(f"(nie udało się zebrać stanu: {type(e).__name__}: {e})")
+        w += ["", "=== Dziennik błędów (ostatnie linie) ===", logi.ogon(300) or "(pusty)"]
+        return "\n".join(w)
+
+    def zapisz_raport(self, opis: str = "") -> Path:
+        folder = next((p for p in (Path.home() / "Downloads", Path.home() / "Pobrane", Path.home() / "Desktop")
+                       if p.is_dir()), self.katalog)
+        plik = folder / f"Katalogator-raport-{time.strftime('%Y%m%d-%H%M%S')}.txt"
+        tekst = self.raport_diagnostyczny()
+        if opis.strip():
+            tekst = "=== Opis problemu ===\n" + opis.strip() + "\n\n" + tekst
+        plik.write_text(tekst, encoding="utf-8")
+        if sys.platform == "win32":
+            subprocess.Popen(["explorer", "/select,", str(plik)])
+        LOG.info("Zapisano raport diagnostyczny: %s", plik)
+        return plik
+
+    def url_zgloszenia(self, opis_uzytkownika: str = "") -> str:
+        from urllib.parse import quote
+        bledy = [l for l in logi.ogon(400).splitlines() if " ERROR " in l or " CRITICAL" in l or "Traceback" in l
+                 or l.startswith(("  ", "\t")) or "Error" in l]
+        tresc = (f"**Opis problemu:**\n{opis_uzytkownika or '(opisz, co robiłeś i co poszło nie tak)'}\n\n"
+                 f"**Wersja:** {__version__}\n**System:** {logi.system()['system']}\n\n"
+                 "**Ostatnie błędy z dziennika:**\n```\n" + "\n".join(bledy[-60:])[-4500:] + "\n```\n\n"
+                 "_Pełny raport zapisz przyciskiem „Zapisz plik” w programie i dołącz tutaj (przeciągnij plik)._")
+        tytul = "Problem: " + (opis_uzytkownika.splitlines()[0][:80] if opis_uzytkownika else "Katalogator " + __version__)
+        return (f"https://github.com/{aktualizacje.REPO}/issues/new?title={quote(tytul)}&body={quote(tresc)}"
+                )[:7800]
+
+    def zainstaluj_aktualizacje(self, url: str, zamknij) -> str | None:
+        def f(db, postep, przerwij):
+            aktualizacje.pobierz_i_uruchom(url, postep=postep, przerwij=przerwij)
+            threading.Timer(3, zamknij).start()  # zwolnij plik programu dla instalatora
+            return "Uruchomiono instalator nowej wersji — Katalogator zaraz się zamknie."
+        return self.uruchom("aktualizacja", f)
+
     def z_db(self, funkcja, *a, **kw):
         db = self.db()
         try:
@@ -494,6 +575,25 @@ def _handler(stan: Stan, token: str, zamknij):
                 return {}
 
         def do_GET(self):
+            self._bezpiecznie(self._get)
+
+        def do_POST(self):
+            self._bezpiecznie(self._post)
+
+        def _bezpiecznie(self, f):
+            try:
+                f()
+            except (ConnectionError, BrokenPipeError):
+                pass
+            except Exception as e:
+                LOG.exception("Błąd obsługi %s %s", self.command, urlparse(self.path).path)
+                try:
+                    self._wyslij({"blad": f"Błąd programu: {type(e).__name__}: {e}. Szczegóły zapisano w dzienniku "
+                                          f"— użyj „Zgłoś problem”."}, kod=HTTPStatus.INTERNAL_SERVER_ERROR)
+                except Exception:
+                    pass
+
+        def _get(self):
             u = urlparse(self.path)
             q = parse_qs(u.query)
             if u.path in ("/", "/index.html"):
@@ -508,16 +608,25 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij(stan.stan())
             if u.path == "/raport":
                 return self._wyslij(stan.raport_html(), "text/html; charset=utf-8")
-            if u.path.startswith("/ui/") and u.path.endswith((".js", ".css")):
+            if u.path.startswith("/ui/") and u.path.endswith((".js", ".css", ".png", ".ico")):
                 plik = UI / os.path.basename(u.path)
                 if plik.is_file():
-                    return self._wyslij(plik.read_bytes(), "text/javascript; charset=utf-8"
-                                        if plik.suffix == ".js" else "text/css; charset=utf-8")
+                    typ = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+                           ".png": "image/png", ".ico": "image/x-icon"}[plik.suffix]
+                    return self._wyslij(plik.read_bytes(), typ)
                 return self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
             if u.path == "/api/plan/drzewo":
                 return self._wyslij({"foldery": stan.z_db(planista.drzewo),
                                      "podsumowanie": stan.z_db(planista.podsumowanie),
                                      "przejrzane": sorted(stan.z_db(projekty.przejrzane))})
+            if u.path == "/api/raport-bledow":
+                return self._wyslij({"tekst": stan.raport_diagnostyczny(), "plik_logu": str(logi.plik() or "")})
+            if u.path == "/api/aktualizacja":
+                return self._wyslij(aktualizacje.sprawdz(stan.katalog, wymus=q.get("wymus", ["0"])[0] == "1"))
+            if u.path == "/api/o-programie":
+                return self._wyslij({"wersja": __version__, "katalog": str(stan.katalog),
+                                     "plik_logu": str(logi.plik() or ""), **logi.system(),
+                                     "sprawdzaj_aktualizacje": aktualizacje.wlaczone(stan.katalog)})
             if u.path == "/api/projekty":
                 return self._wyslij({"projekty": stan.projekty.lista(), "biezacy": stan.pid})
             if u.path == "/api/projekt/dziennik":
@@ -562,7 +671,7 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij(dane, "image/jpeg")
             self._wyslij({"blad": "nie ma"}, kod=HTTPStatus.NOT_FOUND)
 
-        def do_POST(self):
+        def _post(self):
             u = urlparse(self.path)
             if not self._ok_token(parse_qs(u.query)):
                 return self._wyslij({"blad": "brak dostępu"}, kod=HTTPStatus.FORBIDDEN)
@@ -619,6 +728,28 @@ def _handler(stan: Stan, token: str, zamknij):
                     return self._wyslij(w)
                 except ValueError as e:
                     return self._wyslij({"blad": str(e)}, kod=HTTPStatus.BAD_REQUEST)
+            if u.path == "/api/log":
+                LOG.warning("Okno programu: %s", str(dane.get("tekst", ""))[:2000])
+                return self._wyslij({"ok": True})
+            if u.path == "/api/raport-bledow/zapisz":
+                return self._wyslij({"plik": str(stan.zapisz_raport(str(dane.get("opis", ""))[:5000]))})
+            if u.path == "/api/raport-bledow/github":
+                url_z = stan.url_zgloszenia(str(dane.get("opis", ""))[:1500])
+                webbrowser.open(url_z)
+                return self._wyslij({"url": url_z})
+            if u.path == "/api/otworz-strone":
+                adres = str(dane.get("url", ""))
+                if adres.startswith("https://github.com/"):
+                    webbrowser.open(adres)
+                return self._wyslij({"ok": True})
+            if u.path == "/api/program/ustawienia":
+                d = aktualizacje.zapisz_ustawienia(stan.katalog, sprawdzaj_aktualizacje=bool(
+                    dane.get("sprawdzaj_aktualizacje", True)))
+                return self._wyslij(d)
+            if u.path == "/api/aktualizacja/instaluj":
+                blad = stan.zainstaluj_aktualizacje(str(dane.get("url", "")), zamknij)
+                return self._wyslij({"blad": blad} if blad else {"ok": True},
+                                    kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
             if u.path == "/api/projekty/zmien":
                 w = stan.zmien_projekt(dane)
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
@@ -714,7 +845,10 @@ def otworz_okno(url: str) -> None:
 
 
 def main(otworz: bool = True) -> None:
-    serwer, url, stan = uruchom_serwer()
+    katalog = katalog_danych()
+    logi.konfiguruj(katalog)
+    LOG.info("Start Katalogatora %s — %s", __version__, logi.system())
+    serwer, url, stan = uruchom_serwer(katalog)
 
     def pilnuj():  # zamknięcie okna = koniec programu (skan jest wznawialny)
         while True:

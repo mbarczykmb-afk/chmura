@@ -131,5 +131,13 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     tworzy kopii „(2)”; ustawiane „Mieszkam w”; tryb `Katalogator.exe --auto <projekt>` i zadanie
     w Harmonogramie zadań Windows (codziennie o wybranej godzinie), wynik w dzienniku i auto.log
 
+11. **Instalator i aktualizacje** ✅ (1.2) — własna ikona, instalator Inno Setup (bez uprawnień
+    administratora, skróty w menu Start i na pulpicie, odinstalowanie usuwa zadania harmonogramu,
+    zostawia dane), wydania na GitHubie (tag `v*`), powiadomienie o nowej wersji (najwyżej co 12 h,
+    można wyłączyć) i „Pobierz i zainstaluj”
+12. **Diagnostyka** ✅ (1.2) — dziennik błędów w pliku (rotowany), wyjątki z wątków i błędy JavaScript
+    z okna trafiają do dziennika zamiast okienek; „Zgłoś problem”: raport (wersja, system, ustawienia,
+    stan zadań, dziennik prac, błędy) do skopiowania / zapisania / zgłoszenia na GitHubie
+
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.
