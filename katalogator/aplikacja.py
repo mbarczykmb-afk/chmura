@@ -52,6 +52,12 @@ class Stan:
         self.zad = {n: self._pusty() for n in ("analiza", "plan", "wykonanie")}
         self.miniatury: dict[int, bytes] = {}
         self.ostatni_ping = time.time()
+        self.wersja_danych = 0          # rośnie po każdej zmianie danych
+        self._podsumowania = (-1, {})   # (wersja, dane) — okno pyta o stan co sekundę
+
+    def zmiana(self) -> None:
+        with self.blokada:
+            self.wersja_danych += 1
 
     @staticmethod
     def _pusty() -> dict:
@@ -87,18 +93,25 @@ class Stan:
                 "dup": dup, "zad": zad, "ma_wyniki": ma, "duplikaty": None, "do_cofniecia": None,
                 "analiza": None, "plan": None, "wykonanie": None}
         if ma:
-            db = self.db()
-            try:
-                if db.execute("SELECT 1 FROM odciski LIMIT 1").fetchone():
-                    dane["duplikaty"] = duplikaty.podsumowanie(db)
-                dane["do_cofniecia"] = duplikaty.ostatnia_partia(db)
-                if db.execute("SELECT 1 FROM analiza LIMIT 1").fetchone():
-                    dane["analiza"] = analiza.podsumowanie(db)
-                if planista.istnieje(db):
-                    dane["plan"] = planista.podsumowanie(db)
-                dane["wykonanie"] = wykonawca.ostatnia_partia(db)
-            finally:
-                db.close()
+            with self.blokada:
+                wersja, (w_cache, cache) = self.wersja_danych, self._podsumowania
+            if w_cache != wersja or any(z["trwa"] for z in zad.values()) or skan["trwa"] or dup["trwa"]:
+                cache = {}
+                db = self.db()
+                try:
+                    if db.execute("SELECT 1 FROM odciski LIMIT 1").fetchone():
+                        cache["duplikaty"] = duplikaty.podsumowanie(db)
+                    cache["do_cofniecia"] = duplikaty.ostatnia_partia(db)
+                    if db.execute("SELECT 1 FROM analiza LIMIT 1").fetchone():
+                        cache["analiza"] = analiza.podsumowanie(db)
+                    if planista.istnieje(db):
+                        cache["plan"] = planista.podsumowanie(db)
+                    cache["wykonanie"] = wykonawca.ostatnia_partia(db)
+                finally:
+                    db.close()
+                with self.blokada:
+                    self._podsumowania = (wersja, cache)
+            dane.update(cache)
         return dane
 
     def _zajety(self) -> bool:  # wywoływać pod blokadą
@@ -133,6 +146,7 @@ class Stan:
                 db.close()
             with self.blokada:
                 self.zad[nazwa].update(trwa=False, komunikat=komunikat, blad=blad)
+                self.wersja_danych += 1
 
         threading.Thread(target=praca, daemon=True).start()
         return None
@@ -176,6 +190,7 @@ class Stan:
             db.close()
         with self.blokada:
             self.skan.update(trwa=False, komunikat=komunikat, blad=blad)
+            self.wersja_danych += 1
 
     # --- duplikaty w tle --------------------------------------------------
     def szukaj_duplikatow(self) -> str | None:
@@ -209,6 +224,7 @@ class Stan:
             db.close()
         with self.blokada:
             self.dup.update(trwa=False, komunikat=komunikat, blad=blad)
+            self.wersja_danych += 1
 
     def grupy(self, rodzaj: str | None, od: int, ile: int) -> dict:
         db = self.db()
@@ -334,6 +350,8 @@ def _handler(stan: Stan, token: str, zamknij):
             if not isinstance(tresc, (bytes, str)):
                 tresc = json.dumps(tresc, ensure_ascii=False)
             dane = tresc.encode("utf-8") if isinstance(tresc, str) else tresc
+            if self.command == "POST":
+                stan.zmiana()  # po wykonaniu operacji, przed odpowiedzią — odśwież podsumowania
             self.send_response(kod)
             self.send_header("Content-Type", typ)
             self.send_header("Content-Length", str(len(dane)))
@@ -413,6 +431,7 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij({"blad": "brak dostępu"}, kod=HTTPStatus.FORBIDDEN)
             stan.ostatni_ping = time.time()
             dane = self._json()
+            stan.zmiana()
             if u.path == "/api/ustawienia":
                 stan.zapisz_ustawienia(dane)
                 return self._wyslij(stan.stan())
