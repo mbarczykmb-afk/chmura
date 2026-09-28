@@ -91,13 +91,29 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
 
 ## Etapy realizacji
 
-1. **Skaner + raport** ✅ — aplikacja okienkowa `Katalogator.exe`
+1. **Skaner + raport** ✅ — aplikacja okienkowa `Katalogator.exe`, drzewo folderów z ptaszkami K/P
 1a. **Detektor duplikatów** ✅ — porównanie zawartości (rozmiar → 1 MB początek/koniec →
-    pełny odcisk BLAKE2b), lista grup z miniaturami, wybór pliku, który zostaje,
-    odłożenie kopii do `_Duplikaty_Katalogator` (zamiast kasowania) i cofanie.
-    Zostaje preferencyjnie: plik z miejsca docelowego, spoza folderów typu
-    „Pobrane/WhatsApp/Kopia”, bez „(1)” w nazwie, najstarszy.
-2. Nazwy miejscowości (offline) + propozycja drzewa + wykrywanie wyjazdów
-3. Edytor drzewa w przeglądarce (miniatury, edycja, zapis planu)
-4. Detektor zdjęć dokumentów + widok potwierdzania
-5. Wykonanie planu (kopiuj/przenieś/scal, weryfikacja, dziennik, cofanie)
+    pełny odcisk BLAKE2b), wybór pliku, który zostaje, odłożenie kopii do
+    `_Duplikaty_Katalogator` (bez kasowania) i cofanie
+2. **Propozycja drzewa** ✅ — nazwy miejscowości offline (GeoNames, dzielnice → miasto,
+   zagranica → kraj), polski miejscownik (reguły + wyjątki), dom = najczęstsze miejsce,
+   wyjazdy (seria zdjęć poza domem, przerwa ≤ 48 h, etykieta = najczęstsze miejsce wyjazdu),
+   zdjęcia bez GPS dopasowane do wyjazdu (±6 h) lub „w domu”, filmy z telefonu jak zdjęcia,
+   pozostałe filmy → `Filmy/Inne`, muzyka `Wykonawca/Album`, pliki towarzyszące
+   (XMP, RAW, napisy) idą za plikiem głównym, pliki już obecne w celu i duplikaty pomijane
+3. **Edytor drzewa** ✅ — drzewo wynikowe z licznikami (nowe / już są / do sprawdzenia /
+   kolizje / pominięte), miniatury, zmiana nazwy (scalanie), przenoszenie folderów i plików
+   (także przeciąganiem), nowy folder z zaznaczonych, wykluczanie, cofnij/ponów (Ctrl+Z/Y),
+   plan zapisany w bazie
+4. **Detektor zdjęć dokumentów** ✅ — ocena na miniaturze EXIF (jasne tło, mało koloru,
+   tusz, krawędzie tekstu); widok do przejrzenia, potwierdzone → `Zdjęcia/Dokumenty`
+5. **Wykonanie planu** ✅ — kopiuj/przenieś wg ptaszków, kopia do pliku tymczasowego +
+   weryfikacja sumą kontrolną, szybka zmiana nazwy na tym samym dysku, brak nadpisywania
+   („ (2)”), kontrola wolnego miejsca, wznawianie, usuwanie pustych folderów źródłowych,
+   dziennik i cofanie
+6. **Podobne i nieostre zdjęcia** ✅ — odcisk obrazu (dHash 64 bity, pasma LSH, próg 5 bitów),
+   najlepsze w grupie = największa rozdzielczość i ostrość; lista najmniej ostrych;
+   odkładanie do `_Duplikaty_Katalogator` z cofaniem
+
+Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
+plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

@@ -7,6 +7,7 @@ on:
       - "tests/**"
       - "uruchom.py"
       - "requirements.txt"
+      - "narzedzia/**"
       - ".github/workflows/katalogator-windows.yml"
   workflow_dispatch:
 
@@ -32,6 +33,7 @@ jobs:
         run: >
           pyinstaller --noconfirm --onefile --windowed --name Katalogator
           --add-data "katalogator/ui;katalogator/ui"
+          --add-data "katalogator/dane;katalogator/dane"
           --collect-all pillow_heif
           uruchom.py
 

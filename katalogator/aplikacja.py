@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, duplikaty, dyski, raport, skaner
+from . import __version__, analiza, duplikaty, dyski, planista, raport, skaner, wykonawca
 
 UI = Path(__file__).parent / "ui"
 BEZ_PINGU_ZAMKNIJ_PO = 150  # s; przeglądarka spowalnia timery w zminimalizowanym oknie
@@ -49,8 +49,13 @@ class Stan:
         self.skan = {"trwa": False, "przejrzano": 0, "folder": "", "komunikat": "", "blad": ""}
         self.dup = {"trwa": False, "etap": "", "zrobione": 0, "wszystkie": 0, "bajty": 0,
                     "komunikat": "", "blad": ""}
+        self.zad = {n: self._pusty() for n in ("analiza", "plan", "wykonanie")}
         self.miniatury: dict[int, bytes] = {}
         self.ostatni_ping = time.time()
+
+    @staticmethod
+    def _pusty() -> dict:
+        return {"trwa": False, "etap": "", "zrobione": 0, "wszystkie": 0, "bajty": 0, "komunikat": "", "blad": ""}
 
     def zapisz_ustawienia(self, dane: dict) -> None:
         zrodla = dyski.normalizuj_wybor(dane.get("zrodla") or [])
@@ -69,28 +74,68 @@ class Stan:
 
     def db(self):
         db = skaner.otworz_baze(self.baza)
-        duplikaty.przygotuj(db)
+        wykonawca.przygotuj(db)  # tworzy też tabele duplikatów, analizy i planu
         return db
 
     def stan(self) -> dict:
         with self.blokada:
             skan, dup = dict(self.skan), dict(self.dup)
         ma = self.ma_wyniki()
-        dane = {"wersja": __version__, "windows": dyski.WINDOWS, "sep": os.sep, **self.ustawienia, "skan": skan, "dup": dup, "ma_wyniki": ma,
-                "duplikaty": None, "do_cofniecia": None}
+        with self.blokada:
+            zad = {k: dict(v) for k, v in self.zad.items()}
+        dane = {"wersja": __version__, "windows": dyski.WINDOWS, "sep": os.sep, **self.ustawienia, "skan": skan,
+                "dup": dup, "zad": zad, "ma_wyniki": ma, "duplikaty": None, "do_cofniecia": None,
+                "analiza": None, "plan": None, "wykonanie": None}
         if ma:
             db = self.db()
             try:
                 if db.execute("SELECT 1 FROM odciski LIMIT 1").fetchone():
                     dane["duplikaty"] = duplikaty.podsumowanie(db)
                 dane["do_cofniecia"] = duplikaty.ostatnia_partia(db)
+                if db.execute("SELECT 1 FROM analiza LIMIT 1").fetchone():
+                    dane["analiza"] = analiza.podsumowanie(db)
+                if planista.istnieje(db):
+                    dane["plan"] = planista.podsumowanie(db)
+                dane["wykonanie"] = wykonawca.ostatnia_partia(db)
             finally:
                 db.close()
         return dane
 
+    def _zajety(self) -> bool:  # wywoływać pod blokadą
+        return self.skan["trwa"] or self.dup["trwa"] or any(z["trwa"] for z in self.zad.values())
+
     def zajety(self) -> bool:
         with self.blokada:
-            return self.skan["trwa"] or self.dup["trwa"]
+            return self._zajety()
+
+    def uruchom(self, nazwa: str, funkcja) -> str | None:
+        """Zadanie w tle: funkcja(db, postep, przerwij) -> komunikat."""
+        with self.blokada:
+            if self._zajety():
+                return "Poczekaj, aż skończy się bieżące zadanie."
+            self.zad[nazwa] = {**self._pusty(), "trwa": True, "etap": "przygotowanie"}
+        self.przerwij.clear()
+
+        def praca():
+            db = self.db()
+
+            def postep(etap, zrobione, wszystkie, bajty):
+                with self.blokada:
+                    self.zad[nazwa].update(etap=etap, zrobione=zrobione, wszystkie=wszystkie, bajty=bajty)
+            try:
+                komunikat, blad = funkcja(db, postep, self.przerwij), ""
+            except skaner.Przerwano:
+                komunikat, blad = "Przerwano. Postęp zapisany — możesz dokończyć później.", ""
+            except Exception as e:
+                komunikat, blad = "Nie powiodło się.", f"{e}" if isinstance(e, (OSError, ValueError)) else \
+                    f"{type(e).__name__}: {e}"
+            finally:
+                db.close()
+            with self.blokada:
+                self.zad[nazwa].update(trwa=False, komunikat=komunikat, blad=blad)
+
+        threading.Thread(target=praca, daemon=True).start()
+        return None
 
     # --- skan w tle ----------------------------------------------------
     def rozpocznij_skan(self) -> str | None:
@@ -104,7 +149,7 @@ class Stan:
         if brak:
             return "Nie mogę otworzyć folderu: " + ", ".join(brak)
         with self.blokada:
-            if self.skan["trwa"] or self.dup["trwa"]:
+            if self._zajety():
                 return "Poczekaj, aż skończy się bieżące zadanie."
             self.skan = {"trwa": True, "przejrzano": 0, "folder": "", "komunikat": "Rozpoczynam…", "blad": ""}
         self.przerwij.clear()
@@ -137,7 +182,7 @@ class Stan:
         if not self.ma_wyniki():
             return "Najpierw zeskanuj foldery."
         with self.blokada:
-            if self.skan["trwa"] or self.dup["trwa"]:
+            if self._zajety():
                 return "Poczekaj, aż skończy się bieżące zadanie."
             self.dup = {"trwa": True, "etap": "przygotowanie", "zrobione": 0, "wszystkie": 0, "bajty": 0,
                         "komunikat": "", "blad": ""}
@@ -198,25 +243,74 @@ class Stan:
         db = self.db()
         try:
             r = db.execute("SELECT sciezka FROM pliki WHERE rowid=? AND rodzaj='zdjecie'", (id_,)).fetchone()
+            if not r:  # plik z planu, którego nie ma już w skanie (np. w miejscu docelowym)
+                r = db.execute("SELECT sciezka FROM plan WHERE plik_id=? AND rodzaj='zdjecie'", (id_,)).fetchone()
         finally:
             db.close()
         if not r:
             return None
         try:
             import io
-            from PIL import Image, ImageOps
-            with Image.open(r["sciezka"]) as im:
-                im.draft("RGB", (480, 480))
-                im = ImageOps.exif_transpose(im).convert("RGB")
-                im.thumbnail((240, 240))
-                buf = io.BytesIO()
-                im.save(buf, "JPEG", quality=80)
+            im, _ = analiza.miniatura(r["sciezka"], min_bok=150)
+            im.thumbnail((260, 260))
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=82)
         except Exception:
             return None
-        if len(self.miniatury) > 400:
+        if len(self.miniatury) > 600:
             self.miniatury.clear()
         self.miniatury[id_] = buf.getvalue()
         return self.miniatury[id_]
+
+    # --- zadania: analiza, plan, wykonanie ---------------------------------------
+    def analizuj(self) -> str | None:
+        if not self.ma_wyniki():
+            return "Najpierw zeskanuj foldery."
+
+        def f(db, postep, przerwij):
+            w = analiza.analizuj(db, postep=postep, przerwij=przerwij)
+            return (f"Przeanalizowano {w['przeanalizowane']} zdjęć: możliwych dokumentów {w['dokumenty']}, "
+                    f"grup podobnych {w['podobne_grupy']}.")
+        return self.uruchom("analiza", f)
+
+    def generuj_plan(self) -> str | None:
+        if not self.ma_wyniki():
+            return "Najpierw zeskanuj foldery."
+        if not self.ustawienia["cel"]:
+            return "Najpierw wybierz miejsce docelowe („Dokąd?”)."
+        zrodla, cel = list(self.ustawienia["zrodla"]), self.ustawienia["cel"]
+
+        def f(db, postep, przerwij):
+            w = planista.generuj(db, zrodla, cel, postep=postep, przerwij=przerwij)
+            return f"Propozycja gotowa: {w['kopiuj'] + w['przenies']} plików do uporządkowania."
+        return self.uruchom("plan", f)
+
+    def wykonaj(self, usun_puste: bool) -> str | None:
+        def f(db, postep, przerwij):
+            w = wykonawca.wykonaj(db, postep=postep, przerwij=przerwij, usun_puste=usun_puste)
+            k = f"Gotowe: {w['zrobione']} plików ({raport.rozmiar_txt(w['bajty'])})."
+            if w["bledy"]:
+                k += f" Błędy: {w['bledy']} — szczegóły w drzewie (czerwone)."
+            if w["usuniete_foldery"]:
+                k += f" Usunięto pustych folderów: {w['usuniete_foldery']}."
+            return k
+        return self.uruchom("wykonanie", f)
+
+    def cofnij_wykonanie(self) -> str | None:
+        def f(db, postep, przerwij):
+            w = wykonawca.cofnij(db, postep=postep, przerwij=przerwij)
+            k = f"Cofnięto {w['cofniete']} plików. Przeskanuj foldery, żeby odświeżyć wyniki."
+            if w["bledy"]:
+                k += " Problemy: " + "; ".join(w["bledy"][:5])
+            return k
+        return self.uruchom("wykonanie", f)
+
+    def z_db(self, funkcja, *a, **kw):
+        db = self.db()
+        try:
+            return funkcja(db, *a, **kw)
+        finally:
+            db.close()
 
     def raport_html(self) -> str:
         db = skaner.otworz_baze(self.baza)
@@ -261,13 +355,38 @@ def _handler(stan: Stan, token: str, zamknij):
                 if not self._ok_token(q):
                     return self._wyslij("Brak dostępu", "text/plain; charset=utf-8", HTTPStatus.FORBIDDEN)
                 return self._wyslij((UI / "index.html").read_bytes(), "text/html; charset=utf-8")
-            if not self._ok_token(q):
+            if not u.path.startswith("/ui/") and not self._ok_token(q):
                 return self._wyslij({"blad": "brak dostępu"}, kod=HTTPStatus.FORBIDDEN)
-            stan.ostatni_ping = time.time()
+            if not u.path.startswith("/ui/"):
+                stan.ostatni_ping = time.time()
             if u.path == "/api/stan":
                 return self._wyslij(stan.stan())
             if u.path == "/raport":
                 return self._wyslij(stan.raport_html(), "text/html; charset=utf-8")
+            if u.path.startswith("/ui/") and u.path.endswith((".js", ".css")):
+                plik = UI / os.path.basename(u.path)
+                if plik.is_file():
+                    return self._wyslij(plik.read_bytes(), "text/javascript; charset=utf-8"
+                                        if plik.suffix == ".js" else "text/css; charset=utf-8")
+                return self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
+            if u.path == "/api/plan/drzewo":
+                return self._wyslij({"foldery": stan.z_db(planista.drzewo),
+                                     "podsumowanie": stan.z_db(planista.podsumowanie)})
+            if u.path == "/api/plan/pliki":
+                return self._wyslij(stan.z_db(planista.pliki_folderu, q.get("folder", [""])[0],
+                                              _int(q, "od", 0), min(_int(q, "ile", 200), 500)))
+            if u.path == "/api/plan/sprawdz":
+                return self._wyslij(stan.z_db(wykonawca.sprawdz))
+            if u.path == "/api/dokumenty":
+                return self._wyslij({"kandydaci": stan.z_db(analiza.kandydaci_dokumentow)})
+            if u.path == "/api/podobne":
+                grupy = stan.z_db(analiza.grupy_podobnych)
+                od, ile = _int(q, "od", 0), min(_int(q, "ile", 30), 200)
+                return self._wyslij({"razem": len(grupy), "grupy": [
+                    [{k: w[k] for k in ("id", "sciezka", "wzgledna", "mtime", "rozmiar", "szer", "wys", "ostrosc")}
+                     for w in g] for g in grupy[od:od + ile]]})
+            if u.path == "/api/nieostre":
+                return self._wyslij({"pliki": stan.z_db(analiza.najmniej_ostre, min(_int(q, "ile", 120), 500))})
             if u.path == "/api/dyski":
                 return self._wyslij({"dyski": dyski.lista_dyskow()})
             if u.path == "/api/foldery":
@@ -314,6 +433,38 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/duplikaty/cofnij":
                 w = stan.cofnij()
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            proste = {
+                "/api/analiza/start": lambda: stan.analizuj(),
+                "/api/plan/generuj": lambda: stan.generuj_plan(),
+                "/api/wykonaj": lambda: stan.wykonaj(bool(dane.get("usun_puste", True))),
+                "/api/wykonanie/cofnij": lambda: stan.cofnij_wykonanie(),
+            }
+            if u.path in proste:
+                blad = proste[u.path]()
+                return self._wyslij({"blad": blad} if blad else stan.stan(),
+                                    kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
+            edycja = {
+                "/api/plan/zmien-nazwe": lambda db: planista.zmien_nazwe_folderu(db, str(dane.get("stara", "")),
+                                                                                   str(dane.get("nowa", ""))),
+                "/api/plan/przenies": lambda db: planista.przenies_pliki(db, [int(i) for i in dane.get("ids") or []],
+                                                                         str(dane.get("folder", ""))),
+                "/api/plan/wyklucz": lambda db: planista.wyklucz(
+                    db, [int(i) for i in dane.get("ids") or []] if "ids" in dane else None,
+                    dane.get("folder"), bool(dane.get("wartosc", True))),
+                "/api/plan/cofnij": planista.cofnij,
+                "/api/plan/ponow": planista.ponow,
+                "/api/dokumenty/zapisz": lambda db: {
+                    **analiza.zapisz_decyzje(db, [int(i) for i in dane.get("tak") or []],
+                                             [int(i) for i in dane.get("nie") or []]),
+                    "plan": planista.oznacz_dokumenty(db, analiza.dokumenty_potwierdzone(db))},
+                "/api/odloz": lambda db: duplikaty.odloz(db, [int(i) for i in dane.get("ids") or []],
+                                                         "podobne" if dane.get("typ") == "podobne" else "nieostre"),
+            }
+            if u.path in edycja:
+                if u.path == "/api/odloz" and stan.zajety():
+                    return self._wyslij({"blad": "Poczekaj, aż skończy się bieżące zadanie."}, kod=HTTPStatus.BAD_REQUEST)
+                w = stan.z_db(edycja[u.path])
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/przerwij":
                 stan.przerwij.set()
                 return self._wyslij({"ok": True})
@@ -325,6 +476,13 @@ def _handler(stan: Stan, token: str, zamknij):
             self._wyslij({"blad": "nie ma"}, kod=HTTPStatus.NOT_FOUND)
 
     return H
+
+
+def _int(q: dict, klucz: str, domyslnie: int) -> int:
+    try:
+        return int(q.get(klucz, [domyslnie])[0])
+    except (TypeError, ValueError):
+        return domyslnie
 
 
 def uruchom_serwer(katalog: Path | None = None, port: int = 0):

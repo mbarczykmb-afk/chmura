@@ -82,7 +82,9 @@ Konfiguracje i skrypty dla wybranej opcji trafią do tego repozytorium.
 ## Katalogator — porządkowanie zdjęć, filmów, muzyki i plików
 
 Specyfikacja: [`docs/katalogator-specyfikacja.md`](docs/katalogator-specyfikacja.md).
-Gotowy **etap 1: skaner + raport** (niczego nie przenosi ani nie zmienia).
+Wersja 1.0: skan i raport, duplikaty, analiza zdjęć (dokumenty, podobne, nieostre),
+propozycja drzewa („Zdjęcia z 2023 → Marzec w Olkuszu”), edytor drzewa i porządkowanie
+z weryfikacją i cofaniem. Nazwy miejscowości: © GeoNames, CC BY 4.0.
 
 **Uruchomienie (aplikacja okienkowa, bez instalacji):**
 1. GitHub → zakładka **Actions** → „Katalogator.exe (Windows)” → ostatnie
@@ -98,6 +100,12 @@ Gotowy **etap 1: skaner + raport** (niczego nie przenosi ani nie zmienia).
    zaznacz plik, który zostaje → *Odłóż zaznaczone kopie*. Kopie trafiają do
    folderu `_Duplikaty_Katalogator` (nic nie jest kasowane; *Cofnij* przywraca).
    Gdy wszystko sprawdzisz, folder `_Duplikaty_Katalogator` możesz usunąć ręcznie.
+5. **Analiza zdjęć** → zakładki *Dokumenty* (zdjęcia paragonów/skanów do potwierdzenia)
+   i *Podobne* (np. kopie z WhatsAppa, seria ujęć; najmniej ostre).
+6. **Utwórz propozycję drzewa** → zakładka *Drzewo*: popraw nazwy folderów, przeciągaj
+   pliki i foldery, wykluczaj; *Cofnij/Ponów* (Ctrl+Z/Y).
+7. **Uporządkuj pliki…** → kopiowanie/przenoszenie wg ptaszków K/P z weryfikacją każdej
+   kopii; *Cofnij porządkowanie* przywraca stan sprzed operacji.
 
 Ustawienia i baza skanu: `%LOCALAPPDATA%\Katalogator\`. Program działa tylko
 lokalnie (127.0.0.1), nic nie wysyła do internetu. Zamknięcie okna kończy

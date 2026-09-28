@@ -245,32 +245,58 @@ def przenies(db: sqlite3.Connection, decyzje: list[dict]) -> dict:
             pominiete.append(f"Nie ma pliku do zostawienia: {zostaw['wzgledna']}")
             continue
         for i in d["usun"]:
-            w = wiersze[i]
-            try:
-                st = os.stat(w["sciezka"])
-                if (st.st_size, st.st_mtime) != (w["rozmiar"], w["mtime"]):
-                    pominiete.append(f"Zmieniony od skanu: {w['wzgledna']}")
-                    continue
-                cel = _cel_przeniesienia(w["korzen"], w["wzgledna"])
-                os.makedirs(os.path.dirname(cel), exist_ok=True)
-                os.rename(w["sciezka"], cel)
-            except OSError as e:
-                pominiete.append(f"{w['wzgledna']}: {e.strerror or e}")
-                continue
-            dane = {k: w[k] for k in w.keys() if k != "rowid"}
-            db.execute("INSERT INTO operacje(partia, czas, typ, z_, do_, wiersz) VALUES (?,?,?,?,?,?)",
-                       (partia, time.time(), "duplikat", w["sciezka"], cel, json.dumps(dane, ensure_ascii=False)))
-            db.execute("DELETE FROM pliki WHERE rowid = ?", (i,))
+            blad = _odloz_wiersz(db, wiersze[i], partia, "duplikat")
+            if blad:
+                pominiete.append(blad)
+            else:
+                przeniesione += 1
+                bajty += wiersze[i]["rozmiar"]
+        db.commit()
+    return {"przeniesione": przeniesione, "bajty": bajty, "pominiete": pominiete, "partia": partia}
+
+
+def _odloz_wiersz(db: sqlite3.Connection, w, partia: int, typ: str) -> str | None:
+    """Przenosi plik do <korzeń>/_Duplikaty_Katalogator/<ścieżka>. Zwraca opis błędu albo None."""
+    try:
+        st = os.stat(w["sciezka"])
+        if (st.st_size, st.st_mtime) != (w["rozmiar"], w["mtime"]):
+            return f"Zmieniony od skanu: {w['wzgledna']}"
+        cel = _cel_przeniesienia(w["korzen"], w["wzgledna"])
+        os.makedirs(os.path.dirname(cel), exist_ok=True)
+        os.rename(w["sciezka"], cel)
+    except OSError as e:
+        return f"{w['wzgledna']}: {e.strerror or e}"
+    dane = {k: w[k] for k in w.keys() if k != "rowid"}
+    db.execute("INSERT INTO operacje(partia, czas, typ, z_, do_, wiersz) VALUES (?,?,?,?,?,?)",
+               (partia, time.time(), typ, w["sciezka"], cel, json.dumps(dane, ensure_ascii=False)))
+    db.execute("DELETE FROM pliki WHERE rowid = ?", (w["rowid"],))
+    return None
+
+
+def odloz(db: sqlite3.Connection, ids: list[int], typ: str) -> dict:
+    """Odkłada wskazane pliki (np. podobne / nieostre zdjęcia) — bez wymogu identyczności."""
+    przygotuj(db)
+    partia = int(time.time() * 1000)
+    przeniesione, pominiete, bajty = 0, [], 0
+    for i in dict.fromkeys(int(x) for x in ids):
+        w = db.execute("SELECT rowid, * FROM pliki WHERE rowid=?", (i,)).fetchone()
+        if not w:
+            pominiete.append("Plik nieaktualny — przeskanuj ponownie.")
+            continue
+        blad = _odloz_wiersz(db, w, partia, typ)
+        if blad:
+            pominiete.append(blad)
+        else:
             przeniesione += 1
             bajty += w["rozmiar"]
-        db.commit()
+    db.commit()
     return {"przeniesione": przeniesione, "bajty": bajty, "pominiete": pominiete, "partia": partia}
 
 
 def ostatnia_partia(db: sqlite3.Connection) -> dict | None:
     przygotuj(db)
     r = db.execute(
-        "SELECT partia, COUNT(*) n, MIN(czas) czas FROM operacje WHERE cofnieta = 0 AND typ = 'duplikat' "
+        "SELECT partia, COUNT(*) n, MIN(czas) czas, MIN(typ) typ FROM operacje WHERE cofnieta = 0 "
         "GROUP BY partia ORDER BY partia DESC LIMIT 1").fetchone()
     return dict(r) if r else None
 
