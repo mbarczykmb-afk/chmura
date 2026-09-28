@@ -11,8 +11,8 @@ from . import raport, skaner
 
 def main(argv=None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if sys.stdout is None:  # Katalogator.exe bez konsoli
-        sys.stdout = sys.stderr = open(os.devnull, "w")
+    if sys.stdout is None:  # Katalogator.exe bez konsoli (UTF-8, bo domyślne cp1252 nie zna polskich znaków)
+        sys.stdout = sys.stderr = open(os.devnull, "w", encoding="utf-8", errors="replace")
     if args[:1] in (["--auto"], ["--usun-harmonogramy"]) or not args:
         # tryby bez konsoli: wszystko (także błędy) do pliku dziennika, nigdy okienko z błędem
         from . import logi
@@ -25,7 +25,10 @@ def main(argv=None) -> int:
                 logi.LOG.info("Tryb automatyczny: projekt %s", args[1])
                 wynik = automat(katalog, args[1])
                 logi.LOG.info("Tryb automatyczny zakończony: %s", wynik)
-                print(wynik)
+                try:
+                    print(wynik)
+                except (UnicodeError, OSError):
+                    pass  # konsola bez polskich znaków — wynik i tak jest w dzienniku
                 return 0
             if args[:1] == ["--usun-harmonogramy"]:
                 from .przychodzace import usun_wszystkie_harmonogramy

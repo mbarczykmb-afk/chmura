@@ -77,3 +77,19 @@ def test_polecenia_harmonogramu(monkeypatch):
     assert przychodzace.polecenia_harmonogramu("moj-abc123", "") == [usun]
     with pytest.raises(ValueError):
         przychodzace.polecenia_harmonogramu("moj-abc123", "25:00")
+
+
+def test_auto_bez_konsoli_z_polskimi_znakami(tmp_path, monkeypatch):
+    """Katalogator.exe --auto: brak konsoli, a domyślne kodowanie nie zna polskich znaków."""
+    import io
+    from katalogator.__main__ import main
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(sys, "stderr", None)
+    wynik = main(["--auto", "nie-ma-takiego"])
+    assert wynik == 0
+    log = (tmp_path / "Katalogator" / "logi" / "katalogator.log").read_text(encoding="utf-8")
+    assert "Nie ma takiego projektu" in log and "Traceback" not in log
+    # konsola w kodowaniu cp1252 też nie może wywrócić programu
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(io.BytesIO(), encoding="cp1252"))
+    assert main(["--auto", "nie-ma-takiego"]) == 0
