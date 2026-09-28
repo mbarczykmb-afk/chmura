@@ -78,3 +78,20 @@ def test_blad_obslugi_zwraca_komunikat(app, monkeypatch):  # noqa: F811
         api("/api/raport-bledow")
     assert e.value.code == 500 and "ZeroDivisionError" in json.loads(e.value.read())["blad"]
     assert "ZeroDivisionError" in logi.ogon(30)
+
+
+def test_baza_nie_blokuje_sie_przy_dlugim_zapisie(tmp_path):
+    """Zadanie w tle trzyma transakcję — okno musi móc czytać od razu, a zapis ma poczekać, nie zgłaszać błędu."""
+    import time
+    from katalogator import skaner
+    baza = tmp_path / "k.db"
+    zadanie = skaner.otworz_baze(baza)
+    zadanie.execute("INSERT INTO skany(korzen, start) VALUES ('x', 1)")  # transakcja otwarta
+    okno = skaner.otworz_baze(baza)
+    t0 = time.time()
+    assert okno.execute("SELECT COUNT(*) FROM pliki").fetchone()[0] == 0  # odczyt bez czekania (WAL)
+    assert time.time() - t0 < 1
+    threading.Timer(1.5, zadanie.commit).start()
+    okno.execute("INSERT INTO skany(korzen, start) VALUES ('y', 2)")  # czeka na zakończenie, bez błędu
+    okno.commit()
+    assert okno.execute("SELECT COUNT(*) FROM skany").fetchone()[0] == 2

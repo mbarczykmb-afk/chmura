@@ -188,6 +188,7 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
                            (partia, w["id"], w["sciezka"], dst, "juz_byl", usuniete, w["rozmiar"], st.st_mtime,
                             time.time()))
                 db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
+                db.commit()
                 ok += 1
                 continue
             dst = _wolna(dst)
@@ -219,8 +220,7 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
         except OSError as e:
             db.execute("UPDATE plan SET wynik=? WHERE id=?", (f"blad: {e.strerror or e}"[:300], w["id"]))
             bledy += 1
-        if i % 20 == 0:
-            db.commit()
+        db.commit()  # po każdym pliku: kopiowanie następnego może trwać minuty
     db.commit()
     usuniete_foldery = _usun_puste(przeniesione_foldery, db) if usun_puste else 0
     if postep:

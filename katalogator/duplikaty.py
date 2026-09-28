@@ -17,7 +17,7 @@ import sqlite3
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from .skaner import Przerwano
+from .skaner import Przerwano, Zatwierdzanie
 
 BLOK = 1 << 20
 FOLDER_DUPLIKATOW = "_Duplikaty_Katalogator"
@@ -102,6 +102,7 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
             except OSError:
                 return w, None  # plik zniknął / brak dostępu — pomijamy
 
+        zatwierdz = Zatwierdzanie(db)
         with ThreadPoolExecutor(max_workers=watki) as pula:
             for i, (w, odc) in enumerate(pula.map(zadanie, wiersze), 1):
                 if odc is not None:
@@ -117,8 +118,8 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
                     # mały plik przeczytany w całości: szybki odcisk = pełny
                     if not pelny and w["rozmiar"] <= 2 * BLOK:
                         db.execute("UPDATE odciski SET pelny=? WHERE sciezka=?", (odc, w["sciezka"]))
-                if i % 50 == 0:
-                    db.commit()
+                zatwierdz(wymus=pelny)  # pełny odcisk dużego pliku trwa długo — zapisuj od razu
+                if i % 20 == 0:
                     zglos(etap, i, len(wiersze))
         db.commit()
         zglos(etap, len(wiersze), len(wiersze))

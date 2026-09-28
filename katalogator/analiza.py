@@ -145,13 +145,14 @@ def analizuj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4)
             raise Przerwano(w["sciezka"])
         return _analizuj_plik(w)
 
+    from .skaner import Zatwierdzanie
+    zatwierdz = Zatwierdzanie(db)
     with ThreadPoolExecutor(max_workers=watki) as pula:
         for i, wynik in enumerate(pula.map(zadanie, wiersze), 1):
             db.execute("INSERT OR REPLACE INTO analiza VALUES (?,?,?,?,?,?,?,?,?)", wynik)
-            if i % 50 == 0:
-                db.commit()
-                if postep:
-                    postep("analiza zdjęć", i, len(wiersze), 0)
+            zatwierdz()
+            if postep and i % 20 == 0:
+                postep("analiza zdjęć", i, len(wiersze), 0)
     db.commit()
     if postep:
         postep("analiza zdjęć", len(wiersze), len(wiersze), 0)

@@ -46,10 +46,29 @@ CREATE TABLE IF NOT EXISTS skany (
 
 
 def otworz_baze(sciezka: str | Path) -> sqlite3.Connection:
-    db = sqlite3.connect(str(sciezka))
+    """Połączenie z bazą projektu. Tryb WAL: odczyt (np. odświeżanie okna) nigdy nie czeka na zapis
+    zadania w tle, a zapis czeka do 30 s na zakończenie cudzej transakcji zamiast od razu zgłaszać
+    „database is locked”."""
+    db = sqlite3.connect(str(sciezka), timeout=30)
     db.row_factory = sqlite3.Row
+    if str(sciezka) != ":memory:":
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA synchronous=NORMAL")
+    db.execute("PRAGMA busy_timeout=30000")
     db.executescript(SCHEMAT)
     return db
+
+
+class Zatwierdzanie:
+    """Zatwierdza transakcję najwyżej co `co` sekund — zadania w tle nie trzymają blokady zapisu długo."""
+
+    def __init__(self, db: sqlite3.Connection, co: float = 1.0):
+        self.db, self.co, self.ostatnio = db, co, time.monotonic()
+
+    def __call__(self, wymus: bool = False) -> None:
+        if wymus or time.monotonic() - self.ostatnio >= self.co:
+            self.db.commit()
+            self.ostatnio = time.monotonic()
 
 
 def _przejdz(korzen: str, licz: dict):
@@ -90,6 +109,7 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
         raise NotADirectoryError(korzen)
     cur = db.execute("INSERT INTO skany(korzen, start) VALUES (?, ?)", (korzen, time.time()))
     skan_id = cur.lastrowid
+    db.commit()  # nie trzymaj blokady zapisu podczas przeglądania folderów
     znane = {
         r["sciezka"]: (r["rozmiar"], r["mtime"])
         for r in db.execute("SELECT sciezka, rozmiar, mtime FROM pliki WHERE korzen = ?", (korzen,))
@@ -127,7 +147,7 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
             else:
                 stat["nowe_lub_zmienione"] += 1
                 oczekujace.append(pula.submit(zadanie, el))
-            if len(oczekujace) >= 256:
+            if len(oczekujace) >= 64:
                 for f in oczekujace:
                     zapisz(f.result())
                 oczekujace.clear()
