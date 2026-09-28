@@ -1,0 +1,4 @@
+pillow>=10
+pillow-heif>=0.16   # zdjęcia HEIC (opcjonalnie)
+mutagen>=1.47
+pytest>=8           # tylko do testów

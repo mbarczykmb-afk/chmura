@@ -1,0 +1,154 @@
+"""Skanowanie folderów do lokalnej bazy SQLite (wznawialne)."""
+
+from __future__ import annotations
+
+import os
+import sqlite3
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+from . import typy
+from .metadane import odczytaj
+
+SCHEMAT = """
+CREATE TABLE IF NOT EXISTS pliki (
+    sciezka     TEXT PRIMARY KEY,
+    korzen      TEXT NOT NULL,
+    wzgledna    TEXT NOT NULL,
+    rozmiar     INTEGER NOT NULL,
+    mtime       REAL NOT NULL,
+    rodzaj      TEXT NOT NULL,
+    rozszerzenie TEXT NOT NULL,
+    data        TEXT,
+    zrodlo_daty TEXT,
+    lat         REAL,
+    lon         REAL,
+    aparat      TEXT,
+    wykonawca   TEXT,
+    album       TEXT,
+    tytul       TEXT,
+    blad        TEXT,
+    skan        INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_pliki_korzen ON pliki(korzen);
+CREATE TABLE IF NOT EXISTS skany (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    korzen    TEXT NOT NULL,
+    start     REAL NOT NULL,
+    koniec    REAL,
+    pominiete_pliki   INTEGER DEFAULT 0,
+    pominiete_foldery INTEGER DEFAULT 0,
+    bledy_dostepu     INTEGER DEFAULT 0
+);
+"""
+
+
+def otworz_baze(sciezka: str | Path) -> sqlite3.Connection:
+    db = sqlite3.connect(str(sciezka))
+    db.row_factory = sqlite3.Row
+    db.executescript(SCHEMAT)
+    return db
+
+
+def _przejdz(korzen: str, licz: dict):
+    """Rekurencyjnie zwraca (ścieżka, nazwa, stat) z pominięciem śmieci."""
+    stos = [korzen]
+    while stos:
+        folder = stos.pop()
+        try:
+            wpisy = list(os.scandir(folder))
+        except OSError:
+            licz["bledy_dostepu"] += 1
+            continue
+        for w in wpisy:
+            try:
+                if w.is_dir(follow_symlinks=False):
+                    if typy.pominac_folder(w.name):
+                        licz["pominiete_foldery"] += 1
+                    else:
+                        stos.append(w.path)
+                elif w.is_file(follow_symlinks=False):
+                    if typy.pominac_plik(w.name):
+                        licz["pominiete_pliki"] += 1
+                    else:
+                        yield w.path, w.name, w.stat(follow_symlinks=False)
+            except OSError:
+                licz["bledy_dostepu"] += 1
+
+
+def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print) -> dict:
+    korzen = os.path.abspath(korzen)
+    if not os.path.isdir(korzen):
+        raise NotADirectoryError(korzen)
+    cur = db.execute("INSERT INTO skany(korzen, start) VALUES (?, ?)", (korzen, time.time()))
+    skan_id = cur.lastrowid
+    znane = {
+        r["sciezka"]: (r["rozmiar"], r["mtime"])
+        for r in db.execute("SELECT sciezka, rozmiar, mtime FROM pliki WHERE korzen = ?", (korzen,))
+    }
+    licz = {"pominiete_pliki": 0, "pominiete_foldery": 0, "bledy_dostepu": 0}
+    stat = {"wszystkie": 0, "nowe_lub_zmienione": 0, "bez_zmian": 0}
+    niezmienione: list[str] = []
+    ostatni_wydruk = time.time()
+
+    def zadanie(el):
+        sciezka, nazwa, st = el
+        rodz = typy.rodzaj(nazwa)
+        return sciezka, st, rodz, odczytaj(sciezka, rodz, st.st_mtime)
+
+    def zapisz(wynik):
+        sciezka, st, rodz, m = wynik
+        db.execute(
+            "INSERT OR REPLACE INTO pliki VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                sciezka, korzen, os.path.relpath(sciezka, korzen), st.st_size, st.st_mtime,
+                rodz, Path(sciezka).suffix.lower(),
+                m.data.isoformat(timespec="seconds") if m.data else None, m.zrodlo_daty,
+                m.lat, m.lon, m.aparat, m.wykonawca, m.album, m.tytul, m.blad, skan_id,
+            ),
+        )
+
+    with ThreadPoolExecutor(max_workers=watki) as pula:
+        oczekujace = []
+        for el in _przejdz(korzen, licz):
+            stat["wszystkie"] += 1
+            sciezka, _, st = el
+            if znane.get(sciezka) == (st.st_size, st.st_mtime):
+                stat["bez_zmian"] += 1
+                niezmienione.append(sciezka)
+            else:
+                stat["nowe_lub_zmienione"] += 1
+                oczekujace.append(pula.submit(zadanie, el))
+            if len(oczekujace) >= 256:
+                for f in oczekujace:
+                    zapisz(f.result())
+                oczekujace.clear()
+                db.commit()
+            if time.time() - ostatni_wydruk > 2:
+                wypisz(f"  ...przejrzano {stat['wszystkie']} plików")
+                ostatni_wydruk = time.time()
+        for f in oczekujace:
+            zapisz(f.result())
+
+    # Oznacz pliki bez zmian jako widziane w tym skanie, usuń te, których już nie ma.
+    for i in range(0, len(niezmienione), 500):
+        paczka = niezmienione[i:i + 500]
+        db.execute(
+            f"UPDATE pliki SET skan = ? WHERE sciezka IN ({','.join('?' * len(paczka))})",
+            [skan_id, *paczka],
+        )
+    usuniete = db.execute(
+        "DELETE FROM pliki WHERE korzen = ? AND skan != ?", (korzen, skan_id)
+    ).rowcount
+    db.execute(
+        "UPDATE skany SET koniec=?, pominiete_pliki=?, pominiete_foldery=?, bledy_dostepu=? WHERE id=?",
+        (time.time(), licz["pominiete_pliki"], licz["pominiete_foldery"], licz["bledy_dostepu"], skan_id),
+    )
+    db.commit()
+    return {**stat, **licz, "usuniete_z_bazy": usuniete, "korzen": korzen}
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit("Użyj: python -m katalogator skanuj <folder>")

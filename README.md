@@ -76,3 +76,31 @@ Wymaga czegoś, co działa w domu 24/7. Opcje, od najprostszej:
    tylko po wykonaniu Etapu 1.
 
 Konfiguracje i skrypty dla wybranej opcji trafią do tego repozytorium.
+
+---
+
+## Katalogator — porządkowanie zdjęć, filmów, muzyki i plików
+
+Specyfikacja: [`docs/katalogator-specyfikacja.md`](docs/katalogator-specyfikacja.md).
+Gotowy **etap 1: skaner + raport** (niczego nie przenosi ani nie zmienia).
+
+**Instalacja (raz):**
+1. Zainstaluj Pythona z <https://www.python.org/downloads/>
+   — zaznacz **„Add python.exe to PATH”**.
+2. Pobierz to repozytorium (GitHub → *Code* → *Download ZIP*) i rozpakuj,
+   np. do `C:\chmura`.
+3. W PowerShell:
+   ```
+   cd C:\chmura
+   py -m pip install -r requirements.txt
+   ```
+
+**Skan i raport:**
+```
+py -m katalogator skanuj Z:\
+```
+Baza skanu (`katalog.db`) zapisuje się lokalnie na PC. Skan można przerwać
+(Ctrl+C) i uruchomić ponownie — przeczyta tylko nowe/zmienione pliki.
+Na końcu otwiera się raport HTML: ile zdjęć/filmów ma GPS, skąd są daty,
+lata, urządzenia, foldery pozostałych plików, możliwe duplikaty.
+Ponowne wyświetlenie raportu: `py -m katalogator raport`.
