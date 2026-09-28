@@ -139,5 +139,13 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     z okna trafiają do dziennika zamiast okienek; „Zgłoś problem”: raport (wersja, system, ustawienia,
     stan zadań, dziennik prac, błędy) do skopiowania / zapisania / zgłoszenia na GitHubie
 
+13. **Poprawki 1.2.1** ✅ — (a) „database is locked”: tryb WAL, 30 s oczekiwania, krótkie transakcje
+    zadań w tle; (b) dokumenty: etap 2 na obrazie ~1000 px — tusz (ciemniejszy od lokalnego tła),
+    cienkie kreski, **naprzemienność wierszy** (autokorelacja profilu w 10 pasach, w poziomie i w pionie),
+    pokrycie strony; śnieg, niebo, ściany i postacie nie mają powtarzających się wierszy;
+    (c) podobne: potwierdzenie podpisem jasności 8×8 i kolorów 4×4, grupy wokół wzorca (bez łańcuchów),
+    widok jak w Duplikatach (najlepsze zostaje, reszta „odłożę”, można zostawić kilka, „zostaw wszystkie”),
+    dwuklik = duży podgląd
+
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

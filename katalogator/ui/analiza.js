@@ -2,7 +2,7 @@
 "use strict";
 
 const an = {dok: [], dokZazn: new Set(), dokWczytane: false, tryb: "podobne", grupy: [], razem: 0, nieostre: [],
-            odloz: new Set(), podWczytane: false, trwala: false};
+            odloz: new Set(), podWczytane: false, trwala: false, decyzje: new Map()};
 
 function rysujAnalizeLewa() {
   $("analizuj").disabled = zajety() || !stan.ma_wyniki;
@@ -98,7 +98,11 @@ async function wczytajPodobne(wiecej) {
     const r = await api("/api/nieostre?ile=150");
     an.nieostre = r.pliki;
   }
-  if (!wiecej) an.odloz.clear();
+  if (!wiecej) { an.odloz.clear(); an.decyzje.clear(); }
+  for (const g of an.grupy) {   // jak w duplikatach: najlepsze zostaje, reszta do odłożenia
+    const klucz = g.map(w => w.id).join("-");
+    if (!an.decyzje.has(klucz)) an.decyzje.set(klucz, {zostaw: new Set([g[0].id]), pomin: false});
+  }
   an.podWczytane = true; rysujPodobne();
 }
 
@@ -111,19 +115,40 @@ function rysujPodobne() {
   const l = $("pod-lista"); l.replaceChildren();
   if (!stan.analiza) { l.innerHTML = '<div class="pusto">Najpierw kliknij „Analizuj zdjęcia” w lewej kolumnie.</div>'; }
   else if (an.tryb === "podobne") {
-    $("pod-info").textContent = `${an.razem} grup — pierwsze w grupie ma najwyższą rozdzielczość i ostrość`;
+    $("pod-info").textContent = `${an.razem} grup · ★ = najwyższa rozdzielczość i ostrość · kliknij, żeby zostawić więcej · dwuklik na miniaturze = powiększenie`;
     if (!an.grupy.length) l.innerHTML = '<div class="pusto">Nie znaleziono podobnych zdjęć.</div>';
     for (const g of an.grupy) {
-      const box = document.createElement("div"); box.className = "grupa-pod";
+      const d = an.decyzje.get(g.map(w => w.id).join("-"));
+      const k = document.createElement("div"); k.className = "grupa pod" + (d.pomin ? " pominieta" : "");
+      const odz = g.filter(w => !d.pomin && !d.zostaw.has(w.id));
       const gl = document.createElement("div"); gl.className = "gl";
-      const t = document.createElement("strong"); t.textContent = `${g.length} podobne zdjęcia`;
-      const b = document.createElement("button"); b.className = "maly"; b.textContent = "Zaznacz wszystkie poza pierwszym";
-      b.onclick = () => { g.slice(1).forEach(w => an.odloz.add(w.id)); rysujPodobne(); };
-      gl.append(t, b); box.append(gl);
-      const s = document.createElement("div"); s.className = "siatka";
-      g.forEach((w, i) => s.append(karta(w.id, "zdjecie", w.wzgledna, (i === 0 ? "★ najlepsze · " : "") + opisZdjecia(w),
-        an.odloz.has(w.id), v => { v ? an.odloz.add(w.id) : an.odloz.delete(w.id); rysujPodobne(); })));
-      box.append(s); l.append(box);
+      gl.innerHTML = `<strong>${g.length} podobne zdjęcia · odłożę ${odz.length} · odzyskasz ${rozmiar(odz.reduce((a, w) => a + w.rozmiar, 0))}</strong>`;
+      const pom = document.createElement("label"); pom.className = "pomin";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = d.pomin;
+      cb.onchange = () => { d.pomin = cb.checked; rysujPodobne(); };
+      pom.append(cb, "zostaw wszystkie"); gl.append(pom); k.append(gl);
+      g.forEach((w, i) => {
+        const zost = d.pomin || d.zostaw.has(w.id);
+        const r = document.createElement("label"); r.className = "plik zdj " + (zost ? "zostaje" : "odklada");
+        const c = document.createElement("input"); c.type = "checkbox"; c.checked = zost; c.title = "Zostaw to zdjęcie";
+        c.onchange = () => {
+          if (c.checked) { d.zostaw.add(w.id); d.pomin = false; }
+          else if (d.zostaw.size > 1) d.zostaw.delete(w.id);
+          else { toast("Przynajmniej jedno zdjęcie z grupy musi zostać."); }
+          rysujPodobne();
+        };
+        const img = new Image(); img.loading = "lazy"; img.alt = "";
+        img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${w.id}`;
+        img.ondblclick = e => { e.preventDefault(); podgladDuzy(w.id, w.wzgledna); };
+        const sc = document.createElement("span"); sc.className = "sc"; sc.title = w.sciezka;
+        const cz = w.wzgledna.split(/[\\/]/); const nazwa = cz.pop();
+        const em = document.createElement("em"); em.textContent = cz.length ? cz.join("\\") + "\\" : "";
+        sc.append("\u200E", em, nazwa);
+        const z = document.createElement("span"); z.className = "znak";
+        z.textContent = (i === 0 ? "★ " : "") + (zost ? "zostaje" : "odłożę") + " · " + opisZdjecia(w);
+        r.append(c, img, sc, z); k.append(r);
+      });
+      l.append(k);
     }
     if (an.grupy.length < an.razem) {
       const b = document.createElement("button"); b.className = "wiecej"; b.textContent = "Pokaż więcej grup";
@@ -139,9 +164,29 @@ function rysujPodobne() {
     if (!an.nieostre.length) s.innerHTML = '<div class="pusto">Brak przeanalizowanych zdjęć.</div>';
     l.append(s);
   }
-  $("pod-stopka").textContent = an.odloz.size
-    ? `Zaznaczone do odłożenia: ${an.odloz.size} — trafią do _Duplikaty_Katalogator (można cofnąć)` : "Zaznacz zdjęcia, które chcesz odłożyć.";
-  $("pod-odloz").disabled = !an.odloz.size;
+  const doOdl = doOdlozenia();
+  const bajty = an.tryb === "podobne"
+    ? an.grupy.flat().filter(w => doOdl.includes(w.id)).reduce((a, w) => a + w.rozmiar, 0) : 0;
+  $("pod-stopka").textContent = doOdl.length
+    ? `Do odłożenia: ${doOdl.length} zdjęć${bajty ? ` (${rozmiar(bajty)})` : ""} — trafią do _Duplikaty_Katalogator (można cofnąć)`
+    : (an.tryb === "podobne" ? "Nic do odłożenia — wszystkie zdjęcia zostają." : "Zaznacz zdjęcia, które chcesz odłożyć.");
+  $("pod-odloz").disabled = !doOdl.length;
+  $("pod-odloz").textContent = an.tryb === "podobne" ? "Odłóż zaznaczone kopie" : "Odłóż zaznaczone";
+}
+function doOdlozenia() {
+  if (an.tryb !== "podobne") return [...an.odloz];
+  const ids = [];
+  for (const g of an.grupy) {
+    const d = an.decyzje.get(g.map(w => w.id).join("-"));
+    if (d && !d.pomin) g.forEach(w => { if (!d.zostaw.has(w.id)) ids.push(w.id); });
+  }
+  return ids;
+}
+function podgladDuzy(id, nazwa) {
+  const n = document.createElement("div"); n.className = "nakladka";
+  const img = new Image(); img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${id}&duza=1`; img.alt = nazwa;
+  img.style.cssText = "max-width:90vw;max-height:85vh;border-radius:8px;background:#000";
+  n.append(img); n.onclick = () => n.remove(); document.body.append(n);
 }
 $("pod-filtry").onclick = e => {
   const b = e.target.closest(".filtr"); if (!b) return;
@@ -149,9 +194,10 @@ $("pod-filtry").onclick = e => {
   an.tryb = b.dataset.r; an.podWczytane = false; wczytajPodobne();
 };
 $("pod-odloz").onclick = async () => {
-  if (!confirm(`Odłożyć ${an.odloz.size} zdjęć do folderu _Duplikaty_Katalogator?\n\nNic nie jest kasowane — operację można cofnąć w sekcji „Duplikaty”.`)) return;
+  const ids = doOdlozenia();
+  if (!confirm(`Odłożyć ${ids.length} zdjęć do folderu _Duplikaty_Katalogator?\n\nNic nie jest kasowane — operację można cofnąć w sekcji „Duplikaty”.`)) return;
   try {
-    const w = await api("/api/odloz", {ids: [...an.odloz], typ: an.tryb});
+    const w = await api("/api/odloz", {ids, typ: an.tryb});
     toast(`Odłożono ${w.przeniesione} zdjęć.` + (w.pominiete.length ? ` Pominięto: ${w.pominiete.length}.` : ""));
     stan = await api("/api/stan"); rysuj(); an.podWczytane = false; wczytajPodobne();
   } catch (e) { toast(e.message); }

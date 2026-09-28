@@ -350,6 +350,25 @@ class Stan:
             db.close()
         return r["sciezka"] if r else None
 
+    def podglad(self, id_: int) -> bytes | None:
+        """Duży podgląd zdjęcia (np. do porównania podobnych) — bez zapamiętywania."""
+        db = self.db()
+        try:
+            r = db.execute("SELECT sciezka FROM pliki WHERE rowid=? AND rodzaj='zdjecie'", (id_,)).fetchone()
+        finally:
+            db.close()
+        if not r:
+            return None
+        try:
+            import io
+            im = analiza._obraz_do_tekstu(r["sciezka"], bok=1400)
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=85)
+            return buf.getvalue()
+        except Exception:
+            LOG.info("Brak podglądu dla %s", r["sciezka"], exc_info=True)
+            return None
+
     # --- zadania: analiza, plan, wykonanie ---------------------------------------
     def analizuj(self) -> str | None:
         if not self.ma_wyniki():
@@ -663,7 +682,7 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._strumien(stan.sciezka_filmu(_int(q, "id", 0)))
             if u.path == "/miniatura":
                 try:
-                    dane = stan.miniatura(int(q.get("id", ["0"])[0]))
+                    dane = (stan.podglad if q.get("duza") else stan.miniatura)(int(q.get("id", ["0"])[0]))
                 except ValueError:
                     dane = None
                 if dane is None:

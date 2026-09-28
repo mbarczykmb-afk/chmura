@@ -12,7 +12,7 @@ import re
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
-from PIL import Image, ImageFilter, ImageOps, ImageStat
+from PIL import Image, ImageChops, ImageFilter, ImageOps, ImageStat
 
 from .skaner import Przerwano
 
@@ -34,9 +34,12 @@ CREATE TABLE IF NOT EXISTS decyzje_dok (
 );
 """
 NAGLOWEK = 256 * 1024
-PROG_KANDYDAT = 0.55   # od tej oceny zdjęcie pokazujemy jako możliwy dokument
-PROG_PEWNY = 0.72      # od tej — wstępnie zaznaczone
-PROG_PODOBNE = 5       # maks. różnica bitów odcisku obrazu
+PROG_WSTEPNY = 0.45    # etap 1 (miniatura): jasne, mało kolorowe — tylko te sprawdzamy dokładniej
+PROG_KANDYDAT = 0.6    # etap 2 (tekst): od tej oceny zdjęcie pokazujemy jako możliwy dokument
+PROG_PEWNY = 0.8       # od tej — wstępnie zaznaczone
+PROG_PODOBNE = 8       # maks. różnica bitów odcisku obrazu (wstępne dopasowanie)
+PROG_SZAROSCI = 14     # maks. średnia różnica jasności podpisów 8×8 (0–255)
+PROG_KOLORU = 16       # maks. średnia różnica kolorów podpisów 4×4
 _ZRZUT = re.compile(r"screenshot|zrzut|screen_shot|scr_", re.IGNORECASE)
 _ORIENTACJA = {2: (Image.Transpose.FLIP_LEFT_RIGHT,), 3: (Image.Transpose.ROTATE_180,),
                4: (Image.Transpose.FLIP_TOP_BOTTOM,), 5: (Image.Transpose.TRANSPOSE,),
@@ -46,6 +49,11 @@ _ORIENTACJA = {2: (Image.Transpose.FLIP_LEFT_RIGHT,), 3: (Image.Transpose.ROTATE
 
 def przygotuj(db: sqlite3.Connection) -> None:
     db.executescript(SCHEMAT)
+    kol = {r[1] for r in db.execute("PRAGMA table_info(analiza)")}
+    for nazwa, typ in (("podpis", "TEXT"), ("tekst", "REAL")):  # kolumny od wersji 1.2.1
+        if nazwa not in kol:
+            db.execute(f"ALTER TABLE analiza ADD COLUMN {nazwa} {typ}")
+    db.commit()
 
 
 def miniatura(sciezka: str, min_bok: int = 100) -> tuple[Image.Image, tuple[int, int] | None]:
@@ -120,42 +128,137 @@ def ocena_dokumentu(im: Image.Image) -> float:
     return round(0.35 * s_papier + 0.25 * s_kolor + 0.15 * s_tusz + 0.25 * s_tekst, 3)
 
 
+def podpis(im: Image.Image) -> str:
+    """64 bajty jasności (8×8) + 48 bajtów koloru (4×4 RGB) — do potwierdzania podobieństwa."""
+    return (im.convert("L").resize((8, 8), Image.Resampling.BOX).tobytes()
+            + im.convert("RGB").resize((4, 4), Image.Resampling.BOX).tobytes()).hex()
+
+
+def _roznice_podpisow(a: str, b: str) -> tuple[float, float]:
+    x, y = bytes.fromhex(a), bytes.fromhex(b)
+    szar = sum(abs(x[i] - y[i]) for i in range(64)) / 64
+    kol = sum(abs(x[i] - y[i]) for i in range(64, 112)) / 48
+    return szar, kol
+
+
+def _okresowosc(prof: list[float]) -> float:
+    """Siła regularnego powtarzania się wierszy (tekst: wiersz, przerwa, wiersz…), 0–1."""
+    n = len(prof)
+    if n < 30:
+        return 0.0
+    sr = sum(prof) / n
+    d = [v - sr for v in prof]
+    war = sum(v * v for v in d)
+    if war <= 1e-9:
+        return 0.0
+    ac = [sum(d[i] * d[i + lag] for i in range(n - lag)) / war for lag in range(min(90, n // 3))]
+    minimum = None
+    for lag in range(2, len(ac)):
+        if ac[lag] < 0 and (minimum is None or ac[lag] < ac[minimum]):
+            minimum = lag
+        elif minimum is not None and ac[lag] > ac[lag - 1] and ac[lag] > 0:
+            break
+    if minimum is None:  # brak naprzemienności — łagodne przejścia (niebo, sylwetka), nie tekst
+        return 0.0
+    return max(0.0, min(max(ac[minimum:]) - ac[minimum], 2.0) / 2)
+
+
+def ocena_tekstu(im: Image.Image, bok: int = 1000, pasy: int = 10) -> float:
+    """0..1 — czy na zdjęciu jest tekst: cienkie ciemne kreski ułożone w regularne wiersze.
+    Śnieg, niebo czy postać na tle ściany są jasne, ale nie mają powtarzających się wierszy."""
+    g = im.convert("L")
+    g.thumbnail((bok, bok))
+    tlo = g.filter(ImageFilter.BoxBlur(10))
+    tusz = ImageChops.subtract(tlo, g).point(lambda v: 255 if v > 30 else 0)
+    px = tusz.tobytes()
+    n_tusz = px.count(255)
+    udzial = n_tusz / max(1, len(px))
+    grube = tusz.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.MaxFilter(5)).tobytes().count(255)
+    cienkie = 1 - grube / max(1, n_tusz)
+    okres = 0.0
+    for obraz in (tusz, tusz.transpose(Image.Transpose.ROTATE_90)):  # też kartka sfotografowana bokiem
+        w, h = obraz.size
+        prof = obraz.resize((pasy, h), Image.Resampling.BOX).tobytes()
+        for p in range(pasy):
+            okres = max(okres, _okresowosc([prof[y * pasy + p] / 255 for y in range(h)]))
+    siatka = tusz.resize((6, 6), Image.Resampling.BOX).tobytes()
+    pokrycie = sum(1 for v in siatka if 8 <= v <= 110) / 36
+
+    def ogr(x):
+        return max(0.0, min(1.0, x))
+
+    return round(0.5 * ogr(okres / 0.3) + 0.2 * ogr((cienkie - 0.4) / 0.4)
+                 + 0.15 * ogr((pokrycie - 0.3) / 0.4) + 0.15 * ogr((udzial - 0.03) / 0.05), 3)
+
+
+def _obraz_do_tekstu(sciezka: str, bok: int = 1000) -> Image.Image:
+    with Image.open(sciezka) as im:
+        im.draft("RGB", (bok, bok))  # JPEG: dekodowanie od razu w zmniejszonej skali
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        im.thumbnail((bok, bok))
+        return im
+
+
 def _analizuj_plik(w) -> tuple:
     try:
         im, rozm = miniatura(w["sciezka"])
         h = dhash(im)
         return (w["sciezka"], w["rozmiar"], w["mtime"], f"{h:016x}", ocena_dokumentu(im), ostrosc(im),
-                rozm[0] if rozm else im.width, rozm[1] if rozm else im.height, None)
+                rozm[0] if rozm else im.width, rozm[1] if rozm else im.height, None, podpis(im), None)
     except Exception as e:
-        return (w["sciezka"], w["rozmiar"], w["mtime"], None, None, None, None, None, f"{type(e).__name__}: {e}"[:200])
+        return (w["sciezka"], w["rozmiar"], w["mtime"], None, None, None, None, None,
+                f"{type(e).__name__}: {e}"[:200], None, None)
 
 
 def analizuj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -> dict:
+    """Etap 1: miniatura z nagłówka (wszystkie zdjęcia). Etap 2: tekst na większym obrazie
+    (tylko jasne kandydaty na dokumenty). Liczone są tylko nowe/zmienione zdjęcia."""
     przygotuj(db)
+    from .skaner import Zatwierdzanie
+    zatwierdz = Zatwierdzanie(db)
     wiersze = db.execute(
         """SELECT p.sciezka, p.rozmiar, p.mtime FROM pliki p
            LEFT JOIN analiza a ON a.sciezka = p.sciezka AND a.rozmiar = p.rozmiar AND a.mtime = p.mtime
-           WHERE p.rodzaj = 'zdjecie' AND a.sciezka IS NULL"""
+           WHERE p.rodzaj = 'zdjecie' AND (a.sciezka IS NULL OR (a.blad IS NULL AND a.podpis IS NULL))"""
     ).fetchall()
-    if postep:
-        postep("analiza zdjęć", 0, len(wiersze), 0)
 
     def zadanie(w):
         if przerwij is not None and przerwij.is_set():
             raise Przerwano(w["sciezka"])
         return _analizuj_plik(w)
 
-    from .skaner import Zatwierdzanie
-    zatwierdz = Zatwierdzanie(db)
+    if postep:
+        postep("analiza zdjęć", 0, len(wiersze), 0)
     with ThreadPoolExecutor(max_workers=watki) as pula:
         for i, wynik in enumerate(pula.map(zadanie, wiersze), 1):
-            db.execute("INSERT OR REPLACE INTO analiza VALUES (?,?,?,?,?,?,?,?,?)", wynik)
+            db.execute("INSERT OR REPLACE INTO analiza(sciezka, rozmiar, mtime, dhash, dokument, ostrosc, szer, wys, "
+                       "blad, podpis, tekst) VALUES (?,?,?,?,?,?,?,?,?,?,?)", wynik)
             zatwierdz()
             if postep and i % 20 == 0:
                 postep("analiza zdjęć", i, len(wiersze), 0)
-    db.commit()
+    zatwierdz(wymus=True)
+
+    kandydaci = db.execute(
+        f"""SELECT a.sciezka FROM analiza a JOIN pliki p ON {_AKTUALNE}
+            WHERE a.dokument >= ? AND a.tekst IS NULL AND a.blad IS NULL""", (PROG_WSTEPNY,)).fetchall()
+
+    def tekst(w):
+        if przerwij is not None and przerwij.is_set():
+            raise Przerwano(w[0])
+        try:
+            return w[0], ocena_tekstu(_obraz_do_tekstu(w[0]))
+        except Exception:
+            return w[0], 0.0
+
     if postep:
-        postep("analiza zdjęć", len(wiersze), len(wiersze), 0)
+        postep("szukanie tekstu (dokumenty)", 0, len(kandydaci), 0)
+    with ThreadPoolExecutor(max_workers=watki) as pula:
+        for i, (sc, t) in enumerate(pula.map(tekst, kandydaci), 1):
+            db.execute("UPDATE analiza SET tekst=? WHERE sciezka=?", (t, sc))
+            zatwierdz()
+            if postep and i % 5 == 0:
+                postep("szukanie tekstu (dokumenty)", i, len(kandydaci), 0)
+    zatwierdz(wymus=True)
     return podsumowanie(db)
 
 
@@ -177,11 +280,11 @@ def podsumowanie(db: sqlite3.Connection) -> dict:
 def kandydaci_dokumentow(db: sqlite3.Connection, tylko_nowe: bool = False) -> list[dict]:
     przygotuj(db)
     wiersze = db.execute(
-        f"""SELECT p.rowid id, p.sciezka, p.wzgledna, p.data, a.dokument ocena, d.dokument decyzja
+        f"""SELECT p.rowid id, p.sciezka, p.wzgledna, p.data, COALESCE(a.tekst, 0) ocena, d.dokument decyzja
             FROM pliki p JOIN analiza a ON {_AKTUALNE}
             LEFT JOIN decyzje_dok d ON d.sciezka = p.sciezka
-            WHERE p.rodzaj='zdjecie' AND (a.dokument >= ? OR d.dokument = 1)
-            ORDER BY a.dokument DESC""", (PROG_KANDYDAT,)).fetchall()
+            WHERE p.rodzaj='zdjecie' AND (a.tekst >= ? OR d.dokument = 1)
+            ORDER BY a.tekst DESC""", (PROG_KANDYDAT,)).fetchall()
     wynik = []
     for w in wiersze:
         if _ZRZUT.search(w["wzgledna"]):
@@ -213,61 +316,60 @@ def dokumenty_potwierdzone(db: sqlite3.Connection) -> set[str]:
 # --- podobne i nieostre ----------------------------------------------------------------
 
 def grupy_podobnych(db: sqlite3.Connection, prog: int = PROG_PODOBNE) -> list[list[dict]]:
-    """Grupy wizualnie podobnych zdjęć (bez grup samych identycznych plików)."""
+    """Grupy wizualnie podobnych zdjęć (bez grup samych identycznych plików).
+
+    1) wstępnie: odcisk dHash różni się o ≤ prog bitów (wyszukiwanie przez pasma),
+    2) potwierdzenie: podobna jasność (8×8) i kolory (4×4),
+    3) grupa powstaje wokół jednego zdjęcia-wzorca — każde w grupie jest podobne do wzorca
+       (bez łańcuchów A≈B≈C…, które sklejały zupełnie różne zdjęcia)."""
     przygotuj(db)
+    odc = ", o.pelny" if _ma_odciski(db) else ", NULL pelny"
+    zl = ("LEFT JOIN odciski o ON o.sciezka = p.sciezka AND o.rozmiar = p.rozmiar AND o.mtime = p.mtime"
+          if _ma_odciski(db) else "")
     wiersze = [dict(w) for w in db.execute(
         f"""SELECT p.rowid id, p.sciezka, p.korzen, p.wzgledna, p.mtime, p.rozmiar, p.data,
-                   a.dhash, a.ostrosc, a.szer, a.wys, o.pelny
-            FROM pliki p JOIN analiza a ON {_AKTUALNE}
-            LEFT JOIN odciski o ON o.sciezka = p.sciezka AND o.rozmiar = p.rozmiar AND o.mtime = p.mtime
-            WHERE p.rodzaj='zdjecie' AND a.dhash IS NOT NULL""")] if _ma_odciski(db) else [dict(w) for w in db.execute(
-        f"""SELECT p.rowid id, p.sciezka, p.korzen, p.wzgledna, p.mtime, p.rozmiar, p.data,
-                   a.dhash, a.ostrosc, a.szer, a.wys, NULL pelny
-            FROM pliki p JOIN analiza a ON {_AKTUALNE}
-            WHERE p.rodzaj='zdjecie' AND a.dhash IS NOT NULL""")]
+                   a.dhash, a.ostrosc, a.szer, a.wys, a.podpis {odc}
+            FROM pliki p JOIN analiza a ON {_AKTUALNE} {zl}
+            WHERE p.rodzaj='zdjecie' AND a.dhash IS NOT NULL AND a.podpis IS NOT NULL""")]
     hashe = []
     for w in wiersze:
         h = int(w["dhash"], 16)
         if 6 <= h.bit_count() <= 58:  # pomijamy jednolite obrazy (czarne, białe)
             hashe.append((h, w))
-    rodzic = list(range(len(hashe)))
-
-    def znajdz(i):
-        while rodzic[i] != i:
-            rodzic[i] = rodzic[rodzic[i]]
-            i = rodzic[i]
-        return i
-
-    # pasma: różnica <= prog bitów => co najmniej jedno z (prog+1) pasm identyczne
+    sasiedzi: dict[int, set[int]] = {}
     pasma = prog + 1
     szer = 64 // pasma
     for b in range(pasma):
         przes = b * szer
-        dl = szer if b < pasma - 1 else 64 - przes
-        maska = (1 << dl) - 1
+        maska = (1 << (szer if b < pasma - 1 else 64 - przes)) - 1
         kubelki: dict[int, list[int]] = {}
         for i, (h, _) in enumerate(hashe):
             kubelki.setdefault((h >> przes) & maska, []).append(i)
         for lista in kubelki.values():
-            if len(lista) < 2 or len(lista) > 400:
+            if len(lista) < 2 or len(lista) > 800:
                 continue
             for x in range(len(lista)):
                 for y in range(x + 1, len(lista)):
                     i, j = lista[x], lista[y]
-                    if (hashe[i][0] ^ hashe[j][0]).bit_count() <= prog:
-                        ri, rj = znajdz(i), znajdz(j)
-                        if ri != rj:
-                            rodzic[ri] = rj
-    grupy: dict[int, list[dict]] = {}
-    for i, (_, w) in enumerate(hashe):
-        grupy.setdefault(znajdz(i), []).append(w)
+                    if j in sasiedzi.get(i, ()) or (hashe[i][0] ^ hashe[j][0]).bit_count() > prog:
+                        continue
+                    szar, kol = _roznice_podpisow(hashe[i][1]["podpis"], hashe[j][1]["podpis"])
+                    if szar <= PROG_SZAROSCI and kol <= PROG_KOLORU:
+                        sasiedzi.setdefault(i, set()).add(j)
+                        sasiedzi.setdefault(j, set()).add(i)
+    wykorzystane: set[int] = set()
     wynik = []
-    for g in grupy.values():
-        if len(g) < 2:
+    for wzor in sorted(sasiedzi, key=lambda i: -len(sasiedzi[i])):
+        if wzor in wykorzystane:
             continue
+        czlonkowie = [wzor] + [j for j in sasiedzi[wzor] if j not in wykorzystane]
+        if len(czlonkowie) < 2:
+            continue
+        g = [hashe[i][1] for i in czlonkowie]
         pelne = {w["pelny"] for w in g}
         if len(pelne) == 1 and None not in pelne:
             continue  # same identyczne — to zakładka „Duplikaty”
+        wykorzystane.update(czlonkowie)
         g.sort(key=lambda w: (-(w["szer"] or 0) * (w["wys"] or 0), -(w["ostrosc"] or 0), w["mtime"]))
         wynik.append(g)
     wynik.sort(key=lambda g: -len(g))
