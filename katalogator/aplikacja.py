@@ -43,6 +43,7 @@ class Stan:
             self.ustawienia.update(json.loads(self.plik_ustawien.read_text(encoding="utf-8")))
         except (OSError, ValueError):
             pass
+        self.ustawienia["zrodla"] = dyski.normalizuj_wybor(self.ustawienia.get("zrodla") or [])
         self.blokada = threading.Lock()
         self.przerwij = threading.Event()
         self.skan = {"trwa": False, "przejrzano": 0, "folder": "", "komunikat": "", "blad": ""}
@@ -52,7 +53,7 @@ class Stan:
         self.ostatni_ping = time.time()
 
     def zapisz_ustawienia(self, dane: dict) -> None:
-        zrodla = dyski.normalizuj_wybor([str(z) for z in dane.get("zrodla", [])])
+        zrodla = dyski.normalizuj_wybor(dane.get("zrodla") or [])
         cel = str(dane.get("cel", "")).strip()
         self.ustawienia = {"zrodla": zrodla, "cel": os.path.normpath(cel) if cel else ""}
         self.plik_ustawien.write_text(json.dumps(self.ustawienia, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -93,7 +94,7 @@ class Stan:
 
     # --- skan w tle ----------------------------------------------------
     def rozpocznij_skan(self) -> str | None:
-        foldery = list(self.ustawienia["zrodla"])
+        foldery = [z["sciezka"] for z in self.ustawienia["zrodla"]]
         cel = self.ustawienia["cel"]
         if cel and not any(dyski.zawiera(z, cel) for z in foldery):
             foldery.append(cel)  # miejsce docelowe też skanujemy (o ile nie leży w źródle)

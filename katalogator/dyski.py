@@ -31,12 +31,26 @@ def zawiera(rodzic: str, dziecko: str) -> bool:
     return d.startswith(prefiks)
 
 
-def normalizuj_wybor(sciezki: list[str]) -> list[str]:
-    """Usuwa duplikaty i foldery zawarte w innych wybranych (rodzic obejmuje dzieci)."""
-    wynik: list[str] = []
-    for s in sorted({os.path.normpath(s.strip()) for s in sciezki if s and s.strip()}, key=len):
-        if not any(zawiera(w, s) for w in wynik):
-            wynik.append(s)
+TRYBY = ("kopiuj", "przenies")
+
+
+def normalizuj_wybor(elementy: list) -> list[dict]:
+    """Wybrane foldery jako [{"sciezka", "tryb"}]: bez powtórzeń i bez folderów zawartych
+    w innych wybranych (rodzic obejmuje dzieci). Przy powtórce ścieżki wygrywa ostatnia."""
+    wg_klucza: dict[str, dict] = {}
+    for e in elementy:
+        if isinstance(e, dict):
+            sciezka, tryb = str(e.get("sciezka", "")), e.get("tryb")
+        else:  # stary zapis: sama ścieżka
+            sciezka, tryb = str(e), "kopiuj"
+        if not sciezka.strip():
+            continue
+        sciezka = os.path.normpath(sciezka.strip())
+        wg_klucza[_klucz(sciezka)] = {"sciezka": sciezka, "tryb": tryb if tryb in TRYBY else "kopiuj"}
+    wynik: list[dict] = []
+    for e in sorted(wg_klucza.values(), key=lambda e: len(e["sciezka"])):
+        if not any(zawiera(w["sciezka"], e["sciezka"]) for w in wynik):
+            wynik.append(e)
     return wynik
 
 

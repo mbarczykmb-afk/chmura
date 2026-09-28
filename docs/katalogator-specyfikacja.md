@@ -13,7 +13,9 @@ Program niczego nie przenosi ani nie kopiuje bez zatwierdzenia planu.
 
 1. **Wskazanie źródła** (jeden lub kilka folderów) i **miejsca docelowego** —
    drzewo jak w commanderze: podpięte dyski (także sieciowe), rozwijanie,
-   ptaszki przy folderach (folder obejmuje podfoldery); cel wybierany
+   dwa ptaszki przy każdym folderze: **K — kopiuj** (oryginały zostają) lub
+   **P — przenieś** (oryginały usuwane ze źródła po weryfikacji kopii);
+   folder obejmuje podfoldery; cel wybierany
    w tym samym drzewie, z możliwością utworzenia nowego folderu.
 2. **Skan** źródła i miejsca docelowego (czytane są tylko nagłówki plików:
    EXIF, metadane filmów, tagi muzyki; pełna zawartość tylko przy
@@ -79,7 +81,8 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
 
 ## Wykonanie
 
-- Tryby: **kopiuj** / **przenieś** / **scal** (do wyboru przy starcie).
+- Tryb **kopiuj** / **przenieś** — ustawiany osobno dla każdego wybranego folderu
+  (ptaszki K/P w drzewie); **scalanie** z istniejącą zawartością celu wynika z drzewa.
 - Przenoszenie = kopia → weryfikacja sumy kontrolnej → usunięcie źródła.
 - Duplikaty (ta sama zawartość) — nie są kopiowane drugi raz; raport.
 - Konflikt nazw przy różnej zawartości → dopisek ` (2)`, nigdy nadpisanie.

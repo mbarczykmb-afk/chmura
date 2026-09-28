@@ -7,7 +7,10 @@ from test_aplikacja import app  # noqa: F401  (fikstura)
 
 def test_normalizuj_wybor(tmp_path):
     a, b, c = str(tmp_path / "A"), str(tmp_path / "A" / "B"), str(tmp_path / "AB")
-    assert dyski.normalizuj_wybor([b, a, c, a + os.sep, " "]) == sorted([a, c], key=len)
+    w = dyski.normalizuj_wybor([{"sciezka": b, "tryb": "przenies"}, a, {"sciezka": c, "tryb": "przenies"},
+                                {"sciezka": a + os.sep, "tryb": "przenies"}, " ", {"sciezka": c, "tryb": "zly"}])
+    # a: ostatni wpis wygrywa (przenieś); b zawarte w a; c: nieznany tryb -> kopiuj
+    assert w == [{"sciezka": a, "tryb": "przenies"}, {"sciezka": c, "tryb": "kopiuj"}]
     assert dyski.zawiera(a, b) and not dyski.zawiera(a, c) and dyski.zawiera(a, a)
 
 
@@ -44,5 +47,14 @@ def test_api_drzewa(app, tmp_path):  # noqa: F811
     w = json.loads(api("/api/nowy-folder", {"w": str(tmp_path / "Z"), "nazwa": "Cel"})[1])
     assert os.path.isdir(w["sciezka"])
     # rodzic zaznaczony razem z dzieckiem -> zostaje tylko rodzic
-    s = json.loads(api("/api/ustawienia", {"zrodla": [str(tmp_path / "Z" / "Zdjęcia"), str(tmp_path / "Z")]})[1])
-    assert s["zrodla"] == [str(tmp_path / "Z")]
+    s = json.loads(api("/api/ustawienia", {"zrodla": [
+        {"sciezka": str(tmp_path / "Z" / "Zdjęcia"), "tryb": "kopiuj"},
+        {"sciezka": str(tmp_path / "Z"), "tryb": "przenies"}]})[1])
+    assert s["zrodla"] == [{"sciezka": str(tmp_path / "Z"), "tryb": "przenies"}]
+
+
+def test_stary_plik_ustawien(tmp_path):
+    from katalogator.aplikacja import Stan
+    (tmp_path / "ustawienia.json").write_text('{"zrodla": ["Z:/Zdjecia"], "cel": ""}', encoding="utf-8")
+    st = Stan(tmp_path)
+    assert st.ustawienia["zrodla"] == [{"sciezka": os.path.normpath("Z:/Zdjecia"), "tryb": "kopiuj"}]

@@ -54,7 +54,7 @@ def test_ustawienia_skan_raport(app, tmp_path):
 
     _, body = api("/api/ustawienia", {"zrodla": [str(k), str(k), " "], "cel": str(cel)})
     s = json.loads(body)
-    assert s["zrodla"] == [str(k)] and s["cel"] == str(cel) and not s["ma_wyniki"]
+    assert s["zrodla"] == [{"sciezka": str(k), "tryb": "kopiuj"}] and s["cel"] == str(cel) and not s["ma_wyniki"]
     assert json.loads(stan.plik_ustawien.read_text(encoding="utf-8"))["cel"] == str(cel)
 
     api("/api/skanuj", {})
