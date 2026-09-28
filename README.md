@@ -84,23 +84,24 @@ Konfiguracje i skrypty dla wybranej opcji trafią do tego repozytorium.
 Specyfikacja: [`docs/katalogator-specyfikacja.md`](docs/katalogator-specyfikacja.md).
 Gotowy **etap 1: skaner + raport** (niczego nie przenosi ani nie zmienia).
 
-**Instalacja (raz):**
-1. Zainstaluj Pythona z <https://www.python.org/downloads/>
-   — zaznacz **„Add python.exe to PATH”**.
-2. Pobierz to repozytorium (GitHub → *Code* → *Download ZIP*) i rozpakuj,
-   np. do `C:\chmura`.
-3. W PowerShell:
-   ```
-   cd C:\chmura
-   py -m pip install -r requirements.txt
-   ```
+**Uruchomienie (aplikacja okienkowa, bez instalacji):**
+1. GitHub → zakładka **Actions** → „Katalogator.exe (Windows)” → ostatnie
+   zielone uruchomienie → na dole **Artifacts → Katalogator-windows** (pobierze ZIP).
+2. Rozpakuj i kliknij dwukrotnie **Katalogator.exe**. Przy pierwszym uruchomieniu
+   Windows SmartScreen może ostrzec o nieznanym wydawcy → *Więcej informacji* →
+   *Uruchom mimo to*.
+3. Otworzy się okno programu: dodaj foldery → *Skanuj* → raport.
 
-**Skan i raport:**
+Ustawienia i baza skanu: `%LOCALAPPDATA%\Katalogator\`. Program działa tylko
+lokalnie (127.0.0.1), nic nie wysyła do internetu. Zamknięcie okna kończy
+program; przerwany skan wznawia się od miejsca przerwania.
+
+<details><summary>Dla zaawansowanych: uruchomienie z Pythona / linia poleceń</summary>
+
 ```
-py -m katalogator skanuj Z:\
+py -m pip install -r requirements.txt
+py -m katalogator                 # okno aplikacji
+py -m katalogator skanuj Z:\      # skan w konsoli + raport HTML
+py -m katalogator raport
 ```
-Baza skanu (`katalog.db`) zapisuje się lokalnie na PC. Skan można przerwać
-(Ctrl+C) i uruchomić ponownie — przeczyta tylko nowe/zmienione pliki.
-Na końcu otwiera się raport HTML: ile zdjęć/filmów ma GPS, skąd są daty,
-lata, urządzenia, foldery pozostałych plików, możliwe duplikaty.
-Ponowne wyświetlenie raportu: `py -m katalogator raport`.
+</details>

@@ -1,4 +1,4 @@
-"""Linia poleceń: python -m katalogator skanuj|raport ..."""
+"""Bez parametrów: aplikacja okienkowa. Z parametrami: python -m katalogator skanuj|raport ..."""
 
 import argparse
 import sys
@@ -9,6 +9,10 @@ from . import raport, skaner
 
 
 def main(argv=None) -> int:
+    if not (sys.argv[1:] if argv is None else argv):
+        from .aplikacja import main as aplikacja  # bez parametrów: okno aplikacji
+        aplikacja()
+        return 0
     p = argparse.ArgumentParser(prog="katalogator", description="Porządkowanie zdjęć, filmów, muzyki i plików.")
     p.add_argument("--baza", default="katalog.db", help="plik bazy skanu (domyślnie katalog.db)")
     sub = p.add_subparsers(dest="polecenie", required=True)

@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Katalogator</title>
+<style>
+:root{
+  --bg:#f4f4f2; --panel:#ffffff; --fg:#1c1c1e; --mut:#6c6c72; --lin:#e2e2de;
+  --akc:#2f6fdb; --akc-fg:#fff; --akc-miekki:#e8f0fd; --ok:#1f9d6b; --blad:#c8372d; --blad-miekki:#fdecea;
+  --cien:0 1px 2px rgba(0,0,0,.05),0 2px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141518; --panel:#1d1e22; --fg:#ececef; --mut:#9a9aa3; --lin:#2e3036;
+  --akc:#6d9df0; --akc-fg:#0e1420; --akc-miekki:#1f2a3d; --ok:#3cc28c; --blad:#f07a70; --blad-miekki:#3a1f1d;
+  --cien:none;
+}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 "Segoe UI",system-ui,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--lin);background:var(--panel)}
+header h1{font-size:18px;margin:0;font-weight:600}
+header .wersja{color:var(--mut);font-size:12px}
+header .odstep{flex:1}
+.kroki{display:flex;gap:6px;padding:14px 24px 0;flex-wrap:wrap}
+.krok{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;color:var(--mut);font-size:13px}
+.krok b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--lin);color:var(--fg);font-size:12px}
+.krok.akt{background:var(--akc-miekki);color:var(--fg)} .krok.akt b{background:var(--akc);color:var(--akc-fg)}
+.krok.gotowy b{background:var(--ok);color:#fff}
+.krok.wkrotce{opacity:.55}
+main{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:20px;padding:16px 24px 24px;align-items:start}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+section{background:var(--panel);border:1px solid var(--lin);border-radius:12px;padding:18px;box-shadow:var(--cien)}
+section+section{margin-top:16px}
+h2{font-size:15px;margin:0 0 4px;font-weight:600}
+p.opis{margin:0 0 12px;color:var(--mut);font-size:13px}
+.lista{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.folder{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--lin);border-radius:8px;background:var(--bg)}
+.folder span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.pusto{color:var(--mut);font-size:13px;padding:8px 0}
+.wiersz{display:flex;gap:8px}
+input[type=text]{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--lin);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+button{font:inherit;border-radius:8px;border:1px solid var(--lin);background:var(--panel);color:var(--fg);padding:8px 14px;cursor:pointer}
+button:hover{border-color:var(--akc)}
+button:disabled{opacity:.5;cursor:default;border-color:var(--lin)}
+button.glowny{background:var(--akc);border-color:var(--akc);color:var(--akc-fg);font-weight:600;padding:11px 18px;width:100%}
+button.maly{padding:3px 9px;font-size:12px}
+button.ikonowy{border:none;background:none;color:var(--mut);padding:2px 6px}
+button.ikonowy:hover{color:var(--blad)}
+.postep{margin-top:14px;padding:12px;border-radius:8px;background:var(--akc-miekki)}
+.postep .liczba{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.postep .gdzie{font-size:12px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pasek{height:4px;border-radius:2px;background:var(--lin);overflow:hidden;margin:8px 0}
+.pasek i{display:block;height:100%;width:30%;background:var(--akc);animation:jedz 1.2s ease-in-out infinite}
+@keyframes jedz{0%{transform:translateX(-100%)}100%{transform:translateX(330%)}}
+.komunikat{margin-top:10px;font-size:13px}
+.komunikat.blad{color:var(--blad);background:var(--blad-miekki);padding:8px 10px;border-radius:8px}
+.komunikat.ok{color:var(--ok)}
+.raport{padding:0;overflow:hidden;min-height:70vh;display:flex;flex-direction:column}
+.raport .pasek-g{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--lin)}
+.raport .pasek-g h2{flex:1;margin:0}
+.raport iframe{flex:1;width:100%;border:0;min-height:70vh;background:var(--bg)}
+.raport .zachęta{flex:1;display:grid;place-items:center;text-align:center;color:var(--mut);padding:40px}
+.raport .zachęta strong{display:block;color:var(--fg);font-size:16px;margin-bottom:6px}
+.wkrotce-box{border-style:dashed;color:var(--mut);font-size:13px}
+.wkrotce-box h2{color:var(--fg)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Katalogator</h1><span class="wersja" id="wersja"></span>
+  <span class="odstep"></span>
+  <button id="zamknij" title="Zamyka program">Zamknij</button>
+</header>
+
+<nav class="kroki">
+  <div class="krok akt" id="k1"><b>1</b>Foldery</div>
+  <div class="krok" id="k2"><b>2</b>Skan i raport</div>
+  <div class="krok wkrotce"><b>3</b>Propozycja drzewa</div>
+  <div class="krok wkrotce"><b>4</b>Porządkowanie</div>
+</nav>
+
+<main>
+  <div>
+    <section>
+      <h2>Co porządkujemy?</h2>
+      <p class="opis">Foldery ze zdjęciami, filmami, muzyką i plikami — np. zmapowany dysk <code>Z:\</code>.</p>
+      <div class="lista" id="zrodla"></div>
+      <div class="wiersz">
+        <button id="dodaj-zrodlo">+ Dodaj folder…</button>
+      </div>
+      <div class="wiersz" style="margin-top:8px">
+        <input type="text" id="wklej-zrodlo" placeholder="lub wklej ścieżkę, np. \\192.168.1.50\Public">
+        <button id="dodaj-wklejone">Dodaj</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Dokąd?</h2>
+      <p class="opis">Miejsce docelowe. Jeśli są tam już pliki, też je przeskanuję, żeby pokazać wynikowe drzewo.</p>
+      <div class="lista" id="cel"></div>
+      <div class="wiersz">
+        <button id="wybierz-cel">Wybierz folder…</button>
+        <input type="text" id="wklej-cel" placeholder="lub wklej ścieżkę">
+        <button id="ustaw-cel">Ustaw</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Skanowanie</h2>
+      <p class="opis">Tylko odczyt — nic nie jest przenoszone ani zmieniane. Można przerwać i wznowić później.</p>
+      <button class="glowny" id="skanuj">Skanuj</button>
+      <div class="postep" id="postep" hidden>
+        <div class="liczba"><span id="przejrzano">0</span> plików</div>
+        <div class="pasek"><i></i></div>
+        <div class="gdzie" id="gdzie"></div>
+        <div class="wiersz" style="margin-top:8px;justify-content:space-between;align-items:center">
+          <span id="etap" class="gdzie"></span>
+          <button class="maly" id="przerwij">Przerwij</button>
+        </div>
+      </div>
+      <div class="komunikat" id="komunikat"></div>
+    </section>
+
+    <section class="wkrotce-box">
+      <h2>Następny krok: propozycja drzewa</h2>
+      Foldery „Zdjęcia z 2023 → Marzec w Olkuszu”, muzyka wg wykonawców i albumów,
+      edycja drzewa i dopiero potem kopiowanie/przenoszenie — w przygotowaniu.
+    </section>
+  </div>
+
+  <section class="raport">
+    <div class="pasek-g">
+      <h2>Raport</h2>
+      <button class="maly" id="odswiez" hidden>Odśwież</button>
+    </div>
+    <div class="zachęta" id="zacheta">
+      <div><strong>Tu pojawi się raport ze skanu</strong>
+      Ile masz zdjęć i filmów, ile ma lokalizację GPS, z jakich lat, co zajmuje miejsce i ile jest możliwych duplikatów.</div>
+    </div>
+    <iframe id="ramka" title="Raport" hidden></iframe>
+  </section>
+</main>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
+const $ = id => document.getElementById(id);
+let stan = {zrodla: [], cel: "", skan: {}, ma_wyniki: false};
+let bylSkan = false;
+
+async function api(sciezka, dane) {
+  const opcje = {headers: {"X-Token": TOKEN}};
+  if (dane !== undefined) {
+    opcje.method = "POST";
+    opcje.headers["Content-Type"] = "application/json";
+    opcje.body = JSON.stringify(dane);
+  }
+  const r = await fetch(sciezka, opcje);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.blad || ("Błąd " + r.status));
+  return j;
+}
+
+function wierszFolderu(sciezka, usun) {
+  const d = document.createElement("div");
+  d.className = "folder";
+  const s = document.createElement("span");
+  s.textContent = "\u200E" + sciezka;   // poprawne wyświetlanie przy direction:rtl
+  s.title = sciezka;
+  const b = document.createElement("button");
+  b.className = "ikonowy"; b.textContent = "✕"; b.title = "Usuń z listy";
+  b.onclick = usun;
+  d.append(s, b);
+  return d;
+}
+
+function rysuj() {
+  $("wersja").textContent = stan.wersja ? "wersja " + stan.wersja : "";
+  const zr = $("zrodla"); zr.replaceChildren();
+  if (!stan.zrodla.length) zr.innerHTML = '<div class="pusto">Nie wybrano jeszcze żadnego folderu.</div>';
+  stan.zrodla.forEach((z, i) => zr.append(wierszFolderu(z, () => {
+    zapisz({zrodla: stan.zrodla.filter((_, j) => j !== i), cel: stan.cel});
+  })));
+  const cel = $("cel"); cel.replaceChildren();
+  if (stan.cel) cel.append(wierszFolderu(stan.cel, () => zapisz({zrodla: stan.zrodla, cel: ""})));
+  else cel.innerHTML = '<div class="pusto">Nie wybrano (możesz ustawić później).</div>';
+
+  const sk = stan.skan || {};
+  $("skanuj").disabled = !!sk.trwa || !stan.zrodla.length;
+  $("skanuj").textContent = stan.ma_wyniki ? "Skanuj ponownie (tylko zmiany)" : "Skanuj";
+  $("postep").hidden = !sk.trwa;
+  $("przejrzano").textContent = (sk.przejrzano || 0).toLocaleString("pl-PL");
+  $("gdzie").textContent = sk.folder || ""; $("gdzie").title = sk.folder || "";
+  $("etap").textContent = sk.komunikat || "";
+  const k = $("komunikat");
+  k.className = "komunikat" + (sk.blad ? " blad" : (!sk.trwa && sk.komunikat ? " ok" : ""));
+  k.textContent = sk.trwa ? "" : (sk.blad ? sk.komunikat + " " + sk.blad : (sk.komunikat || ""));
+
+  $("k1").className = "krok " + (stan.zrodla.length ? "gotowy" : "akt");
+  $("k2").className = "krok " + (stan.ma_wyniki && !sk.trwa ? "gotowy" : (stan.zrodla.length ? "akt" : ""));
+  $("odswiez").hidden = !stan.ma_wyniki;
+  $("zacheta").hidden = stan.ma_wyniki;
+  $("ramka").hidden = !stan.ma_wyniki;
+}
+
+function pokazRaport() {
+  if (stan.ma_wyniki) $("ramka").src = "/raport?t=" + encodeURIComponent(TOKEN) + "&_=" + Date.now();
+}
+
+async function odswiez() {
+  try {
+    stan = await api("/api/stan");
+    const trwa = !!(stan.skan && stan.skan.trwa);
+    if (bylSkan && !trwa) pokazRaport();
+    bylSkan = trwa;
+    rysuj();
+  } catch (e) { $("komunikat").className = "komunikat blad"; $("komunikat").textContent = "Brak połączenia z programem. Uruchom Katalogator ponownie."; }
+}
+
+async function zapisz(ust) {
+  try { stan = await api("/api/ustawienia", ust); rysuj(); }
+  catch (e) { alert(e.message); }
+}
+
+async function wybierz(od) {
+  const r = await api("/api/wybierz-folder", {od: od || ""});
+  return r.folder;
+}
+
+$("dodaj-zrodlo").onclick = async () => {
+  const f = await wybierz(stan.zrodla[0]);
+  if (f) zapisz({zrodla: [...stan.zrodla, f], cel: stan.cel});
+};
+$("dodaj-wklejone").onclick = () => {
+  const v = $("wklej-zrodlo").value.trim();
+  if (v) { $("wklej-zrodlo").value = ""; zapisz({zrodla: [...stan.zrodla, v], cel: stan.cel}); }
+};
+$("wklej-zrodlo").onkeydown = e => { if (e.key === "Enter") $("dodaj-wklejone").click(); };
+$("wybierz-cel").onclick = async () => {
+  const f = await wybierz(stan.cel);
+  if (f) zapisz({zrodla: stan.zrodla, cel: f});
+};
+$("ustaw-cel").onclick = () => {
+  const v = $("wklej-cel").value.trim();
+  if (v) { $("wklej-cel").value = ""; zapisz({zrodla: stan.zrodla, cel: v}); }
+};
+$("skanuj").onclick = async () => {
+  try { stan = await api("/api/skanuj", {}); bylSkan = true; rysuj(); }
+  catch (e) { $("komunikat").className = "komunikat blad"; $("komunikat").textContent = e.message; }
+};
+$("przerwij").onclick = () => api("/api/przerwij", {});
+$("odswiez").onclick = pokazRaport;
+$("zamknij").onclick = async () => {
+  if (stan.skan && stan.skan.trwa && !confirm("Skan trwa. Przerwać i zamknąć? Postęp zostanie zapisany.")) return;
+  try { await api("/api/zamknij", {}); } catch (e) {}
+  document.body.innerHTML = '<p style="padding:40px;text-align:center">Katalogator zamknięty. Możesz zamknąć to okno.</p>';
+  window.close();
+};
+
+(async () => {
+  await odswiez();
+  pokazRaport();
+  setInterval(odswiez, 1000);
+})();
+</script>
+</body>
+</html>

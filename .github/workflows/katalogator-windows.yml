@@ -1,0 +1,51 @@
+name: Katalogator.exe (Windows)
+
+on:
+  push:
+    paths:
+      - "katalogator/**"
+      - "tests/**"
+      - "uruchom.py"
+      - "requirements.txt"
+      - ".github/workflows/katalogator-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Zależności
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Testy (na Windows)
+        run: python -m pytest -q tests
+
+      - name: Budowanie Katalogator.exe
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name Katalogator
+          --add-data "katalogator/ui;katalogator/ui"
+          --collect-all pillow_heif
+          uruchom.py
+
+      - name: Test uruchomienia exe (serwer startuje)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\Katalogator.exe -PassThru
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) { throw "Katalogator.exe zakonczyl sie od razu (kod $($p.ExitCode))" }
+          Stop-Process -Id $p.Id -Force
+          Get-Item dist\Katalogator.exe | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Katalogator-windows
+          path: dist/Katalogator.exe
+          retention-days: 90

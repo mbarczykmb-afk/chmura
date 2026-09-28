@@ -78,7 +78,13 @@ def _przejdz(korzen: str, licz: dict):
                 licz["bledy_dostepu"] += 1
 
 
-def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print) -> dict:
+class Przerwano(Exception):
+    """Skan przerwany na życzenie — postęp jest zapisany w bazie."""
+
+
+def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
+           postep=None, przerwij=None) -> dict:
+    """postep(liczba_plikow, folder) — wywoływane co ok. 0,5 s; przerwij — threading.Event."""
     korzen = os.path.abspath(korzen)
     if not os.path.isdir(korzen):
         raise NotADirectoryError(korzen)
@@ -126,11 +132,22 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print) ->
                     zapisz(f.result())
                 oczekujace.clear()
                 db.commit()
-            if time.time() - ostatni_wydruk > 2:
+            if przerwij is not None and przerwij.is_set():
+                for f in oczekujace:
+                    zapisz(f.result())
+                db.commit()
+                raise Przerwano(korzen)
+            teraz = time.time()
+            if postep is not None and teraz - ostatni_wydruk > 0.5:
+                postep(stat["wszystkie"], os.path.dirname(sciezka))
+                ostatni_wydruk = teraz
+            elif postep is None and teraz - ostatni_wydruk > 2:
                 wypisz(f"  ...przejrzano {stat['wszystkie']} plików")
-                ostatni_wydruk = time.time()
+                ostatni_wydruk = teraz
         for f in oczekujace:
             zapisz(f.result())
+    if postep is not None:
+        postep(stat["wszystkie"], korzen)
 
     # Oznacz pliki bez zmian jako widziane w tym skanie, usuń te, których już nie ma.
     for i in range(0, len(niezmienione), 500):
