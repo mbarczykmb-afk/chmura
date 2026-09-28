@@ -91,6 +91,10 @@ Gotowy **etap 1: skaner + raport** (niczego nie przenosi ani nie zmienia).
    Windows SmartScreen może ostrzec o nieznanym wydawcy → *Więcej informacji* →
    *Uruchom mimo to*.
 3. Otworzy się okno programu: dodaj foldery → *Skanuj* → raport.
+4. **Duplikaty:** *Szukaj duplikatów* → zakładka *Duplikaty* → w każdej grupie
+   zaznacz plik, który zostaje → *Odłóż zaznaczone kopie*. Kopie trafiają do
+   folderu `_Duplikaty_Katalogator` (nic nie jest kasowane; *Cofnij* przywraca).
+   Gdy wszystko sprawdzisz, folder `_Duplikaty_Katalogator` możesz usunąć ręcznie.
 
 Ustawienia i baza skanu: `%LOCALAPPDATA%\Katalogator\`. Program działa tylko
 lokalnie (127.0.0.1), nic nie wysyła do internetu. Zamknięcie okna kończy

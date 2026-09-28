@@ -85,7 +85,12 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
 
 ## Etapy realizacji
 
-1. **Skaner + raport** ✅ (`katalogator skanuj`, `katalogator raport`)
+1. **Skaner + raport** ✅ — aplikacja okienkowa `Katalogator.exe`
+1a. **Detektor duplikatów** ✅ — porównanie zawartości (rozmiar → 1 MB początek/koniec →
+    pełny odcisk BLAKE2b), lista grup z miniaturami, wybór pliku, który zostaje,
+    odłożenie kopii do `_Duplikaty_Katalogator` (zamiast kasowania) i cofanie.
+    Zostaje preferencyjnie: plik z miejsca docelowego, spoza folderów typu
+    „Pobrane/WhatsApp/Kopia”, bez „(1)” w nazwie, najstarszy.
 2. Nazwy miejscowości (offline) + propozycja drzewa + wykrywanie wyjazdów
 3. Edytor drzewa w przeglądarce (miniatury, edycja, zapis planu)
 4. Detektor zdjęć dokumentów + widok potwierdzania

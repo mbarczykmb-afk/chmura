@@ -59,6 +59,12 @@ def zbierz(db: sqlite3.Connection) -> dict:
         "SELECT COUNT(*) grupy, COALESCE(SUM(n-1),0) nadmiar, COALESCE(SUM((n-1)*rozmiar),0) b FROM "
         "(SELECT rozmiar, COUNT(*) n FROM pliki WHERE rozmiar > 0 GROUP BY rozmiar HAVING n > 1)")[0]
     d["duplikaty"] = dict(kand)
+    d["duplikaty_potwierdzone"] = None
+    if db.execute("SELECT 1 FROM sqlite_master WHERE name='odciski'").fetchone():
+        from .duplikaty import podsumowanie
+        pod = podsumowanie(db)
+        if db.execute("SELECT 1 FROM odciski LIMIT 1").fetchone():
+            d["duplikaty_potwierdzone"] = pod
     d["bledy"] = q("SELECT wzgledna, blad FROM pliki WHERE blad IS NOT NULL LIMIT 10")
     d["n_bledow"] = q("SELECT COUNT(*) n FROM pliki WHERE blad IS NOT NULL")[0]["n"]
     d["pominiete"] = q(
@@ -167,11 +173,13 @@ def html_raport(d: dict) -> str:
             + _tabela(["Rozszerzenie", "Plików", "Rozmiar"],
                       [(e["e"] or "(brak)", e["n"], rozmiar_txt(e["b"])) for e in d["rozszerzenia_inne"]])
         )
-    du = d["duplikaty"]
-    info = [
-        f"Możliwe duplikaty (identyczny rozmiar): <b>{du['nadmiar']}</b> plików, "
-        f"do odzyskania do <b>{rozmiar_txt(du['b'])}</b> — potwierdzimy sumą kontrolną w etapie 2."
-    ]
+    du, dp = d["duplikaty"], d.get("duplikaty_potwierdzone")
+    if dp:
+        info = [f"Duplikaty (sprawdzona zawartość): <b>{dp['nadmiar']}</b> zbędnych kopii w {dp['grupy']} grupach, "
+                f"do odzyskania <b>{rozmiar_txt(dp['bajty'])}</b> — zakładka „Duplikaty”."]
+    else:
+        info = [f"Możliwe duplikaty (identyczny rozmiar): <b>{du['nadmiar']}</b> plików, "
+                f"do odzyskania do <b>{rozmiar_txt(du['b'])}</b> — sprawdź przyciskiem „Szukaj duplikatów”."]
     for p in d["pominiete"]:
         info.append(f"Pominięte śmieci w {html.escape(p['korzen'])}: {p['p']} plików, {p['f']} folderów; "
                     f"błędy dostępu: {p['e']}.")

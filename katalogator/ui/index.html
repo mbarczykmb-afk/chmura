@@ -63,6 +63,38 @@ button.ikonowy:hover{color:var(--blad)}
 .raport .zachęta{flex:1;display:grid;place-items:center;text-align:center;color:var(--mut);padding:40px}
 .raport .zachęta strong{display:block;color:var(--fg);font-size:16px;margin-bottom:6px}
 .wkrotce-box{border-style:dashed;color:var(--mut);font-size:13px}
+.zakladki{display:flex;gap:4px;flex:1}
+.zakladka{border:none;background:none;padding:6px 12px;border-radius:8px;color:var(--mut);font-weight:600}
+.zakladka.akt{background:var(--akc-miekki);color:var(--fg)}
+.zakladka .licz{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;background:var(--akc);color:var(--akc-fg);font-size:11px}
+.podsum{margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--bg);font-size:13px}
+.podsum b{font-size:16px}
+.cofnij{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;font-size:13px;color:var(--mut)}
+#widok-dup{display:flex;flex-direction:column;min-height:70vh}
+.filtry{display:flex;gap:6px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--lin);align-items:center}
+.filtr{padding:4px 12px;border-radius:999px;font-size:13px}
+.filtr.akt{background:var(--akc);border-color:var(--akc);color:var(--akc-fg)}
+.filtry .info{margin-left:auto;color:var(--mut);font-size:13px}
+.lista-dup{flex:1;overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 290px)}
+.grupa{display:grid;grid-template-columns:96px 1fr;gap:12px;border:1px solid var(--lin);border-radius:10px;padding:10px;background:var(--bg)}
+.grupa.pominieta{opacity:.5}
+.grupa .mini{width:96px;height:96px;border-radius:6px;background:var(--lin);display:grid;place-items:center;font-size:30px;overflow:hidden}
+.grupa .mini img{width:100%;height:100%;object-fit:cover}
+.grupa .gl{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px}
+.grupa .gl strong{flex:1}
+.grupa label.pomin{color:var(--mut);font-size:12px;display:flex;gap:4px;align-items:center;cursor:pointer}
+.plik{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center;padding:4px 6px;border-radius:6px;font-size:13px;cursor:pointer}
+.plik:hover{background:var(--panel)}
+.plik .sc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.plik .sc em{font-style:normal;color:var(--mut)}
+.plik .znak{font-size:11px;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.plik.zostaje .znak{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.plik.odklada .znak{background:var(--lin);color:var(--mut)}
+.plik.odklada .sc{text-decoration:line-through;text-decoration-color:var(--mut)}
+.stopka{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--lin);background:var(--panel)}
+.stopka span{flex:1;font-size:13px}
+.stopka button{width:auto}
+.wiecej{align-self:center}
 .wkrotce-box h2{color:var(--fg)}
 </style>
 </head>
@@ -122,6 +154,27 @@ button.ikonowy:hover{color:var(--blad)}
       <div class="komunikat" id="komunikat"></div>
     </section>
 
+    <section>
+      <h2>Duplikaty</h2>
+      <p class="opis">Porównuję <b>zawartość</b> plików, nie nazwy. Nic nie jest kasowane — kopie trafiają
+        do folderu <code>_Duplikaty_Katalogator</code>, a operację można cofnąć.</p>
+      <button class="glowny" id="szukaj-dup">Szukaj duplikatów</button>
+      <div class="postep" id="postep-dup" hidden>
+        <div class="liczba"><span id="dup-zrobione">0</span> / <span id="dup-wszystkie">0</span></div>
+        <div class="pasek"><i></i></div>
+        <div class="gdzie" id="dup-etap"></div>
+        <div class="wiersz" style="margin-top:8px;justify-content:space-between;align-items:center">
+          <span class="gdzie" id="dup-bajty"></span>
+          <button class="maly" id="przerwij-dup">Przerwij</button>
+        </div>
+      </div>
+      <div class="komunikat" id="komunikat-dup"></div>
+      <div class="podsum" id="podsum-dup" hidden></div>
+      <div class="cofnij" id="cofnij-box" hidden>
+        <span id="cofnij-opis"></span><button class="maly" id="cofnij">Cofnij</button>
+      </div>
+    </section>
+
     <section class="wkrotce-box">
       <h2>Następny krok: propozycja drzewa</h2>
       Foldery „Zdjęcia z 2023 → Marzec w Olkuszu”, muzyka wg wykonawców i albumów,
@@ -131,14 +184,34 @@ button.ikonowy:hover{color:var(--blad)}
 
   <section class="raport">
     <div class="pasek-g">
-      <h2>Raport</h2>
+      <div class="zakladki">
+        <button class="zakladka akt" id="tab-raport">Raport</button>
+        <button class="zakladka" id="tab-dup">Duplikaty<span class="licz" id="licz-dup" hidden></span></button>
+      </div>
       <button class="maly" id="odswiez" hidden>Odśwież</button>
     </div>
-    <div class="zachęta" id="zacheta">
-      <div><strong>Tu pojawi się raport ze skanu</strong>
-      Ile masz zdjęć i filmów, ile ma lokalizację GPS, z jakich lat, co zajmuje miejsce i ile jest możliwych duplikatów.</div>
+    <div id="widok-raport" style="display:flex;flex-direction:column;flex:1">
+      <div class="zachęta" id="zacheta">
+        <div><strong>Tu pojawi się raport ze skanu</strong>
+        Ile masz zdjęć i filmów, ile ma lokalizację GPS, z jakich lat, co zajmuje miejsce i ile jest możliwych duplikatów.</div>
+      </div>
+      <iframe id="ramka" title="Raport" hidden></iframe>
     </div>
-    <iframe id="ramka" title="Raport" hidden></iframe>
+    <div id="widok-dup" hidden>
+      <div class="filtry" id="filtry">
+        <button class="filtr maly akt" data-r="">Wszystkie</button>
+        <button class="filtr maly" data-r="zdjecie">Zdjęcia</button>
+        <button class="filtr maly" data-r="film">Filmy</button>
+        <button class="filtr maly" data-r="muzyka">Muzyka</button>
+        <button class="filtr maly" data-r="inne">Pozostałe</button>
+        <span class="info" id="dup-info"></span>
+      </div>
+      <div class="lista-dup" id="lista-dup"></div>
+      <div class="stopka" id="stopka-dup" hidden>
+        <span id="stopka-opis"></span>
+        <button class="glowny" id="odloz">Odłóż zaznaczone kopie</button>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -186,7 +259,7 @@ function rysuj() {
   else cel.innerHTML = '<div class="pusto">Nie wybrano (możesz ustawić później).</div>';
 
   const sk = stan.skan || {};
-  $("skanuj").disabled = !!sk.trwa || !stan.zrodla.length;
+  $("skanuj").disabled = !!sk.trwa || !!(stan.dup && stan.dup.trwa) || !stan.zrodla.length;
   $("skanuj").textContent = stan.ma_wyniki ? "Skanuj ponownie (tylko zmiany)" : "Skanuj";
   $("postep").hidden = !sk.trwa;
   $("przejrzano").textContent = (sk.przejrzano || 0).toLocaleString("pl-PL");
@@ -198,9 +271,10 @@ function rysuj() {
 
   $("k1").className = "krok " + (stan.zrodla.length ? "gotowy" : "akt");
   $("k2").className = "krok " + (stan.ma_wyniki && !sk.trwa ? "gotowy" : (stan.zrodla.length ? "akt" : ""));
-  $("odswiez").hidden = !stan.ma_wyniki;
+  $("odswiez").hidden = zakladka !== "raport" || !stan.ma_wyniki;
   $("zacheta").hidden = stan.ma_wyniki;
   $("ramka").hidden = !stan.ma_wyniki;
+  rysujDup();
 }
 
 function pokazRaport() {
@@ -256,6 +330,162 @@ $("zamknij").onclick = async () => {
   document.body.innerHTML = '<p style="padding:40px;text-align:center">Katalogator zamknięty. Możesz zamknąć to okno.</p>';
   window.close();
 };
+
+// ---------- duplikaty ----------
+const IKONY = {zdjecie: "🖼️", film: "🎬", muzyka: "🎵", towarzyszacy: "📎", inne: "📄"};
+let dupGrupy = [], dupDecyzje = {}, dupFiltr = "", dupKoniec = false, bylDup = false, zakladka = "raport";
+
+function rozmiar(b) {
+  const j = ["B", "KB", "MB", "GB", "TB"]; let i = 0;
+  while (b >= 1024 && i < j.length - 1) { b /= 1024; i++; }
+  return (i < 2 ? Math.round(b) : b.toLocaleString("pl-PL", {maximumFractionDigits: 1})) + " " + j[i];
+}
+function kopie(n) { const d = n % 10, s = n % 100; return (d >= 2 && d <= 4 && (s < 12 || s > 14)) ? "kopie" : "kopii"; }
+function data(mtime) { return new Date(mtime * 1000).toLocaleDateString("pl-PL"); }
+
+function pokazZakladke(z) {
+  zakladka = z;
+  $("tab-raport").classList.toggle("akt", z === "raport");
+  $("tab-dup").classList.toggle("akt", z === "dup");
+  $("widok-raport").hidden = z !== "raport";
+  $("widok-dup").hidden = z !== "dup";
+  $("widok-raport").style.display = z === "raport" ? "flex" : "none";
+  $("odswiez").hidden = z !== "raport" || !stan.ma_wyniki;
+  if (z === "dup" && !dupGrupy.length) wczytajGrupy(true);
+}
+
+async function wczytajGrupy(odNowa) {
+  if (odNowa) { dupGrupy = []; dupDecyzje = {}; dupKoniec = false; }
+  const r = await api(`/api/duplikaty?rodzaj=${dupFiltr}&od=${dupGrupy.length}&ile=40`);
+  r.grupy.forEach(g => { dupDecyzje[g.h] = {zostaw: g.zostaw, pomin: false}; });
+  dupGrupy = dupGrupy.concat(r.grupy);
+  dupKoniec = r.grupy.length < 40;
+  rysujGrupy();
+}
+
+function rysujGrupy() {
+  const l = $("lista-dup"); l.replaceChildren();
+  const p = stan.duplikaty;
+  $("dup-info").textContent = p ? `${p.nadmiar} zbędnych kopii · ${rozmiar(p.bajty)}` : "";
+  if (!dupGrupy.length) {
+    l.innerHTML = `<div class="zachęta"><div><strong>${p ? "Brak duplikatów w tej kategorii" : "Jeszcze nie szukano duplikatów"}</strong>
+      ${p ? "" : "Kliknij „Szukaj duplikatów” po lewej."}</div></div>`;
+    $("stopka-dup").hidden = true; return;
+  }
+  for (const g of dupGrupy) {
+    const d = dupDecyzje[g.h];
+    const k = document.createElement("div");
+    k.className = "grupa" + (d.pomin ? " pominieta" : "");
+    const mini = document.createElement("div"); mini.className = "mini";
+    if (g.rodzaj === "zdjecie") {
+      const img = new Image(); img.loading = "lazy"; img.alt = "";
+      img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${g.pliki[0].id}`;
+      img.onerror = () => { mini.textContent = IKONY.zdjecie; };
+      mini.append(img);
+    } else mini.textContent = IKONY[g.rodzaj] || "📄";
+    const prawa = document.createElement("div");
+    const gl = document.createElement("div"); gl.className = "gl";
+    gl.innerHTML = `<strong>${g.n} ${kopie(g.n)} · ${rozmiar(g.rozmiar)} każda · odzyskasz ${rozmiar((g.n - 1) * g.rozmiar)}</strong>`;
+    const pom = document.createElement("label"); pom.className = "pomin";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = d.pomin;
+    cb.onchange = () => { d.pomin = cb.checked; rysujGrupy(); };
+    pom.append(cb, "zostaw wszystkie");
+    gl.append(pom); prawa.append(gl);
+    for (const f of g.pliki) {
+      const zost = f.id === d.zostaw;
+      const w = document.createElement("label");
+      w.className = "plik " + (d.pomin || zost ? "zostaje" : "odklada");
+      const r = document.createElement("input"); r.type = "radio"; r.name = "g" + g.h; r.checked = zost;
+      r.title = "Zostaw ten plik";
+      r.onchange = () => { d.zostaw = f.id; d.pomin = false; rysujGrupy(); };
+      const sc = document.createElement("span"); sc.className = "sc"; sc.title = f.sciezka;
+      const cz = f.wzgledna.split(/[\\/]/); const nazwa = cz.pop();
+      sc.innerHTML = "\u200E"; const em = document.createElement("em"); em.textContent = cz.join("\\") + "\\";
+      sc.append(em, nazwa);
+      if (!cz.length) em.textContent = "";
+      const z = document.createElement("span"); z.className = "znak";
+      z.textContent = d.pomin || zost ? "zostaje · " + data(f.mtime) : "odłożę · " + data(f.mtime);
+      w.append(r, sc, z); prawa.append(w);
+    }
+    k.append(mini, prawa); l.append(k);
+  }
+  if (!dupKoniec) {
+    const b = document.createElement("button"); b.className = "wiecej"; b.textContent = "Pokaż więcej grup";
+    b.onclick = () => wczytajGrupy(false); l.append(b);
+  }
+  let n = 0, b = 0;
+  for (const g of dupGrupy) { const d = dupDecyzje[g.h]; if (!d.pomin) { n += g.n - 1; b += (g.n - 1) * g.rozmiar; } }
+  $("stopka-dup").hidden = false;
+  $("stopka-opis").textContent = `Do odłożenia: ${n} plików (${rozmiar(b)}) z ${dupGrupy.length} wyświetlonych grup.`;
+  $("odloz").disabled = !n;
+}
+
+$("tab-raport").onclick = () => pokazZakladke("raport");
+$("tab-dup").onclick = () => pokazZakladke("dup");
+$("filtry").onclick = e => {
+  const b = e.target.closest(".filtr"); if (!b) return;
+  document.querySelectorAll(".filtr").forEach(x => x.classList.toggle("akt", x === b));
+  dupFiltr = b.dataset.r; wczytajGrupy(true);
+};
+$("szukaj-dup").onclick = async () => {
+  try { stan = await api("/api/duplikaty/szukaj", {}); bylDup = true; rysuj(); }
+  catch (e) { $("komunikat-dup").className = "komunikat blad"; $("komunikat-dup").textContent = e.message; }
+};
+$("przerwij-dup").onclick = () => api("/api/przerwij", {});
+$("odloz").onclick = async () => {
+  const decyzje = dupGrupy.filter(g => !dupDecyzje[g.h].pomin).map(g => ({
+    zostaw: dupDecyzje[g.h].zostaw,
+    usun: g.pliki.map(f => f.id).filter(id => id !== dupDecyzje[g.h].zostaw),
+  }));
+  const n = decyzje.reduce((s, d) => s + d.usun.length, 0);
+  if (!confirm(`Przenieść ${n} kopii do folderu _Duplikaty_Katalogator?\n\nOryginały zostają na miejscu. Operację można cofnąć.`)) return;
+  $("odloz").disabled = true;
+  try {
+    const w = await api("/api/duplikaty/przenies", {decyzje});
+    let msg = `Odłożono ${w.przeniesione} plików (${rozmiar(w.bajty)}).`;
+    if (w.pominiete.length) msg += `\n\nPominięto ${w.pominiete.length}:\n` + w.pominiete.slice(0, 8).join("\n");
+    alert(msg);
+  } catch (e) { alert(e.message); }
+  await odswiez(); wczytajGrupy(true);
+};
+$("cofnij").onclick = async () => {
+  if (!confirm("Przywrócić pliki z ostatniego odłożenia na ich miejsce?")) return;
+  try {
+    const w = await api("/api/duplikaty/cofnij", {});
+    alert(`Przywrócono ${w.przywrocone} plików.` + (w.bledy.length ? "\n\nProblemy:\n" + w.bledy.slice(0, 8).join("\n") : ""));
+  } catch (e) { alert(e.message); }
+  await odswiez(); wczytajGrupy(true);
+};
+
+function rysujDup() {
+  const d = stan.dup || {}, zajety = !!(d.trwa || (stan.skan && stan.skan.trwa));
+  $("szukaj-dup").disabled = zajety || !stan.ma_wyniki;
+  $("szukaj-dup").textContent = stan.duplikaty ? "Szukaj ponownie" : "Szukaj duplikatów";
+  $("postep-dup").hidden = !d.trwa;
+  $("dup-zrobione").textContent = (d.zrobione || 0).toLocaleString("pl-PL");
+  $("dup-wszystkie").textContent = (d.wszystkie || 0).toLocaleString("pl-PL");
+  $("dup-etap").textContent = d.etap ? "Etap: " + d.etap : "";
+  $("dup-bajty").textContent = d.bajty ? "przeczytano " + rozmiar(d.bajty) : "";
+  const k = $("komunikat-dup");
+  k.className = "komunikat" + (d.blad ? " blad" : (!d.trwa && d.komunikat ? " ok" : ""));
+  k.textContent = d.trwa ? "" : (d.blad ? d.komunikat + " " + d.blad : (d.komunikat || ""));
+  const p = stan.duplikaty;
+  $("podsum-dup").hidden = !p || d.trwa;
+  if (p) {
+    $("podsum-dup").innerHTML = p.nadmiar
+      ? `<b>${p.nadmiar.toLocaleString("pl-PL")}</b> zbędnych kopii w ${p.grupy} grupach · do odzyskania <b>${rozmiar(p.bajty)}</b>
+         <div style="margin-top:8px"><button class="maly" id="pokaz-dup">Pokaż i wybierz →</button></div>`
+      : "Brak duplikatów 🎉";
+    const b = document.getElementById("pokaz-dup"); if (b) b.onclick = () => pokazZakladke("dup");
+  }
+  $("licz-dup").hidden = !(p && p.nadmiar);
+  if (p) $("licz-dup").textContent = p.nadmiar;
+  const c = stan.do_cofniecia;
+  $("cofnij-box").hidden = !c;
+  if (c) $("cofnij-opis").textContent = `Ostatnio odłożono ${c.n} plików.`;
+  if (bylDup && !d.trwa) { bylDup = false; if (zakladka === "dup") wczytajGrupy(true); else dupGrupy = []; }
+  if (d.trwa) bylDup = true;
+}
 
 (async () => {
   await odswiez();

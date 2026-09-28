@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, raport, skaner
+from . import __version__, duplikaty, raport, skaner
 
 UI = Path(__file__).parent / "ui"
 BEZ_PINGU_ZAMKNIJ_PO = 150  # s; przeglądarka spowalnia timery w zminimalizowanym oknie
@@ -46,6 +46,9 @@ class Stan:
         self.blokada = threading.Lock()
         self.przerwij = threading.Event()
         self.skan = {"trwa": False, "przejrzano": 0, "folder": "", "komunikat": "", "blad": ""}
+        self.dup = {"trwa": False, "etap": "", "zrobione": 0, "wszystkie": 0, "bajty": 0,
+                    "komunikat": "", "blad": ""}
+        self.miniatury: dict[int, bytes] = {}
         self.ostatni_ping = time.time()
 
     def zapisz_ustawienia(self, dane: dict) -> None:
@@ -62,10 +65,30 @@ class Stan:
         finally:
             db.close()
 
+    def db(self):
+        db = skaner.otworz_baze(self.baza)
+        duplikaty.przygotuj(db)
+        return db
+
     def stan(self) -> dict:
         with self.blokada:
-            skan = dict(self.skan)
-        return {"wersja": __version__, **self.ustawienia, "skan": skan, "ma_wyniki": self.ma_wyniki()}
+            skan, dup = dict(self.skan), dict(self.dup)
+        ma = self.ma_wyniki()
+        dane = {"wersja": __version__, **self.ustawienia, "skan": skan, "dup": dup, "ma_wyniki": ma,
+                "duplikaty": None, "do_cofniecia": None}
+        if ma:
+            db = self.db()
+            try:
+                if db.execute("SELECT 1 FROM odciski LIMIT 1").fetchone():
+                    dane["duplikaty"] = duplikaty.podsumowanie(db)
+                dane["do_cofniecia"] = duplikaty.ostatnia_partia(db)
+            finally:
+                db.close()
+        return dane
+
+    def zajety(self) -> bool:
+        with self.blokada:
+            return self.skan["trwa"] or self.dup["trwa"]
 
     # --- skan w tle ----------------------------------------------------
     def rozpocznij_skan(self) -> str | None:
@@ -78,8 +101,8 @@ class Stan:
         if brak:
             return "Nie mogę otworzyć folderu: " + ", ".join(brak)
         with self.blokada:
-            if self.skan["trwa"]:
-                return "Skan już trwa."
+            if self.skan["trwa"] or self.dup["trwa"]:
+                return "Poczekaj, aż skończy się bieżące zadanie."
             self.skan = {"trwa": True, "przejrzano": 0, "folder": "", "komunikat": "Rozpoczynam…", "blad": ""}
         self.przerwij.clear()
         threading.Thread(target=self._skanuj, args=(foldery,), daemon=True).start()
@@ -105,6 +128,92 @@ class Stan:
             db.close()
         with self.blokada:
             self.skan.update(trwa=False, komunikat=komunikat, blad=blad)
+
+    # --- duplikaty w tle --------------------------------------------------
+    def szukaj_duplikatow(self) -> str | None:
+        if not self.ma_wyniki():
+            return "Najpierw zeskanuj foldery."
+        with self.blokada:
+            if self.skan["trwa"] or self.dup["trwa"]:
+                return "Poczekaj, aż skończy się bieżące zadanie."
+            self.dup = {"trwa": True, "etap": "przygotowanie", "zrobione": 0, "wszystkie": 0, "bajty": 0,
+                        "komunikat": "", "blad": ""}
+        self.przerwij.clear()
+        threading.Thread(target=self._duplikaty, daemon=True).start()
+        return None
+
+    def _duplikaty(self) -> None:
+        db = self.db()
+
+        def postep(etap, zrobione, wszystkie, bajty):
+            with self.blokada:
+                self.dup.update(etap=etap, zrobione=zrobione, wszystkie=wszystkie, bajty=bajty)
+        try:
+            w = duplikaty.szukaj(db, postep=postep, przerwij=self.przerwij)
+            komunikat, blad = (f"Znaleziono {w['nadmiar']} zbędnych kopii "
+                               f"({raport.rozmiar_txt(w['bajty'])})." if w["nadmiar"]
+                               else "Nie znaleziono duplikatów."), ""
+        except skaner.Przerwano:
+            komunikat, blad = "Przerwano. Sprawdzone pliki są zapamiętane.", ""
+        except Exception as e:
+            komunikat, blad = "Wyszukiwanie nie powiodło się.", f"{type(e).__name__}: {e}"
+        finally:
+            db.close()
+        with self.blokada:
+            self.dup.update(trwa=False, komunikat=komunikat, blad=blad)
+
+    def grupy(self, rodzaj: str | None, od: int, ile: int) -> dict:
+        db = self.db()
+        try:
+            cele = {os.path.abspath(self.ustawienia["cel"])} if self.ustawienia["cel"] else set()
+            return {"grupy": duplikaty.grupy(db, rodzaj or None, od, ile, cele),
+                    "podsumowanie": duplikaty.podsumowanie(db)}
+        finally:
+            db.close()
+
+    def przenies_duplikaty(self, decyzje: list) -> dict:
+        if self.zajety():
+            return {"blad": "Poczekaj, aż skończy się bieżące zadanie."}
+        db = self.db()
+        try:
+            return duplikaty.przenies(db, decyzje)
+        finally:
+            db.close()
+
+    def cofnij(self) -> dict:
+        if self.zajety():
+            return {"blad": "Poczekaj, aż skończy się bieżące zadanie."}
+        db = self.db()
+        try:
+            return duplikaty.cofnij(db)
+        finally:
+            db.close()
+
+    def miniatura(self, id_: int) -> bytes | None:
+        if id_ in self.miniatury:
+            return self.miniatury[id_]
+        db = self.db()
+        try:
+            r = db.execute("SELECT sciezka FROM pliki WHERE rowid=? AND rodzaj='zdjecie'", (id_,)).fetchone()
+        finally:
+            db.close()
+        if not r:
+            return None
+        try:
+            import io
+            from PIL import Image, ImageOps
+            with Image.open(r["sciezka"]) as im:
+                im.draft("RGB", (480, 480))
+                im = ImageOps.exif_transpose(im).convert("RGB")
+                im.thumbnail((240, 240))
+                buf = io.BytesIO()
+                im.save(buf, "JPEG", quality=80)
+        except Exception:
+            return None
+        if len(self.miniatury) > 400:
+            self.miniatury.clear()
+        self.miniatury[id_] = buf.getvalue()
+        return self.miniatury[id_]
 
     def raport_html(self) -> str:
         db = skaner.otworz_baze(self.baza)
@@ -174,6 +283,20 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij(stan.stan())
             if u.path == "/raport":
                 return self._wyslij(stan.raport_html(), "text/html; charset=utf-8")
+            if u.path == "/api/duplikaty":
+                try:
+                    od, ile = int(q.get("od", ["0"])[0]), min(int(q.get("ile", ["40"])[0]), 200)
+                except ValueError:
+                    od, ile = 0, 40
+                return self._wyslij(stan.grupy(q.get("rodzaj", [""])[0], od, ile))
+            if u.path == "/miniatura":
+                try:
+                    dane = stan.miniatura(int(q.get("id", ["0"])[0]))
+                except ValueError:
+                    dane = None
+                if dane is None:
+                    return self._wyslij(b"", "image/jpeg", HTTPStatus.NOT_FOUND)
+                return self._wyslij(dane, "image/jpeg")
             self._wyslij({"blad": "nie ma"}, kod=HTTPStatus.NOT_FOUND)
 
         def do_POST(self):
@@ -191,6 +314,16 @@ def _handler(stan: Stan, token: str, zamknij):
                 blad = stan.rozpocznij_skan()
                 return self._wyslij({"blad": blad} if blad else stan.stan(),
                                     kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
+            if u.path == "/api/duplikaty/szukaj":
+                blad = stan.szukaj_duplikatow()
+                return self._wyslij({"blad": blad} if blad else stan.stan(),
+                                    kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
+            if u.path == "/api/duplikaty/przenies":
+                w = stan.przenies_duplikaty(dane.get("decyzje") or [])
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/duplikaty/cofnij":
+                w = stan.cofnij()
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/przerwij":
                 stan.przerwij.set()
                 return self._wyslij({"ok": True})

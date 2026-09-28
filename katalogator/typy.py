@@ -18,6 +18,7 @@ SMIECI_PLIKI = {"thumbs.db", "desktop.ini", ".ds_store", "ehthumbs.db"}
 SMIECI_FOLDERY = {
     ".wdmc", "@eadir", "$recycle.bin", "system volume information",
     ".appledouble", ".trashes", ".spotlight-v100", ".fseventsd",
+    "_duplikaty_katalogator",  # odłożone duplikaty nie wracają do skanu
 }
 
 ZDJECIE, FILM, MUZYKA_, TOWARZYSZACY, INNE = "zdjecie", "film", "muzyka", "towarzyszacy", "inne"
