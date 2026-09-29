@@ -95,3 +95,21 @@ def test_decyzje_przekladaja_plan(tmp_path):
     assert cel("skan.png")["cel"].startswith("Zdjęcia/") and cel("skan.png")["kat"] is None
     planista.cofnij(db)
     assert cel("skan.png")["cel"].startswith("Dokumenty/")
+
+
+def test_decyzja_z_duplikatow_i_cofniecie(tmp_path):
+    k = tmp_path / "dysk"
+    k.mkdir()
+    _jpg_z_exif(k / "IMG_20230310.jpg", data="2023:03:10 12:00:00")
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(tmp_path / "cel"))
+    i = db.execute("SELECT rowid FROM pliki").fetchone()[0]
+    kategorie.zapisz(db, {i: "smieci"})
+    planista.zastosuj_kategorie(db)
+    assert kategorie.kategorie_plikow(db, [i]) == {i: "smieci"}
+    assert db.execute("SELECT cel FROM plan").fetchone()[0].startswith("Odłożone/Śmieci/")
+    kategorie.zapisz(db, {i: ""})  # ponowny klik = cofnięcie decyzji
+    planista.zastosuj_kategorie(db)
+    assert kategorie.kategorie_plikow(db, [i]) == {}
+    assert db.execute("SELECT cel FROM plan").fetchone()[0].startswith("Zdjęcia/Zdjęcia z 2023/")

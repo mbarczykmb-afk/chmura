@@ -193,6 +193,9 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
       i **.xmp** obok zdjęcia (json idzie w drzewie razem ze zdjęciem); zdjęcia bez GPS: dopasowanie do wyjazdu
       (±6 h), potem **miejsce z nazwy folderu** („2004 Zakopane”, „Wakacje Hel”, „Chorwacja 2019”, także bez
       polskich liter), potem „w domu”; po aktualizacji pierwszy skan czyta nagłówki ponownie
+20. **Decyzja 📷 / 📄 / 🗑 wszędzie** ✅ (1.4.1) — te same trzy przyciski (zdjęcie / dokument / śmieci) w Duplikatach
+    (dla całej grupy), Podobnych (dla każdego zdjęcia) — zapis od razu i przełożenie w drzewie, ponowny klik cofa
+    decyzję — oraz w Dokumentach (zamiast ptaszka; propozycja programu wstępnie wybrana, „Zapisz decyzje”)
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

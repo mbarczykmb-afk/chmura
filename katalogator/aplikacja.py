@@ -405,8 +405,11 @@ class Stan:
         db = self.db()
         try:
             cele = {os.path.abspath(self.ustawienia["cel"])} if self.ustawienia["cel"] else set()
-            return {"grupy": duplikaty.grupy(db, rodzaj or None, od, ile, cele),
-                    "podsumowanie": duplikaty.podsumowanie(db)}
+            grupy = duplikaty.grupy(db, rodzaj or None, od, ile, cele)
+            kat = kategorie.kategorie_plikow(db, [f["id"] for g in grupy for f in g["pliki"]])
+            for g in grupy:
+                g["kat"] = next((kat[f["id"]] for f in g["pliki"] if f["id"] in kat), None)
+            return {"grupy": grupy, "podsumowanie": duplikaty.podsumowanie(db)}
         finally:
             db.close()
 
@@ -780,13 +783,19 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/nie-z-aparatu":
                 return self._wyslij({"pliki": stan.z_db(kategorie.do_sprawdzenia)})
             if u.path == "/api/dokumenty":
-                return self._wyslij({"kandydaci": stan.z_db(analiza.kandydaci_dokumentow)})
+                kand = stan.z_db(analiza.kandydaci_dokumentow)
+                kat = stan.z_db(kategorie.kategorie_plikow, [k["id"] for k in kand])
+                for k in kand:
+                    k["kat"] = kat.get(k["id"])
+                return self._wyslij({"kandydaci": kand})
             if u.path == "/api/podobne":
                 grupy = stan.z_db(analiza.grupy_podobnych)
                 od, ile = _int(q, "od", 0), min(_int(q, "ile", 30), 200)
+                wycinek = grupy[od:od + ile]
+                kat = stan.z_db(kategorie.kategorie_plikow, [w["id"] for g in wycinek for w in g])
                 return self._wyslij({"razem": len(grupy), "grupy": [
-                    [{k: w[k] for k in ("id", "sciezka", "wzgledna", "mtime", "rozmiar", "szer", "wys", "ostrosc")}
-                     for w in g] for g in grupy[od:od + ile]]})
+                    [{**{k: w[k] for k in ("id", "sciezka", "wzgledna", "mtime", "rozmiar", "szer", "wys", "ostrosc")},
+                      "kat": kat.get(w["id"])} for w in g] for g in wycinek]})
             if u.path == "/api/nieostre":
                 return self._wyslij({"pliki": stan.z_db(analiza.najmniej_ostre, min(_int(q, "ile", 120), 500))})
             if u.path == "/api/dyski":
@@ -917,6 +926,9 @@ def _handler(stan: Stan, token: str, zamknij):
                 "/api/dokumenty/zapisz": lambda db: {
                     **analiza.zapisz_decyzje(db, [int(i) for i in dane.get("tak") or []],
                                              [int(i) for i in dane.get("nie") or []]),
+                    "plan": planista.zastosuj_kategorie(db)},
+                "/api/kategoria": lambda db: {  # jedno kliknięcie w Duplikatach / Dokumentach / Podobnych
+                    **kategorie.zapisz(db, {int(i): str(dane.get("kat") or "") for i in dane.get("ids") or []}),
                     "plan": planista.zastosuj_kategorie(db)},
                 "/api/nie-z-aparatu/zapisz": lambda db: {
                     **kategorie.zapisz(db, {int(k): str(v) for k, v in (dane.get("wybor") or {}).items()}),

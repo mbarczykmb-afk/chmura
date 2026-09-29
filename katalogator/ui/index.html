@@ -178,16 +178,19 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 .karta .uw{color:var(--akc)} .karta .bl{color:var(--blad)}
 /* duże karty (Dokumenty) — jak w Podobnych: całe zdjęcie, bez przycinania */
 /* stały rozmiar kart (jak w porównywarce) — nie rozciągamy do szerokości okna */
-.siatka.duze{grid-template-columns:repeat(auto-fill,240px);justify-content:start}
+.siatka.duze{grid-template-columns:repeat(auto-fill,256px);justify-content:start}
 .karta.duza .op{font-size:12.5px}
 .karta.duza{border-width:2px}
 .karta.duza.zazn{border-color:var(--akc);outline:none}
 .karta.duza .ob{height:auto;aspect-ratio:4/3}
 .karta.duza .ob img{object-fit:contain;cursor:zoom-in}
-.karta .wybor{display:flex;gap:3px;padding:0 6px 8px}
-.karta .wybor button{flex:1;min-width:0;padding:4px 2px;font-size:11px;white-space:nowrap}
-.karta .wybor button.akt{background:var(--akc);color:var(--akc-fg);border-color:var(--akc)}
-.karta .wybor button.akt.s{background:var(--blad);border-color:var(--blad)}
+.wybor{display:flex;gap:3px}
+.karta .wybor{padding:0 6px 8px}
+.wybor.w-grupie{padding:2px 0 6px;max-width:360px}
+.plik.zdj .wybor{padding:0}
+.karta .wybor button,.wybor button{flex:1;min-width:0;padding:4px 2px;font-size:11px;white-space:nowrap}
+.wybor button.akt{background:var(--akc);color:var(--akc-fg);border-color:var(--akc)}
+.wybor button.akt.s{background:var(--blad);border-color:var(--blad)}
 .karta .powod{color:var(--akc);font-size:11.5px}
 .karta.duza input{width:18px;height:18px;top:8px;left:8px}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:13px;z-index:20;max-width:80vw}
@@ -205,7 +208,7 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
 .postep-proj{height:6px;border-radius:3px;background:var(--lin);overflow:hidden;margin-top:6px} .postep-proj i{display:block;height:100%;background:var(--ok)}
 .pw .ok{color:var(--ok);font-weight:700;margin-left:2px}
 .grupa.pod{grid-template-columns:1fr}
-.pod-siatka{display:grid;grid-template-columns:repeat(auto-fill,240px);justify-content:start;gap:10px}
+.pod-siatka{display:grid;grid-template-columns:repeat(auto-fill,256px);justify-content:start;gap:10px}
 .plik.zdj{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:8px;border:2px solid var(--lin);border-radius:10px}
 .plik.zdj.zostaje{border-color:color-mix(in srgb,var(--ok) 55%,transparent)}
 .plik.zdj.odklada img{opacity:.55}
@@ -487,9 +490,9 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
     <div id="widok-dok" class="widok" hidden>
       <div class="filtry">
         <span class="info" style="margin-left:0;flex:1">Zdjęcia, które wyglądają jak dokumenty (paragony, skany, kartki). Dwuklik = powiększenie.
-          Zaznaczone trafią do <b>Dokumenty / Dokumenty z &lt;rok&gt;</b>, niezaznaczone zostają zwykłymi zdjęciami.</span>
-        <button class="maly" id="dok-wszystkie">Zaznacz wszystkie</button>
-        <button class="maly" id="dok-zadne">Odznacz wszystkie</button>
+          📄 dokument → <b>Dokumenty / Dokumenty z &lt;rok&gt;</b>, 📷 zdjęcie → zostaje zdjęciem, 🗑 śmieci → <b>Odłożone/Śmieci</b>.</span>
+        <button class="maly" id="dok-wszystkie">Wszystkie: dokumenty</button>
+        <button class="maly" id="dok-zadne">Wszystkie: zdjęcia</button>
       </div>
       <div class="siatka" id="dok-siatka"></div>
       <div class="stopka"><span id="dok-stopka"></span><button class="glowny" id="dok-zapisz">Zapisz decyzje</button></div>
@@ -1046,6 +1049,9 @@ function rysujGrupy() {
     cb.onchange = () => { d.pomin = cb.checked; rysujGrupy(); };
     pom.append(cb, "zostaw wszystkie");
     gl.append(pom); prawa.append(gl);
+    const kat = przyciskiKategorii(g.pliki.map(f => f.id), g.kat, v => { g.kat = v; });
+    kat.title = "Co to jest? Decyzja dotyczy pliku, który zostaje (i jego kopii)"; kat.classList.add("w-grupie");
+    prawa.append(kat);
     for (const f of g.pliki) {
       const zost = f.id === d.zostaw;
       const w = document.createElement("label");

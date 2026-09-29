@@ -590,7 +590,7 @@ def zastosuj_kategorie(db: sqlite3.Connection) -> dict:
     dec = kategorie.decyzje(db)
     zmiany_kat: dict[int, str | None] = {}
     grupy: dict[str, list] = defaultdict(list)
-    for w in db.execute("SELECT id, sciezka, cel, alt, kat, data, pominiety FROM plan WHERE tryb!='istniejacy'"):
+    for w in db.execute("SELECT id, sciezka, cel, alt, kat, data, pominiety, uwaga FROM plan WHERE tryb!='istniejacy'"):
         d_uz = dec.get(w["sciezka"])
         folder = w["cel"].rsplit("/", 1)[0]
         w_kategorii = folder.startswith(DOKUMENTY + "/") or folder.startswith(kategorie.SMIECI)
@@ -598,7 +598,9 @@ def zastosuj_kategorie(db: sqlite3.Connection) -> dict:
             cel_f, k = (folder if folder.startswith(kategorie.SMIECI) else folder_smieci(w)), "smieci"
         elif d_uz == "dokument" or (w["sciezka"] in dok and d_uz != "zdjecie"):
             cel_f, k = folder_dokumentow(w["data"]), "dokument"
-        elif d_uz == "zdjecie" or (w["kat"] == "dokument" and w["sciezka"] not in dok):
+        elif d_uz == "zdjecie" or (w["kat"] == "dokument" and w["sciezka"] not in dok) or (
+                w["kat"] == "smieci" and d_uz is None and not (w["uwaga"] or "").startswith("śmieci:")):
+            # decyzja cofnięta albo zmieniona na zdjęcie — wraca tam, gdzie trafiłby zwykły plik
             cel_f, k = (w["alt"].rsplit("/", 1)[0] if w["alt"] and w_kategorii else folder), None
         else:
             continue

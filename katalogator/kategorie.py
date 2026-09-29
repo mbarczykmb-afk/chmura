@@ -125,15 +125,40 @@ def do_sprawdzenia(db: sqlite3.Connection) -> list[dict]:
     return wynik
 
 
+def kategorie_plikow(db: sqlite3.Connection, ids) -> dict[int, str]:
+    """Twoje decyzje dla plików (id -> 'zdjecie'|'dokument'|'smieci'); pliki bez decyzji pomijane."""
+    przygotuj(db)
+    ids = [int(i) for i in ids]
+    if not ids:
+        return {}
+    wynik = {}
+    for i in range(0, len(ids), 500):
+        cz = ids[i:i + 500]
+        for w in db.execute(
+                f"""SELECT p.rowid id, k.kategoria, d.dokument FROM pliki p
+                    LEFT JOIN kategorie k ON k.sciezka = p.sciezka LEFT JOIN decyzje_dok d ON d.sciezka = p.sciezka
+                    WHERE p.rowid IN ({','.join('?' * len(cz))})""", cz):
+            kat = w["kategoria"] or ({1: "dokument", 0: "zdjecie"}.get(w["dokument"]))
+            if kat:
+                wynik[w["id"]] = kat
+    return wynik
+
+
 def zapisz(db: sqlite3.Connection, wybor: dict) -> dict:
-    """wybor: {id pliku: 'zdjecie'|'dokument'|'smieci'}. Dokument = też potwierdzenie w decyzjach dokumentów."""
+    """wybor: {id pliku: 'zdjecie'|'dokument'|'smieci'|''}. Dokument = też potwierdzenie w decyzjach dokumentów;
+    '' = cofnięcie decyzji (plik wraca do tego, co zaproponował program)."""
     przygotuj(db)
     n = 0
     for i, kat in wybor.items():
-        if kat not in KATEGORIE:
+        if kat not in KATEGORIE and kat != "":
             continue
         r = db.execute("SELECT sciezka FROM pliki WHERE rowid=?", (int(i),)).fetchone()
         if not r:
+            continue
+        if kat == "":
+            db.execute("DELETE FROM kategorie WHERE sciezka=?", (r[0],))
+            db.execute("DELETE FROM decyzje_dok WHERE sciezka=?", (r[0],))
+            n += 1
             continue
         db.execute("INSERT OR REPLACE INTO kategorie VALUES (?,?)", (r[0], kat))
         db.execute("INSERT OR REPLACE INTO decyzje_dok VALUES (?,?)", (r[0], 1 if kat == "dokument" else 0))

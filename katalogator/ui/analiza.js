@@ -1,7 +1,7 @@
 // Analiza zdjęć: zdjęcia dokumentów (do potwierdzenia) oraz podobne / nieostre zdjęcia.
 "use strict";
 
-const an = {dok: [], dokZazn: new Set(), dokWczytane: false, tryb: "podobne", grupy: [], razem: 0, nieostre: [],
+const an = {dok: [], dokWybor: new Map(), dokWczytane: false, tryb: "podobne", grupy: [], razem: 0, nieostre: [],
             odloz: new Set(), podWczytane: false, trwala: false, decyzje: new Map()};
 
 function rysujAnalizeLewa() {
@@ -38,6 +38,43 @@ $("analizuj").onclick = async () => {
   try { stan = await api("/api/analiza/start", {}); rysuj(); } catch (e) { toast(e.message); }
 };
 
+// ---------- decyzja: zdjęcie / dokument / śmieci (wspólna dla zakładek) ----------
+const KAT_OPCJE = [["zdjecie", "📷 Zdjęcie"], ["dokument", "📄 Dokument"], ["smieci", "🗑 Śmieci"]];
+const KAT_NAZWY = {zdjecie: "zdjęcie", dokument: "dokument", smieci: "śmieci"};
+
+// Trzy przyciski; wybierz(k) -> Promise|undefined; ponowny klik aktywnego = cofnięcie wyboru (k = "").
+function przyciskiWyboru(obecna, wybierz, pozwolCofniecie = true) {
+  const wyb = document.createElement("div"); wyb.className = "wybor";
+  let akt = obecna || "";
+  const pokaz = () => wyb.querySelectorAll("button").forEach(b => b.classList.toggle("akt", b.dataset.k === akt));
+  for (const [k, opis] of KAT_OPCJE) {
+    const b = document.createElement("button"); b.className = "maly" + (k === "smieci" ? " s" : "");
+    b.dataset.k = k; b.textContent = opis;
+    b.onclick = async e => {
+      e.preventDefault(); e.stopPropagation();
+      const nowa = akt === k && pozwolCofniecie ? "" : k;
+      try { await wybierz(nowa); akt = nowa; pokaz(); } catch (err) { toast(err.message); }
+    };
+    wyb.append(b);
+  }
+  wyb.ustaw = k => { akt = k || ""; pokaz(); };
+  pokaz();
+  return wyb;
+}
+
+// Wariant zapisywany od razu (Duplikaty, Podobne): decyzja dla wskazanych plików + przełożenie w drzewie.
+function przyciskiKategorii(ids, obecna, poZmianie) {
+  return przyciskiWyboru(obecna, async nowa => {
+    const w = await api("/api/kategoria", {ids, kat: nowa});
+    toast(nowa ? `Zapisano: ${KAT_NAZWY[nowa]}` + (w.plan && w.plan.zmienione ? " — przełożono w drzewie." : ".")
+               : "Cofnięto decyzję.");
+    if (typeof plan !== "undefined") plan.wczytany = false;
+    if (typeof inne !== "undefined") inne.wczytane = false;
+    an.dokWczytane = false;
+    if (poZmianie) poZmianie(nowa);
+  });
+}
+
 function karta(id, rodzaj, tytul, podpis, zaznaczona, klik, duza = false) {
   const k = document.createElement("div");
   k.className = "karta" + (duza ? " duza" : "") + (zaznaczona ? " zazn" : "");
@@ -68,16 +105,19 @@ przyPokazaniu.dok = async () => {
   const r = await api("/api/dokumenty");
   // najpierw jeszcze nieprzejrzane, potem już zapisane decyzje
   an.dok = r.kandydaci.filter(k => k.decyzja == null).concat(r.kandydaci.filter(k => k.decyzja != null));
-  an.dokZazn = new Set(r.kandydaci.filter(k => k.zaznacz).map(k => k.id)); an.dokIle = DOK_NA_STRONE;
+  // wybór na start: zapisana decyzja, a gdy jej brak — propozycja programu (pewne -> dokument, reszta -> zdjęcie)
+  an.dokWybor = new Map(r.kandydaci.map(k => [k.id, k.kat || (k.decyzja === 1 ? "dokument" : k.decyzja === 0 ? "zdjecie"
+                                                             : (k.zaznacz ? "dokument" : "zdjecie"))]));
+  an.dokIle = DOK_NA_STRONE;
   an.dokWczytane = true; rysujDokumenty();
 };
 
 const DOK_NA_STRONE = 100;
 const dokWidoczne = () => an.dok.slice(0, an.dokIle || DOK_NA_STRONE);
 function dokStopka() {
-  const w = dokWidoczne();
+  const w = dokWidoczne(), licz = k => w.filter(d => an.dokWybor.get(d.id) === k).length;
   $("dok-stopka").textContent = !an.dok.length ? "" :
-    `Zaznaczone jako dokumenty: ${w.filter(d => an.dokZazn.has(d.id)).length} z ${w.length}` +
+    `Dokumenty: ${licz("dokument")} · zdjęcia: ${licz("zdjecie")} · śmieci: ${licz("smieci")} — z ${w.length}` +
     (w.length < an.dok.length ? ` wyświetlonych (razem ${an.dok.length}; zapisuję tylko wyświetlone)` : "");
 }
 function rysujDokumenty() {
@@ -85,10 +125,11 @@ function rysujDokumenty() {
   if (!stan.analiza) s.innerHTML = BRAK_ANALIZY();
   else if (!an.dok.length) s.innerHTML = '<div class="pusto">Nie znaleziono zdjęć przypominających dokumenty. 🎉</div>';
   for (const d of dokWidoczne()) {
-    const z = an.dokZazn.has(d.id);
-    s.append(karta(d.id, "zdjecie", d.wzgledna, `${(d.data || "").slice(0, 10)} · pewność ${Math.round(d.ocena * 100)}%` +
-                   (d.decyzja === 1 ? " · ✓ zapisane" : d.decyzja === 0 ? " · zapisane: nie" : ""), z,
-                   v => { v ? an.dokZazn.add(d.id) : an.dokZazn.delete(d.id); dokStopka(); return true; }, true));
+    const k = karta(d.id, "zdjecie", d.wzgledna, `${(d.data || "").slice(0, 10)} · pewność ${Math.round(d.ocena * 100)}%` +
+                    (d.decyzja != null || d.kat ? " · ✓ zapisane" : ""), false, () => undefined, true);
+    k.querySelector("input").remove(); k.onclick = null; k.style.cursor = "default";
+    k.append(przyciskiWyboru(an.dokWybor.get(d.id), kat => { an.dokWybor.set(d.id, kat); dokStopka(); }, false));
+    s.append(k);
   }
   const reszta = an.dok.length - dokWidoczne().length;
   if (reszta > 0) {
@@ -100,15 +141,17 @@ function rysujDokumenty() {
   dokStopka();
   $("dok-zapisz").disabled = !an.dok.length;
 }
-$("dok-wszystkie").onclick = () => { dokWidoczne().forEach(d => an.dokZazn.add(d.id)); rysujDokumenty(); };
-$("dok-zadne").onclick = () => { dokWidoczne().forEach(d => an.dokZazn.delete(d.id)); rysujDokumenty(); };
+$("dok-wszystkie").onclick = () => { dokWidoczne().forEach(d => an.dokWybor.set(d.id, "dokument")); rysujDokumenty(); };
+$("dok-zadne").onclick = () => { dokWidoczne().forEach(d => an.dokWybor.set(d.id, "zdjecie")); rysujDokumenty(); };
 $("dok-zapisz").onclick = async () => {
-  const w = dokWidoczne();  // decydujemy tylko o tym, co było widać
-  const tak = w.filter(d => an.dokZazn.has(d.id)).map(d => d.id);
-  const nie = w.filter(d => !an.dokZazn.has(d.id)).map(d => d.id);
+  const wybor = {};  // decydujemy tylko o tym, co było widać
+  for (const d of dokWidoczne()) wybor[d.id] = an.dokWybor.get(d.id) || "zdjecie";
   try {
-    const w = await api("/api/dokumenty/zapisz", {tak, nie});
-    toast(`Zapisano. Dokumentów: ${w.dokumenty}.` + (w.plan && w.plan.zmienione ? ` Przeniesiono w drzewie: ${w.plan.zmienione}.` : ""));
+    const w = await api("/api/nie-z-aparatu/zapisz", {wybor});
+    const n = Object.values(wybor).filter(k => k === "dokument").length;
+    toast(`Zapisano ${w.zapisane} decyzji (dokumentów: ${n}).` +
+          (w.plan && w.plan.zmienione ? ` Przełożono w drzewie: ${w.plan.zmienione}.` : ""));
+    if (typeof inne !== "undefined") inne.wczytane = false;
     an.dokWczytane = false; plan.wczytany = false;
     stan = await api("/api/stan"); rysuj(); przyPokazaniu.dok();
   } catch (e) { toast(e.message); }
@@ -176,7 +219,8 @@ function rysujPodobne() {
         z.textContent = (i === 0 ? "★ " : "") + (zost ? "zostaje" : "odłożę");
         const gora = document.createElement("div"); gora.className = "gora"; gora.append(c, z);
         const op = document.createElement("span"); op.className = "zn2"; op.textContent = opisZdjecia(w);
-        r.append(gora, img, sc, op); siatka.append(r);
+        r.append(gora, img, sc, op, przyciskiKategorii([w.id], w.kat, v => { w.kat = v; }));
+        siatka.append(r);
       });
       l.append(k);
     }
@@ -236,7 +280,6 @@ $("pod-odloz").onclick = async () => {
 // ---------- nie z aparatu: zdjęcie / dokument / śmieci ----------
 const INNE_NA_STRONE = 100;
 const inne = {lista: [], wybor: new Map(), ile: INNE_NA_STRONE, wczytane: false};
-const INNE_OPCJE = [["zdjecie", "📷 Zdjęcie"], ["dokument", "📄 Dokument"], ["smieci", "🗑 Śmieci"]];
 przyPokazaniu.inne = async () => {
   if (inne.wczytane) return;
   const r = await api("/api/nie-z-aparatu");
@@ -256,17 +299,9 @@ function kartaInne(p) {
   k.querySelector("input").remove(); k.onclick = null; k.style.cursor = "default";
   const pw = document.createElement("div"); pw.className = "m powod"; pw.textContent = "❔ " + p.powod;
   k.querySelector(".op").append(pw);
-  const wyb = document.createElement("div"); wyb.className = "wybor";
-  for (const [kat, opis] of INNE_OPCJE) {
-    const b = document.createElement("button"); b.className = "maly" + (kat === "smieci" ? " s" : "");
-    b.textContent = opis; b.classList.toggle("akt", inne.wybor.get(p.id) === kat);
-    b.onclick = e => {
-      e.stopPropagation(); inne.wybor.set(p.id, kat);
-      wyb.querySelectorAll("button").forEach(x => x.classList.toggle("akt", x === b)); inneStopka();
-    };
-    wyb.append(b);
-  }
-  k.append(wyb);
+  k.append(przyciskiWyboru(inne.wybor.get(p.id), kat => {
+    kat ? inne.wybor.set(p.id, kat) : inne.wybor.delete(p.id); inneStopka();
+  }));
   return k;
 }
 function rysujInne() {
