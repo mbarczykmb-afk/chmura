@@ -227,20 +227,22 @@ function rysujPliki() {
   const lz = plan.przejrzaneLicz;
   $("f-nastepny").disabled = !lz || !lz.kolejka.length;
   $("f-nastepny").textContent = lz ? `Następny → (${lz.przejrzane}/${lz.wszystkie})` : "Następny →";
-  const s = $("plan-pliki"); s.replaceChildren();
+  const s = $("plan-pliki"); s.replaceChildren(); s.classList.add("duze");
   if (!plan.pliki.length) {
     s.innerHTML = '<div class="pusto">W tym folderze nie ma bezpośrednio plików — wybierz podfolder.</div>';
   }
   for (const [idx, f] of plan.pliki.entries()) {
     const k = document.createElement("div");
     const ist = f.tryb === "istniejacy";
-    k.className = "karta" + (plan.zazn.has(f.id) ? " zazn" : "") + (f.pominiety ? " pom" : "") + (ist ? " ist" : "");
+    k.className = "karta duza" + (plan.zazn.has(f.id) ? " zazn" : "") + (f.pominiety ? " pom" : "") + (ist ? " ist" : "");
     k.title = (ist ? "Już jest w miejscu docelowym:\n" : "Źródło:\n") + f.sciezka + (f.uwaga ? "\n\n" + f.uwaga : "");
     const ob = document.createElement("div"); ob.className = "ob";
     if (f.rodzaj === "zdjecie" && f.plik_id != null) {
       const img = new Image(); img.loading = "lazy"; img.alt = "";
-      img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${f.plik_id}`;
+      img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${f.plik_id}&srednia=1`;
       img.onerror = () => { ob.textContent = IKONY.zdjecie; };
+      img.draggable = false;  // przeciąga się kartę, nie obrazek
+      img.ondblclick = e => { e.stopPropagation(); podgladDuzy(f.plik_id, f.nazwa); };
       ob.append(img);
     } else if (f.rodzaj === "film" && f.plik_id != null) {
       ob.append(podgladFilmu(f.plik_id));

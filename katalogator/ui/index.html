@@ -173,7 +173,9 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 .karta .zn.p{background:var(--przen);color:#fff} .karta .zn.k{background:var(--akc);color:var(--akc-fg)}
 .karta .uw{color:var(--akc)} .karta .bl{color:var(--blad)}
 /* duże karty (Dokumenty) — jak w Podobnych: całe zdjęcie, bez przycinania */
-.siatka.duze{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+/* stały rozmiar kart (jak w porównywarce) — nie rozciągamy do szerokości okna */
+.siatka.duze{grid-template-columns:repeat(auto-fill,240px);justify-content:start}
+.karta.duza .op{font-size:12.5px}
 .karta.duza{border-width:2px}
 .karta.duza.zazn{border-color:var(--akc);outline:none}
 .karta.duza .ob{height:auto;aspect-ratio:4/3}
@@ -194,7 +196,7 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
 .postep-proj{height:6px;border-radius:3px;background:var(--lin);overflow:hidden;margin-top:6px} .postep-proj i{display:block;height:100%;background:var(--ok)}
 .pw .ok{color:var(--ok);font-weight:700;margin-left:2px}
 .grupa.pod{grid-template-columns:1fr}
-.pod-siatka{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.pod-siatka{display:grid;grid-template-columns:repeat(auto-fill,240px);justify-content:start;gap:10px}
 .plik.zdj{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:8px;border:2px solid var(--lin);border-radius:10px}
 .plik.zdj.zostaje{border-color:color-mix(in srgb,var(--ok) 55%,transparent)}
 .plik.zdj.odklada img{opacity:.55}

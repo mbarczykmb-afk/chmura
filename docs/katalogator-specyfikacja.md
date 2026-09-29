@@ -169,6 +169,8 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     powiększenie), po 100 na stronie (nieprzejrzane najpierw, zapisywane są decyzje tylko dla wyświetlonych),
     zaznaczanie bez przerysowania listy; naprawione zgniatanie kart w siatkach przy zamrożonym układzie;
     podsumowania dużego projektu liczone w tle — okno pokazuje się od razu („Wczytuję wyniki projektu…”)
+18. **Poprawki 1.3.2** ✅ — stały rozmiar kart (240 px, całe zdjęcie 4:3, jak w porównywarce) w Drzewie,
+    Dokumentach i Podobnych — bez rozciągania do szerokości okna; w Drzewie większy podgląd i dwuklik = powiększenie
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.
