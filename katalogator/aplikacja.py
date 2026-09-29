@@ -20,8 +20,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import (__version__, aktualizacje, analiza, duplikaty, dyski, logi, planista, projekty, przychodzace, raport,
-               kategorie, skaner, stabilnosc, wykonawca)
+from . import (__version__, aktualizacje, analiza, duplikaty, dyski, galeria, logi, planista, projekty, przychodzace,
+               raport, kategorie, skaner, stabilnosc, wykonawca)
 from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
@@ -46,8 +46,38 @@ class Stan:
         self._podsumowania = (-1, {})   # (wersja, dane) — okno pyta o stan co sekundę
         self._licze_podsumowania = threading.Lock()
         self.tempa: dict[str, stabilnosc.Tempo] = {}
+        self._galerie: dict = {}
+        self.serwer_tel = None
         pid = self.projekty.ostatni() or self.projekty.nowy("Mój projekt")
         self._otworz(pid)
+
+    def galeria(self, zakres: str = "biblioteka") -> "galeria.Galeria":
+        """Przeglądarka biblioteki: „biblioteka” = miejsce docelowe, „wszystko” = całe dane projektu."""
+        klucz = (str(self.baza), zakres)
+        g = self._galerie.get(klucz)
+        if g is None:
+            korzenie = (lambda: [self.ustawienia["cel"]] if self.ustawienia["cel"] else []) \
+                if zakres == "biblioteka" else (lambda: None)
+            g = self._galerie[klucz] = galeria.Galeria(self.baza, korzenie)
+        return g
+
+    def telefon(self, wlacz: bool, zakres: str = "biblioteka") -> dict:
+        """Udostępnienie galerii na telefon (tylko odczyt, PIN) — sieć domowa albo Tailscale."""
+        with self.blokada:
+            if self.serwer_tel is not None:
+                self.serwer_tel.stop()
+                self.serwer_tel = None
+            if not wlacz:
+                return {"wlaczone": False}
+            for port in (8765, 8766, 8767, 0):
+                try:
+                    self.serwer_tel = galeria.SerwerGalerii(self.galeria(zakres), port=port).start()
+                    break
+                except OSError:
+                    continue
+            s = self.serwer_tel
+        LOG.info("Udostępnianie na telefon: %s", s.adresy())
+        return {"wlaczone": True, "pin": s.pin, "adresy": s.adresy(), "port": s.port}
 
     def _otworz(self, pid: str) -> None:
         self.projekt = self.projekty.wczytaj(pid)
@@ -749,13 +779,21 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij(stan.stan())
             if u.path == "/raport":
                 return self._wyslij(stan.raport_html(), "text/html; charset=utf-8")
-            if u.path.startswith("/ui/") and u.path.endswith((".js", ".css", ".png", ".ico")):
-                plik = UI / os.path.basename(u.path)
-                if plik.is_file():
-                    typ = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
-                           ".png": "image/png", ".ico": "image/x-icon"}[plik.suffix]
-                    return self._wyslij(plik.read_bytes(), typ)
-                return self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
+            if u.path.startswith("/ui/"):
+                p = galeria.plik_ui(u.path)  # także podfoldery (mapa/leaflet.js) — nigdy spoza katalogu ui
+                return self._wyslij(*p) if p else self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
+            if u.path == "/galeria":
+                return self._wyslij((UI / "galeria.html").read_bytes(), "text/html; charset=utf-8")
+            if u.path.startswith("/api/g/"):
+                w = galeria.obsluz_api(stan.galeria(q.get("z", ["biblioteka"])[0]), u.path, q)
+                if w is None:
+                    return self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
+                if w[0] == "film":
+                    return galeria.wyslij_strumien(self, w[1])
+                if w[1]:
+                    return self._wyslij(w[0], w[1]) if w[0] is not None else \
+                        self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
+                return self._wyslij(w[0])
             if u.path == "/api/plan/drzewo":
                 return self._wyslij({"foldery": stan.z_db(planista.drzewo),
                                      "podsumowanie": stan.z_db(planista.podsumowanie),
@@ -834,6 +872,8 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/nowy-folder":
                 w = dyski.nowy_folder(str(dane.get("w", "")), str(dane.get("nazwa", "")))
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/telefon":
+                return self._wyslij(stan.telefon(bool(dane.get("wlacz")), str(dane.get("zakres") or "biblioteka")))
             if u.path == "/api/skanuj":
                 blad = stan.rozpocznij_skan()
                 return self._wyslij({"blad": blad} if blad else stan.stan(),

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Biblioteka — Katalogator</title>
+<link rel="icon" href="/ui/ikona.png">
+<link rel="stylesheet" href="/ui/mapa/leaflet.css">
+<link rel="stylesheet" href="/ui/mapa/MarkerCluster.css">
+<link rel="stylesheet" href="/ui/mapa/MarkerCluster.Default.css">
+<style>
+:root{--bg:#fff;--panel:#f4f4f2;--fg:#1c1c1e;--mut:#6b6b70;--lin:#e2e2e0;--akc:#2f6fdb;--akc-fg:#fff;--akc-miekki:#e8f0fd;--ok:#1f9d6b;--blad:#c8372d}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17181b;--panel:#1f2024;--fg:#ececef;--mut:#9a9aa2;--lin:#2e3036;--akc:#6d9df0;--akc-fg:#0e1420;--akc-miekki:#1f2a3d;--ok:#3cc28c;--blad:#f07a70}}
+:root[data-theme="dark"]{--bg:#17181b;--panel:#1f2024;--fg:#ececef;--mut:#9a9aa2;--lin:#2e3036;--akc:#6d9df0;--akc-fg:#0e1420;--akc-miekki:#1f2a3d;--ok:#3cc28c;--blad:#f07a70}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+[hidden]{display:none!important}
+button,select{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--lin);border-radius:8px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--akc)}
+button.akt{background:var(--akc);color:var(--akc-fg);border-color:var(--akc)}
+header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--lin);flex-wrap:wrap}
+header h1{font-size:17px;margin:0 8px 0 0;white-space:nowrap}
+header .odstep{flex:1}
+.info{color:var(--mut);font-size:12.5px}
+.chipy{display:flex;gap:6px;overflow-x:auto;padding:8px 14px;border-bottom:1px solid var(--lin);scrollbar-width:thin;flex:none}
+.chipy button{white-space:nowrap;border-radius:999px;padding:4px 12px;font-size:13px}
+.chipy button small{color:var(--mut);margin-left:4px}
+.chipy button.akt small{color:inherit;opacity:.8}
+main{flex:1;min-height:0;position:relative}
+#os{position:absolute;inset:0;display:flex;flex-direction:column}
+#siatka{flex:1;overflow-y:auto;padding:12px 14px;display:grid;grid-template-columns:repeat(auto-fill,200px);gap:10px;align-content:start;justify-content:start}
+.k{border:1px solid var(--lin);border-radius:10px;overflow:hidden;background:var(--panel);cursor:zoom-in}
+.k .ob{aspect-ratio:4/3;background:var(--lin);display:grid;place-items:center;font-size:40px;position:relative}
+.k .ob img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.k .op{padding:5px 8px;font-size:12px}
+.k .op div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.k .op .m{color:var(--mut)}
+.wiecej{grid-column:1/-1;justify-self:center;margin:10px}
+#mapa{position:absolute;inset:0}
+#mapa-info{position:absolute;left:50%;transform:translateX(-50%);top:10px;z-index:500;background:var(--bg);border:1px solid var(--lin);border-radius:999px;padding:4px 12px;font-size:12.5px;box-shadow:0 2px 8px rgba(0,0,0,.15);max-width:92%;text-align:center}
+.popup img{display:block;width:220px;max-width:62vw;aspect-ratio:4/3;object-fit:contain;background:#eee;border-radius:6px;cursor:zoom-in}
+.popup .n{font-weight:600;margin-top:6px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.popup .m{color:#666;font-size:12px}
+.popup button{margin-top:6px;width:100%;padding:4px}
+.leaflet-popup-content{margin:10px}
+/* podgląd na cały ekran */
+#pelny{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:2000;display:flex;align-items:center;justify-content:center;color:#fff}
+#pelny img,#pelny video{max-width:96vw;max-height:88vh;object-fit:contain}
+#pelny .opis{position:absolute;left:0;right:0;bottom:0;padding:10px 14px;background:linear-gradient(transparent,rgba(0,0,0,.7));font-size:13px;text-align:center}
+#pelny .zam,#pelny .pop,#pelny .nast{position:absolute;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:22px;border-radius:999px;width:44px;height:44px;padding:0}
+#pelny .zam{top:12px;right:12px}
+#pelny .pop{left:12px;top:50%}
+#pelny .nast{right:12px;top:50%}
+/* logowanie PIN-em (telefon) */
+#login{position:fixed;inset:0;background:var(--bg);z-index:3000;display:grid;place-items:center;padding:20px}
+#login form{max-width:320px;width:100%;text-align:center}
+#login input{font:inherit;font-size:24px;letter-spacing:6px;text-align:center;width:100%;padding:10px;border:1px solid var(--lin);border-radius:10px;background:var(--panel);color:var(--fg);margin:14px 0}
+#login button{width:100%;padding:10px;background:var(--akc);color:var(--akc-fg);border-color:var(--akc);font-weight:600}
+#login .bl{color:var(--blad);min-height:20px}
+/* panel „na telefon” */
+#telefon{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2500;display:grid;place-items:center;padding:16px}
+#telefon .okno{background:var(--bg);border-radius:14px;padding:20px;max-width:520px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+#telefon h2{margin:0 0 8px;font-size:18px}
+#telefon .qr{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:12px 0}
+#telefon .qr div:first-child{background:#fff;padding:8px;border-radius:8px}
+#telefon .pin{font-size:30px;font-weight:700;letter-spacing:4px}
+#telefon code{background:var(--panel);padding:2px 6px;border-radius:5px;word-break:break-all}
+#telefon ul{padding-left:18px;margin:8px 0;color:var(--mut);font-size:13px}
+.pusto{grid-column:1/-1;color:var(--mut);padding:30px;text-align:center}
+@media (max-width:600px){
+  header{padding:8px 10px} header h1{font-size:15px}
+  #siatka{grid-template-columns:repeat(auto-fill,minmax(105px,1fr));padding:8px;gap:6px}
+  .k .op{display:none}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>📚 Biblioteka</h1>
+  <button id="w-os" class="akt">📅 Oś czasu</button>
+  <button id="w-mapa">🗺 Mapa</button>
+  <span class="info" id="licznik"></span>
+  <span class="odstep"></span>
+  <select id="zakres" hidden title="Które zdjęcia pokazać">
+    <option value="biblioteka">Biblioteka (miejsce docelowe)</option>
+    <option value="wszystko">Wszystko w projekcie</option>
+  </select>
+  <button id="na-telefon" hidden title="Oglądaj bibliotekę na telefonie (sieć domowa / Tailscale)">📱 Na telefon</button>
+  <button id="zamknij" hidden title="Wróć do porządkowania">✕</button>
+</header>
+<div class="chipy" id="lata"></div>
+<div class="chipy" id="miesiace"></div>
+<main>
+  <div id="os"><div id="siatka"></div></div>
+  <div id="mapa" hidden></div>
+  <div id="mapa-info" hidden></div>
+</main>
+
+<div id="pelny" hidden>
+  <button class="zam" title="Zamknij (Esc)">✕</button>
+  <button class="pop" title="Poprzednie (←)">‹</button>
+  <button class="nast" title="Następne (→)">›</button>
+  <div id="pelny-tresc"></div>
+  <div class="opis" id="pelny-opis"></div>
+</div>
+
+<div id="login" hidden>
+  <form id="login-form">
+    <div style="font-size:44px">📚</div>
+    <h2 style="margin:6px 0">Biblioteka zdjęć</h2>
+    <div class="info">Podaj PIN widoczny na komputerze (Katalogator → 📱 Na telefon).</div>
+    <input id="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="PIN">
+    <button type="submit">Otwórz</button>
+    <div class="bl" id="login-blad"></div>
+  </form>
+</div>
+
+<div id="telefon" hidden>
+  <div class="okno">
+    <h2>📱 Biblioteka na telefonie</h2>
+    <div id="tel-tresc" class="info">Uruchamiam…</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button id="tel-wylacz">Wyłącz udostępnianie</button>
+      <button id="tel-zamknij" class="akt">Gotowe</button>
+    </div>
+  </div>
+</div>
+
+<script src="/ui/mapa/leaflet.js"></script>
+<script src="/ui/mapa/leaflet.markercluster.js"></script>
+<script src="/ui/mapa/qrcode.js"></script>
+<script src="/ui/galeria.js"></script>
+</body>
+</html>

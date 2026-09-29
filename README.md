@@ -75,7 +75,8 @@ Wymaga czegoś, co działa w domu 24/7. Opcje, od najprostszej:
    + Samba + Tailscale/WireGuard + File Browser. Najwięcej pracy i ryzyka;
    tylko po wykonaniu Etapu 1.
 
-Konfiguracje i skrypty dla wybranej opcji trafią do tego repozytorium.
+**Gotowe: Raspberry Pi 24/7** (opcja 2 + galeria zdjęć na telefon) — patrz niżej
+[Biblioteka na telefonie 24/7](#biblioteka-na-telefonie-247-raspberry-pi).
 
 ---
 
@@ -123,9 +124,43 @@ Nazwy miejscowości: © GeoNames, CC BY 4.0.
 Miejsce zdjęć: GPS z EXIF, XMP, plików `.json` Google Zdjęć i `.xmp`; bez GPS — dopasowanie do wyjazdu, nazwa
 folderu („2004 Zakopane”), a na końcu „w domu”.
 
-Projekty (ustawienia, bazy, dziennik): `%LOCALAPPDATA%\Katalogator\projekty\`. Program działa tylko
-lokalnie (127.0.0.1), nic nie wysyła do internetu. Zamknięcie okna w trakcie zadania nie przerywa pracy —
+9. **📚 Biblioteka** (przycisk u góry) — przeglądanie uporządkowanej biblioteki:
+   - *📅 Oś czasu*: lata → miesiące → zdjęcia; kliknięcie = całe zdjęcie (strzałki ← → / przesunięcie palcem);
+   - *🗺 Mapa* (OpenStreetMap): pinezki w miejscach zrobienia zdjęć (z GPS), bliskie łączą się w grupy z liczbą;
+     **kliknięcie pinezki = miniaturka**, **dwa kliknięcia = całe zdjęcie**;
+   - *📱 Na telefon*: kod QR + PIN — telefon w tej samej sieci Wi-Fi (albo z Tailscale — z każdego miejsca)
+     ogląda bibliotekę w przeglądarce, tylko do odczytu; działa, dopóki Katalogator jest otwarty.
+
+Projekty (ustawienia, bazy, dziennik): `%LOCALAPPDATA%\Katalogator\projekty\`. Program działa lokalnie
+(127.0.0.1); do internetu łączy się tylko mapa (kafelki map OpenStreetMap — bez żadnych danych o zdjęciach)
+i sprawdzanie aktualizacji. Udostępnianie na telefon włączasz sam i wyłączasz jednym przyciskiem. Zamknięcie okna w trakcie zadania nie przerywa pracy —
 ponowne uruchomienie otwiera okno działającego programu; przerwane zadania wznawiają się od miejsca przerwania.
+
+### Biblioteka na telefonie 24/7 (Raspberry Pi)
+
+Komputer nie musi być włączony: galerię (oś czasu + mapa, tylko oglądanie, PIN) udostępnia Raspberry Pi,
+czytając bibliotekę prosto z dysku My Cloud. Z Tailscale działa także poza domem, bez otwierania portów.
+
+**Potrzebne:** Raspberry Pi 4 (2 GB) albo 5, zasilacz, karta microSD 16 GB+ (razem ok. 250–350 zł;
+wystarczy też Pi 3B+), kabel sieciowy do routera. Pobór prądu ok. 3–5 W.
+
+1. **Raspberry Pi Imager** (na komputerze) → *Raspberry Pi OS Lite (64-bit)* → w ustawieniach (⚙) włącz **SSH**,
+   ustaw użytkownika i hasło → zapisz na kartę → włóż kartę do Pi, podłącz kabel sieciowy i zasilanie.
+2. Na komputerze: `ssh uzytkownik@raspberrypi.local` (PowerShell), potem:
+   ```
+   curl -fsSL https://raw.githubusercontent.com/mbarczykmb-afk/chmura/HEAD/serwer/instaluj-rpi.sh -o instaluj-rpi.sh
+   bash instaluj-rpi.sh
+   ```
+   Skrypt zapyta o adres dysku (np. `\\192.168.100.28\Public`), folder biblioteki i PIN, podłączy dysk
+   **tylko do odczytu**, zainstaluje galerię jako usługę (startuje sama po włączeniu prądu) i Tailscale
+   (otwórz link, który wyświetli, i zaloguj się tym samym kontem co w telefonie).
+3. W telefonie: aplikacja **Tailscale** (to samo konto) → w przeglądarce adres podany na końcu instalacji
+   (`http://100.x.x.x:8080/`) → PIN. Dodaj stronę do ekranu głównego — działa jak aplikacja.
+4. Nowe zdjęcia w bibliotece pojawiają się w galerii same (skan co 6 godzin; pierwszy — kilkanaście minut
+   przy 50 tys. zdjęć). Aktualizacja: uruchom `bash instaluj-rpi.sh` jeszcze raz.
+
+W panelu Tailscale (*Machines → Raspberry Pi → Edit route settings*) zatwierdź podsieć — wtedy telefon
+poza domem widzi też sam dysk (SMB, np. w menedżerze plików), jak w wariancie z komputerem.
 
 <details><summary>Dla zaawansowanych: uruchomienie z Pythona / linia poleceń</summary>
 
@@ -134,5 +169,6 @@ py -m pip install -r requirements.txt
 py -m katalogator                 # okno aplikacji
 py -m katalogator skanuj Z:\      # skan w konsoli + raport HTML
 py -m katalogator raport
+py -m katalogator galeria --folder Z:\Biblioteka --pin 1234   # galeria dla telefonu (serwer)
 ```
 </details>

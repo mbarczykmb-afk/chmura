@@ -207,6 +207,8 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
 def _wykonaj_plik(db, w, cel_root: str, partia: int, przerwij, licz, przeniesione_foldery: set) -> None:
     """Jeden plik planu: kopia/przeniesienie + wpis w dzienniku. OSError = nie udało się."""
     dst = os.path.join(cel_root, *w["cel"].split("/"))
+    zrodlowy = db.execute("SELECT * FROM pliki WHERE rowid=?", (w["plik_id"],)).fetchone() \
+        if w["plik_id"] is not None else None
     st = os.stat(w["sciezka"])
     if st.st_size != w["rozmiar"]:
         raise OSError("plik zmienił się od skanu — przeskanuj ponownie")
@@ -222,6 +224,7 @@ def _wykonaj_plik(db, w, cel_root: str, partia: int, przerwij, licz, przeniesion
             przeniesione_foldery.add(os.path.dirname(w["sciezka"]))
             if w["plik_id"] is not None:
                 db.execute("DELETE FROM pliki WHERE rowid=?", (w["plik_id"],))
+        _do_biblioteki(db, zrodlowy, dst, cel_root)
         db.execute("INSERT INTO wykonanie(partia, plan_id, zrodlo, cel, tryb, usuniete, rozmiar, mtime, czas) "
                    "VALUES (?,?,?,?,?,?,?,?,?)",
                    (partia, w["id"], w["sciezka"], dst, "juz_byl", usuniete, w["rozmiar"], st.st_mtime,
@@ -246,10 +249,28 @@ def _wykonaj_plik(db, w, cel_root: str, partia: int, przerwij, licz, przeniesion
         przeniesione_foldery.add(os.path.dirname(w["sciezka"]))
         if w["plik_id"] is not None:
             db.execute("DELETE FROM pliki WHERE rowid=?", (w["plik_id"],))
+    _do_biblioteki(db, zrodlowy, dst, cel_root)
     db.execute("INSERT INTO wykonanie(partia, plan_id, zrodlo, cel, tryb, usuniete, rozmiar, mtime, czas) "
                "VALUES (?,?,?,?,?,?,?,?,?)",
                (partia, w["id"], w["sciezka"], dst, tryb_logu, usuniete, w["rozmiar"], st.st_mtime, time.time()))
     db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
+
+
+def _do_biblioteki(db, zrodlowy, dst: str, cel_root: str) -> None:
+    """Plik w bibliotece od razu trafia do bazy (z datą, GPS i aparatem źródła) — przeglądarka biblioteki
+    i kolejne propozycje widzą go bez ponownego skanowania."""
+    if zrodlowy is None:
+        return
+    try:
+        st = os.stat(dst)
+    except OSError:
+        return
+    dane = dict(zrodlowy)
+    dane.update(sciezka=dst, korzen=os.path.abspath(cel_root), wzgledna=os.path.relpath(dst, cel_root),
+                rozmiar=st.st_size, mtime=st.st_mtime, skan=0)
+    kol = list(dane)
+    db.execute(f"INSERT OR REPLACE INTO pliki({','.join(kol)}) VALUES ({','.join('?' * len(kol))})",
+               [dane[k] for k in kol])
 
 
 def _usun_puste(foldery: set[str], db) -> int:
@@ -327,6 +348,8 @@ def cofnij(db: sqlite3.Connection, postep=None, przerwij=None) -> dict:
             if w["tryb"] != "juz_byl":
                 foldery_celu.add(os.path.dirname(w["cel"]))
             db.execute("UPDATE wykonanie SET cofniete=1 WHERE id=?", (w["id"],))
+            if w["tryb"] != "juz_byl":
+                db.execute("DELETE FROM pliki WHERE sciezka=?", (w["cel"],))  # nie ma go już w bibliotece
             db.execute("UPDATE plan SET wynik=NULL WHERE id=?", (w["plan_id"],))
             cofniete += 1
         except OSError as e:

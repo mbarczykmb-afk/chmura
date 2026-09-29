@@ -237,6 +237,9 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
   .edytor-pliki .siatka,body.pelny .edytor-pliki .siatka,#dok-siatka,#inne-siatka{flex:1;min-height:0;max-height:none}
   .stopka{flex:none}
 }
+#galeria-nakladka{position:fixed;inset:0;z-index:1500;background:var(--bg)}
+#galeria-nakladka iframe{border:0;width:100%;height:100%;display:block}
+#biblioteka-btn{font-weight:600}
 /* --- pasek bieżącego zadania (zawsze widoczny u góry) --- */
 .pz{margin:0 24px 10px;padding:10px 14px;border-radius:10px;background:var(--akc-miekki);border:1px solid color-mix(in srgb,var(--akc) 30%,transparent);display:grid;grid-template-columns:1fr auto;gap:4px 16px;align-items:center}
 .pz .pz-tyt{font-weight:600;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -260,6 +263,7 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
   <h1><img src="/ui/ikona.png" alt="">Katalogator</h1><span class="wersja" id="wersja"></span>
   <button class="projekt-btn" id="projekt-btn" title="Zmień projekt">📁 <span id="projekt-nazwa">…</span> ▾</button>
   <span class="odstep"></span>
+  <button id="biblioteka-btn" title="Przeglądaj bibliotekę: oś czasu i mapa miejsc; także na telefonie">📚 Biblioteka</button>
   <div style="position:relative">
     <button id="pomoc-btn" title="Pomoc, zgłaszanie problemów, aktualizacje">?</button>
     <div class="menu" id="pomoc-menu" hidden>
@@ -283,6 +287,8 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
   <div class="krok klik" id="k3"><b>3</b>Propozycja drzewa</div>
   <div class="krok klik" id="k4"><b>4</b>Porządkowanie</div>
 </nav>
+
+<div id="galeria-nakladka" hidden><iframe id="galeria-ramka" title="Biblioteka"></iframe></div>
 
 <div class="pz" id="pz" hidden>
   <div class="pz-tyt" id="pz-tyt"></div>
@@ -755,6 +761,16 @@ function rysujPasekZadania() {
 }
 window.addEventListener("focus", () => { gotoweWTle = false; if (!stan.biezace) document.title = tytulProjektu; });
 $("pz-przerwij").onclick = () => api("/api/przerwij", {});
+
+// ---------- przeglądarka biblioteki (oś czasu + mapa) ----------
+$("biblioteka-btn").onclick = () => {
+  const z = stan.wykonanie ? "biblioteka" : "wszystko";  // przed porządkowaniem biblioteka bywa pusta
+  $("galeria-ramka").src = `/galeria?t=${encodeURIComponent(TOKEN)}&app=1&z=${z}`;
+  $("galeria-nakladka").hidden = false;
+};
+window.addEventListener("message", e => {
+  if (e.data === "zamknij-galerie") { $("galeria-nakladka").hidden = true; $("galeria-ramka").src = "about:blank"; }
+});
 
 let odswiezaTrwa = false;
 async function odswiez() {

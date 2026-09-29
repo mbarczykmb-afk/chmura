@@ -1,4 +1,4 @@
-"""Bez parametrów: aplikacja okienkowa. Z parametrami: python -m katalogator skanuj|raport ..."""
+"""Bez parametrów: aplikacja okienkowa. Z parametrami: python -m katalogator skanuj|raport|galeria ..."""
 
 import argparse
 import os
@@ -45,6 +45,21 @@ def main(argv=None) -> int:
     if not args:
         from .aplikacja import main as aplikacja  # bez parametrów: okno aplikacji
         aplikacja()
+        return 0
+    if args[0] == "galeria":  # serwer galerii 24/7 (np. Raspberry Pi) — tylko oglądanie, z PIN-em
+        g = argparse.ArgumentParser(prog="katalogator galeria",
+                                    description="Galeria biblioteki (oś czasu + mapa) dla telefonu, tylko do odczytu.")
+        g.add_argument("--folder", required=True, help="folder biblioteki, np. /mnt/mycloud/Biblioteka")
+        g.add_argument("--port", type=int, default=8080)
+        g.add_argument("--pin", default=os.environ.get("KATALOGATOR_PIN"), help="PIN (domyślnie losowy)")
+        g.add_argument("--dane", default=None, help="katalog na bazę i miniatury (domyślnie ~/.katalogator-galeria)")
+        g.add_argument("--co-ile-godzin", type=float, default=6.0, help="jak często skanować nowe zdjęcia")
+        a = g.parse_args(args[1:])
+        from .galeria import serwer_24h
+        try:
+            serwer_24h(a.folder, a.port, a.pin, a.dane, a.co_ile_godzin)
+        except KeyboardInterrupt:
+            return 0
         return 0
     p = argparse.ArgumentParser(prog="katalogator", description="Porządkowanie zdjęć, filmów, muzyki i plików.")
     p.add_argument("--baza", default="katalog.db", help="plik bazy skanu (domyślnie katalog.db)")

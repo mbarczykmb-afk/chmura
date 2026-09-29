@@ -200,6 +200,19 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     przełączały bazę na WAL w tej samej chwili; test odtwarzający), decyzje kategorii działają też na planach sprzed 1.4,
     README zaktualizowane; pełny przebieg na 50 tys. plików: skan 46 s, duplikaty 12 s, analiza 133 s, plan 6 s,
     porządkowanie 53 s, okno odpowiada < 0,6 s
+22. **Przeglądarka biblioteki i telefon** ✅ (1.5):
+    - przycisk **📚 Biblioteka**: *oś czasu* (lata → miesiące → siatka, podgląd na cały ekran ze strzałkami /
+      przesuwaniem palcem, filmy odtwarzane) i *mapa* OpenStreetMap (Leaflet 1.9.4 + MarkerCluster dołączone do
+      programu): pinezki w miejscach z GPS, grupowanie bliskich, **klik = miniaturka z nazwą, datą i miejscem,
+      dwuklik = całe zdjęcie**; zakres: biblioteka (miejsce docelowe) albo wszystko w projekcie;
+    - uporządkowane pliki trafiają do bazy od razu (z datą, GPS, aparatem źródła) — biblioteka bez ponownego skanu;
+      cofnięcie porządkowania je usuwa;
+    - **📱 Na telefon**: osobny serwer tylko do odczytu (sieć domowa / Tailscale), kod QR + 6-cyfrowy PIN,
+      blokada po 8 złych próbach (5 min), dostęp tylko do plików z bazy w wybranym zakresie, pliki interfejsu tylko
+      z katalogu `ui`; wyłączany jednym przyciskiem; strona dopasowana do telefonu;
+    - **24/7 na Raspberry Pi**: `python -m katalogator galeria --folder … --pin …` (skan co 6 h, miniatury na dysku
+      Pi) i skrypt `serwer/instaluj-rpi.sh` (dysk SMB tylko do odczytu z automatycznym doborem wersji SMB, usługa
+      systemd, Tailscale z podsiecią, najnowsze wydanie z GitHuba; ponowne uruchomienie = aktualizacja)
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.
