@@ -238,16 +238,16 @@ def test_sprzatanie_nie_rusza_cudzych_folderow_ani_nie_wychodzi_poza_zrodlo(tmp_
     nad = tmp_path / "Zdjecia_stare"          # folder nad wybranym źródłem
     zr = nad / "2019"
     (zr / "wakacje" / ".prywatne").mkdir(parents=True)
-    (zr / "wakacje" / ".prywatne" / "notatka.txt").write_text("ważne")
+    (zr / "wakacje" / ".prywatne" / "notatka.txt").write_text("ważne", encoding="utf-8")
     (zr / "wakacje" / "Odłożone").mkdir()
-    (zr / "wakacje" / "Odłożone" / "moje.txt").write_text("też ważne")
+    (zr / "wakacje" / "Odłożone" / "moje.txt").write_text("też ważne", encoding="utf-8")
     (zr / "inne").mkdir()
     (zr / "inne" / "Thumbs.db").write_bytes(b"x")
     _jpg_z_exif(zr / "wakacje" / "IMG_1.jpg", data="2019:07:10 12:00:00")
     _jpg_z_exif(zr / "inne" / "IMG_2.jpg", data="2019:07:11 12:00:00")
     db, w = _porzadkuj(zr, tmp_path / "Biblioteka", tmp_path / "k.db")
     assert w["zrobione"] == 2
-    assert (zr / "wakacje" / ".prywatne" / "notatka.txt").read_text() == "ważne"
+    assert (zr / "wakacje" / ".prywatne" / "notatka.txt").read_text(encoding="utf-8") == "ważne"
     assert (zr / "wakacje" / "Odłożone" / "moje.txt").exists()
     assert not (zr / "inne").exists()      # pusty (tylko Thumbs.db) — sprzątnięty
     assert nad.exists()                    # nigdy ponad wybrany folder
