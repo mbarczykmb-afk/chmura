@@ -213,6 +213,10 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     - **24/7 na Raspberry Pi**: `python -m katalogator galeria --folder … --pin …` (skan co 6 h, miniatury na dysku
       Pi) i skrypt `serwer/instaluj-rpi.sh` (dysk SMB tylko do odczytu z automatycznym doborem wersji SMB, usługa
       systemd, Tailscale z podsiecią, najnowsze wydanie z GitHuba; ponowne uruchomienie = aktualizacja)
+23. **Audyt interfejsu 1.5.1** ✅ — zakładki w jednym rzędzie (węższa lewa kolumna poniżej 1300 px, przewijanie
+    tylko w bardzo wąskim oknie), brak wychodzenia treści poza okno < 900 px, zawijany wiersz harmonogramu,
+    „Brak duplikatów” zamiast „Jeszcze nie szukano”, nazwa folderu zamiast pełnej ścieżki w Drzewie, postęp zadania
+    tylko na pasku u góry, okno programu otwierane na cały ekran
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

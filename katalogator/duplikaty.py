@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS operacje (
     wiersz  TEXT NOT NULL,
     cofnieta INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS dup_meta (klucz TEXT PRIMARY KEY, wartosc TEXT);
 """
 
 # Ścieżki, które zwykle są kopiami — plik z nich zostawiamy tylko w ostateczności.
@@ -161,9 +162,17 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
                 ORDER BY p.rozmiar"""
         ).fetchall()
         policz("dokładne sprawdzanie", brak_pelnego, pelny=True)
+        # zapamiętaj, że szukano (także gdy nic nie znaleziono — okno pokaże „brak duplikatów”, nie „nie szukano”)
+        db.execute("INSERT OR REPLACE INTO dup_meta VALUES ('ostatnie_szukanie', ?)", (str(time.time()),))
     finally:
         db.commit()
     return podsumowanie(db)
+
+
+def szukano(db: sqlite3.Connection) -> bool:
+    przygotuj(db)
+    return db.execute("SELECT 1 FROM dup_meta WHERE klucz='ostatnie_szukanie'").fetchone() is not None \
+        or db.execute("SELECT 1 FROM odciski LIMIT 1").fetchone() is not None
 
 
 _GRUPY = """

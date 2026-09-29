@@ -211,7 +211,7 @@ class Stan:
         cache = {}
         db = self.db()
         try:
-            if db.execute("SELECT 1 FROM odciski LIMIT 1").fetchone():
+            if duplikaty.szukano(db):
                 cache["duplikaty"] = duplikaty.podsumowanie(db)
             cache["do_cofniecia"] = duplikaty.ostatnia_partia(db)
             if db.execute("SELECT 1 FROM analiza LIMIT 1").fetchone():
@@ -1033,7 +1033,7 @@ def otworz_okno(url: str) -> None:
     for exe in kandydaci:
         if exe.exists():
             try:
-                subprocess.Popen([str(exe), f"--app={url}", "--window-size=1180,860"])
+                subprocess.Popen([str(exe), f"--app={url}", "--start-maximized"])
                 return
             except OSError:
                 continue

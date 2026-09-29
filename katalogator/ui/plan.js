@@ -217,8 +217,10 @@ async function wczytajPliki(odNowa) {
 
 function rysujPliki() {
   const szuk = trybSzukania();
-  $("plan-folder").textContent = szuk ? `🔍 Wyniki: ${plan.razem}` : (plan.folder || ((stan.plan && stan.plan.cel) || "Miejsce docelowe"));
-  $("plan-folder").title = $("plan-folder").textContent;
+  const celPelny = (stan.plan && stan.plan.cel) || "";
+  $("plan-folder").textContent = szuk ? `🔍 Wyniki: ${plan.razem}` :
+    (plan.folder || celPelny.split(/[\\/]/).filter(Boolean).pop() || "Miejsce docelowe");
+  $("plan-folder").title = szuk ? "" : (plan.folder || celPelny);
   const korzen = plan.folder === "" || szuk;
   for (const id of ["f-zmien", "f-przenies", "f-wyklucz", "f-przywroc"]) $(id).disabled = korzen;
   const przejrz = plan.przejrzane.has(plan.folder);
