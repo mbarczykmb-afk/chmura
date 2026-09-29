@@ -155,78 +155,101 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
     wiersze = do_zrobienia(db)
     partia = int(time.time() * 1000)
     bajty = [0]
+    razem = spr["bajtow"]
     ok = bledy = 0
     przeniesione_foldery: set[str] = set()
+    from .stabilnosc import Straznik
+    straznik = Straznik([r[0] for r in db.execute("SELECT DISTINCT korzen FROM pliki")] + [cel_root], przerwij,
+                        getattr(postep, "czeka", None))
+    biezacy = {"i": 0, "plik": "", "t": 0.0}
 
-    def licz(n):
+    def zglos(wymus=False):
+        teraz = time.monotonic()
+        if postep and (wymus or teraz - biezacy["t"] > 0.5):
+            biezacy["t"] = teraz
+            postep("kopiowanie", biezacy["i"], len(wiersze), bajty[0], bajty_razem=razem, plik=biezacy["plik"])
+
+    def licz(n):  # w trakcie kopiowania — pasek rusza się także przy jednym dużym filmie
         bajty[0] += n
+        zglos()
 
     for i, w in enumerate(wiersze, 1):
         if przerwij is not None and przerwij.is_set():
             raise Przerwano(w["sciezka"])
-        if postep:
-            postep(os.path.basename(w["sciezka"]), i - 1, len(wiersze), bajty[0])
-        dst = os.path.join(cel_root, *w["cel"].split("/"))
-        try:
-            st = os.stat(w["sciezka"])
-            if st.st_size != w["rozmiar"]:
-                raise OSError("plik zmienił się od skanu — przeskanuj ponownie")
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            tryb_logu = w["tryb"]
-            if os.path.exists(dst) and os.path.getsize(dst) == w["rozmiar"] and \
-                    _hash(dst, przerwij) == _hash(w["sciezka"], przerwij, licz):
-                # identyczny plik już jest w bibliotece — nie tworzymy kopii „ (2)”
-                usuniete = 0
-                if w["tryb"] == "przenies":
-                    os.remove(w["sciezka"])
-                    usuniete = 1
-                    przeniesione_foldery.add(os.path.dirname(w["sciezka"]))
-                    if w["plik_id"] is not None:
-                        db.execute("DELETE FROM pliki WHERE rowid=?", (w["plik_id"],))
-                db.execute("INSERT INTO wykonanie(partia, plan_id, zrodlo, cel, tryb, usuniete, rozmiar, mtime, czas) "
-                           "VALUES (?,?,?,?,?,?,?,?,?)",
-                           (partia, w["id"], w["sciezka"], dst, "juz_byl", usuniete, w["rozmiar"], st.st_mtime,
-                            time.time()))
-                db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
-                db.commit()
+        biezacy.update(i=i - 1, plik=w["sciezka"])
+        zglos(wymus=True)
+        przed = bajty[0]
+        for proba in range(3):
+            bajty[0] = przed  # ponowienie po przerwie w sieci liczy plik od nowa
+            try:
+                _wykonaj_plik(db, w, cel_root, partia, przerwij, licz, przeniesione_foldery)
                 ok += 1
-                continue
-            dst = _wolna(dst)
-            usuniete = 0
-            if w["tryb"] == "przenies" and ten_sam_wolumin(w["sciezka"], os.path.dirname(dst)):
-                try:
-                    os.rename(w["sciezka"], dst)
-                    usuniete = 1
-                    licz(w["rozmiar"])
-                except OSError:
-                    usuniete = 0
-            if not usuniete:
-                kopiuj_z_weryfikacja(w["sciezka"], dst, przerwij, licz)
-                if w["tryb"] == "przenies":
-                    os.remove(w["sciezka"])
-                    usuniete = 1
-            if usuniete:
-                przeniesione_foldery.add(os.path.dirname(w["sciezka"]))
-                if w["plik_id"] is not None:
-                    db.execute("DELETE FROM pliki WHERE rowid=?", (w["plik_id"],))
-            db.execute("INSERT INTO wykonanie(partia, plan_id, zrodlo, cel, tryb, usuniete, rozmiar, mtime, czas) "
-                       "VALUES (?,?,?,?,?,?,?,?,?)",
-                       (partia, w["id"], w["sciezka"], dst, tryb_logu, usuniete, w["rozmiar"], st.st_mtime, time.time()))
-            db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
-            ok += 1
-        except Przerwano:
-            db.commit()
-            raise
-        except OSError as e:
-            db.execute("UPDATE plan SET wynik=? WHERE id=?", (f"blad: {e.strerror or e}"[:300], w["id"]))
-            bledy += 1
+                break
+            except Przerwano:
+                db.commit()
+                raise
+            except OSError as e:
+                dst = os.path.join(cel_root, *w["cel"].split("/"))
+                if proba < 2 and straznik.utracono(w["sciezka"], dst):
+                    continue  # dysk wrócił — ten sam plik jeszcze raz (gotowa kopia zostanie rozpoznana)
+                db.execute("UPDATE plan SET wynik=? WHERE id=?", (f"blad: {e.strerror or e}"[:300], w["id"]))
+                bledy += 1
+                break
         db.commit()  # po każdym pliku: kopiowanie następnego może trwać minuty
     db.commit()
     usuniete_foldery = _usun_puste(przeniesione_foldery, db) if usun_puste else 0
     if postep:
-        postep("gotowe", len(wiersze), len(wiersze), bajty[0])
+        postep("gotowe", len(wiersze), len(wiersze), bajty[0], bajty_razem=razem)
     return {"zrobione": ok, "bledy": bledy, "bajty": bajty[0], "partia": partia,
             "usuniete_foldery": usuniete_foldery}
+
+
+def _wykonaj_plik(db, w, cel_root: str, partia: int, przerwij, licz, przeniesione_foldery: set) -> None:
+    """Jeden plik planu: kopia/przeniesienie + wpis w dzienniku. OSError = nie udało się."""
+    dst = os.path.join(cel_root, *w["cel"].split("/"))
+    st = os.stat(w["sciezka"])
+    if st.st_size != w["rozmiar"]:
+        raise OSError("plik zmienił się od skanu — przeskanuj ponownie")
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    tryb_logu = w["tryb"]
+    if os.path.exists(dst) and os.path.getsize(dst) == w["rozmiar"] and \
+            _hash(dst, przerwij) == _hash(w["sciezka"], przerwij, licz):
+        # identyczny plik już jest w bibliotece — nie tworzymy kopii „ (2)”
+        usuniete = 0
+        if w["tryb"] == "przenies":
+            os.remove(w["sciezka"])
+            usuniete = 1
+            przeniesione_foldery.add(os.path.dirname(w["sciezka"]))
+            if w["plik_id"] is not None:
+                db.execute("DELETE FROM pliki WHERE rowid=?", (w["plik_id"],))
+        db.execute("INSERT INTO wykonanie(partia, plan_id, zrodlo, cel, tryb, usuniete, rozmiar, mtime, czas) "
+                   "VALUES (?,?,?,?,?,?,?,?,?)",
+                   (partia, w["id"], w["sciezka"], dst, "juz_byl", usuniete, w["rozmiar"], st.st_mtime,
+                    time.time()))
+        db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
+        return
+    dst = _wolna(dst)
+    usuniete = 0
+    if w["tryb"] == "przenies" and ten_sam_wolumin(w["sciezka"], os.path.dirname(dst)):
+        try:
+            os.rename(w["sciezka"], dst)
+            usuniete = 1
+            licz(w["rozmiar"])
+        except OSError:
+            usuniete = 0
+    if not usuniete:
+        kopiuj_z_weryfikacja(w["sciezka"], dst, przerwij, licz)
+        if w["tryb"] == "przenies":
+            os.remove(w["sciezka"])
+            usuniete = 1
+    if usuniete:
+        przeniesione_foldery.add(os.path.dirname(w["sciezka"]))
+        if w["plik_id"] is not None:
+            db.execute("DELETE FROM pliki WHERE rowid=?", (w["plik_id"],))
+    db.execute("INSERT INTO wykonanie(partia, plan_id, zrodlo, cel, tryb, usuniete, rozmiar, mtime, czas) "
+               "VALUES (?,?,?,?,?,?,?,?,?)",
+               (partia, w["id"], w["sciezka"], dst, tryb_logu, usuniete, w["rozmiar"], st.st_mtime, time.time()))
+    db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
 
 
 def _usun_puste(foldery: set[str], db) -> int:
@@ -272,9 +295,14 @@ def cofnij(db: sqlite3.Connection, postep=None, przerwij=None) -> dict:
                          (ost["partia"],)).fetchall()
     cofniete, bledy = 0, []
     foldery_celu: set[str] = set()
+    from .skaner import Zatwierdzanie
+    zatwierdz = Zatwierdzanie(db)  # krótkie transakcje — cofanie 50 tys. plików trwa
     for i, w in enumerate(wiersze, 1):
-        if postep:
-            postep("cofanie", i - 1, len(wiersze), 0)
+        if przerwij is not None and przerwij.is_set():
+            db.commit()
+            raise Przerwano(w["cel"])
+        if postep and (i % 20 == 1 or i == len(wiersze)):
+            postep("cofanie", i - 1, len(wiersze), 0, plik=w["cel"])
         try:
             if not os.path.exists(w["cel"]):
                 raise OSError(f"nie ma już pliku {w['cel']}")
@@ -303,6 +331,7 @@ def cofnij(db: sqlite3.Connection, postep=None, przerwij=None) -> dict:
             cofniete += 1
         except OSError as e:
             bledy.append(str(e))
+        zatwierdz()
     db.commit()
     granica = os.path.normcase(os.path.normpath(planista.meta(db).get("cel", "")))
     for f in sorted(foldery_celu, key=len, reverse=True):

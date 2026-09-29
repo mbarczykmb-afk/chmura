@@ -8,6 +8,7 @@ Wyniki trafiają do tabeli `analiza` i są liczone ponownie tylko dla zmienionyc
 from __future__ import annotations
 
 import io
+import operator
 import re
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
@@ -135,9 +136,12 @@ def podpis(im: Image.Image) -> str:
 
 
 def _roznice_podpisow(a: str, b: str) -> tuple[float, float]:
-    x, y = bytes.fromhex(a), bytes.fromhex(b)
-    szar = sum(abs(x[i] - y[i]) for i in range(64)) / 64
-    kol = sum(abs(x[i] - y[i]) for i in range(64, 112)) / 48
+    return _roznice_bajtow(bytes.fromhex(a), bytes.fromhex(b))
+
+
+def _roznice_bajtow(x: bytes, y: bytes) -> tuple[float, float]:
+    szar = sum(map(abs, map(operator.sub, x[:64], y[:64]))) / 64
+    kol = sum(map(abs, map(operator.sub, x[64:112], y[64:112]))) / 48
     return szar, kol
 
 
@@ -151,7 +155,7 @@ def _okresowosc(prof: list[float]) -> float:
     war = sum(v * v for v in d)
     if war <= 1e-9:
         return 0.0
-    ac = [sum(d[i] * d[i + lag] for i in range(n - lag)) / war for lag in range(min(90, n // 3))]
+    ac = [sum(map(operator.mul, d, d[lag:])) / war for lag in range(min(90, n // 3))]  # map: kilka razy szybciej
     minimum = None
     for lag in range(2, len(ac)):
         if ac[lag] < 0 and (minimum is None or ac[lag] < ac[minimum]):
@@ -206,6 +210,8 @@ def _analizuj_plik(w) -> tuple:
         return (w["sciezka"], w["rozmiar"], w["mtime"], f"{h:016x}", ocena_dokumentu(im), ostrosc(im),
                 rozm[0] if rozm else im.width, rozm[1] if rozm else im.height, None, podpis(im), None)
     except Exception as e:
+        if isinstance(e, OSError) and e.errno is not None:
+            raise  # błąd dostępu (np. sieć) — nie zapisujemy, spróbujemy ponownie
         return (w["sciezka"], w["rozmiar"], w["mtime"], None, None, None, None, None,
                 f"{type(e).__name__}: {e}"[:200], None, None)
 
@@ -222,15 +228,26 @@ def analizuj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4)
            WHERE p.rodzaj = 'zdjecie' AND (a.sciezka IS NULL OR (a.blad IS NULL AND a.podpis IS NULL))"""
     ).fetchall()
 
+    from .stabilnosc import Straznik
+    straznik = Straznik([r[0] for r in db.execute("SELECT DISTINCT korzen FROM pliki")], przerwij,
+                        getattr(postep, "czeka", None))
+
     def zadanie(w):
         if przerwij is not None and przerwij.is_set():
             raise Przerwano(w["sciezka"])
-        return _analizuj_plik(w)
+        try:
+            return straznik.wykonaj(_analizuj_plik, w["sciezka"], w)
+        except Przerwano:
+            raise
+        except OSError:
+            return None  # brak dostępu — zostaje do następnej analizy
 
     if postep:
         postep("analiza zdjęć", 0, len(wiersze), 0)
     with ThreadPoolExecutor(max_workers=watki) as pula:
         for i, wynik in enumerate(pula.map(zadanie, wiersze), 1):
+            if wynik is None:
+                continue
             db.execute("INSERT OR REPLACE INTO analiza(sciezka, rozmiar, mtime, dhash, dokument, ostrosc, szer, wys, "
                        "blad, podpis, tekst) VALUES (?,?,?,?,?,?,?,?,?,?,?)", wynik)
             zatwierdz()
@@ -246,7 +263,9 @@ def analizuj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4)
         if przerwij is not None and przerwij.is_set():
             raise Przerwano(w[0])
         try:
-            return w[0], ocena_tekstu(_obraz_do_tekstu(w[0]))
+            return w[0], ocena_tekstu(straznik.wykonaj(_obraz_do_tekstu, w[0], w[0]))
+        except Przerwano:
+            raise
         except Exception:
             return w[0], 0.0
 
@@ -259,6 +278,7 @@ def analizuj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4)
             if postep and i % 5 == 0:
                 postep("szukanie tekstu (dokumenty)", i, len(kandydaci), 0)
     zatwierdz(wymus=True)
+    grupy_podobnych(db, postep=postep)  # liczone raz, tu — potem z pamięci
     return podsumowanie(db)
 
 
@@ -315,7 +335,7 @@ def dokumenty_potwierdzone(db: sqlite3.Connection) -> set[str]:
 
 # --- podobne i nieostre ----------------------------------------------------------------
 
-def grupy_podobnych(db: sqlite3.Connection, prog: int = PROG_PODOBNE) -> list[list[dict]]:
+def grupy_podobnych(db: sqlite3.Connection, prog: int = PROG_PODOBNE, postep=None) -> list[list[dict]]:
     """Grupy wizualnie podobnych zdjęć (bez grup samych identycznych plików).
 
     1) wstępnie: odcisk dHash różni się o ≤ prog bitów (wyszukiwanie przez pasma),
@@ -323,6 +343,31 @@ def grupy_podobnych(db: sqlite3.Connection, prog: int = PROG_PODOBNE) -> list[li
     3) grupa powstaje wokół jednego zdjęcia-wzorca — każde w grupie jest podobne do wzorca
        (bez łańcuchów A≈B≈C…, które sklejały zupełnie różne zdjęcia)."""
     przygotuj(db)
+    klucz = _odcisk_danych(db, prog)
+    if klucz in _PAMIEC_PODOBNYCH:
+        return _PAMIEC_PODOBNYCH[klucz]
+    wynik = _grupy_podobnych(db, prog, postep)
+    _PAMIEC_PODOBNYCH.clear()  # pamiętamy tylko najnowszy wynik
+    _PAMIEC_PODOBNYCH[klucz] = wynik
+    return wynik
+
+
+_PAMIEC_PODOBNYCH: dict = {}
+MAKS_SASIADOW = 60  # dłuższa seria niemal jednakowych ujęć (np. timelapse) dzieli się na kilka grup — i nie
+                   # porównujemy każdego z każdym (koszt rósłby z kwadratem)
+MAKS_KUBELEK = 2000  # większe kubełki (setki niemal jednakowych ujęć, np. ciemne) pomijamy — koszt rośnie z kwadratem
+
+
+def _odcisk_danych(db: sqlite3.Connection, prog: int) -> tuple:
+    """Tani „odcisk” stanu bazy: zmienia się, gdy dochodzą/znikają zdjęcia lub wyniki analizy."""
+    plik = next((r[2] for r in db.execute("PRAGMA database_list") if r[1] == "main"), "")
+    a = db.execute("SELECT COUNT(*), MAX(rowid) FROM analiza").fetchone()
+    p = db.execute("SELECT COUNT(*), MAX(rowid) FROM pliki").fetchone()
+    o = db.execute("SELECT COUNT(pelny), MAX(rowid) FROM odciski").fetchone() if _ma_odciski(db) else (0, 0)
+    return (plik or id(db), prog, *a, *p, *o)
+
+
+def _grupy_podobnych(db: sqlite3.Connection, prog: int, postep=None) -> list[list[dict]]:
     odc = ", o.pelny" if _ma_odciski(db) else ", NULL pelny"
     zl = ("LEFT JOIN odciski o ON o.sciezka = p.sciezka AND o.rozmiar = p.rozmiar AND o.mtime = p.mtime"
           if _ma_odciski(db) else "")
@@ -336,24 +381,35 @@ def grupy_podobnych(db: sqlite3.Connection, prog: int = PROG_PODOBNE) -> list[li
         h = int(w["dhash"], 16)
         if 6 <= h.bit_count() <= 58:  # pomijamy jednolite obrazy (czarne, białe)
             hashe.append((h, w))
+    podpisy = [bytes.fromhex(w["podpis"]) for _, w in hashe]
+    liczby = [h for h, _ in hashe]
     sasiedzi: dict[int, set[int]] = {}
     pasma = prog + 1
     szer = 64 // pasma
     for b in range(pasma):
+        if postep:
+            postep("szukanie podobnych zdjęć", b, pasma, 0)
         przes = b * szer
         maska = (1 << (szer if b < pasma - 1 else 64 - przes)) - 1
         kubelki: dict[int, list[int]] = {}
         for i, (h, _) in enumerate(hashe):
             kubelki.setdefault((h >> przes) & maska, []).append(i)
         for lista in kubelki.values():
-            if len(lista) < 2 or len(lista) > 800:
+            if len(lista) < 2 or len(lista) > MAKS_KUBELEK:
                 continue
             for x in range(len(lista)):
-                for y in range(x + 1, len(lista)):
-                    i, j = lista[x], lista[y]
-                    if j in sasiedzi.get(i, ()) or (hashe[i][0] ^ hashe[j][0]).bit_count() > prog:
+                i = lista[x]
+                hi, si = liczby[i], sasiedzi.get(i, ())
+                if len(si) >= MAKS_SASIADOW:
+                    continue
+                for j in lista[x + 1:]:
+                    if (hi ^ liczby[j]).bit_count() > prog or j in si:
                         continue
-                    szar, kol = _roznice_podpisow(hashe[i][1]["podpis"], hashe[j][1]["podpis"])
+                    if len(sasiedzi.get(j, ())) >= MAKS_SASIADOW:
+                        continue
+                    if len(sasiedzi.get(i, ())) >= MAKS_SASIADOW:
+                        break
+                    szar, kol = _roznice_bajtow(podpisy[i], podpisy[j])
                     if szar <= PROG_SZAROSCI and kol <= PROG_KOLORU:
                         sasiedzi.setdefault(i, set()).add(j)
                         sasiedzi.setdefault(j, set()).add(i)

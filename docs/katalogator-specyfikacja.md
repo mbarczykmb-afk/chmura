@@ -150,6 +150,21 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     kolumna i zawartość zakładki; duplikaty wyświetlane po 100 grup („Pokaż kolejne 100 grup”)
 15. **Poprawki 1.2.3** ✅ — Podobne: duże karty (ok. 250 px, całe zdjęcie bez przycinania, podgląd 600 px
     zamiast miniatury z EXIF), opis pod nazwą pliku
+16. **Duże biblioteki — stabilizator i postęp** ✅ (1.3) — sprawdzone na 50 tys. plików:
+    - **pasek bieżącego zadania** zawsze widoczny u góry (każda zakładka): procent, pliki x / y, GB x / y,
+      prędkość (MB/s lub pliki/s, z ostatnich ~90 s), czas trwania, **szacowany czas do końca**, bieżący plik,
+      „Przerwij”; procent także w tytule okna (pasek zadań Windows), „✓ Gotowe”, gdy skończy się w tle;
+    - skan w dwóch etapach (liczenie plików → odczyt metadanych), więc od początku znana jest liczba plików;
+      postęp kopiowania i porównywania liczony w bajtach, rusza się także przy jednym dużym filmie;
+    - **przerwa w dostępie do dysku sieciowego**: zadanie się wstrzymuje („Utracono dostęp do … — czekam”),
+      sprawdza co 5 s i po powrocie dysku ponawia ten sam plik (do 15 min, potem zatrzymuje się z zapisanym
+      postępem); foldery, których nie dało się odczytać, nie są uznawane za usunięte; pliki z błędem odczytu
+      są czytane ponownie przy następnym skanie/analizie;
+    - komputer nie usypia się w trakcie zadania (Windows); zamknięcie/zawieszenie okna nie przerywa zadania,
+      a ponowne kliknięcie ikony otwiera okno już działającego programu (jedna kopia programu);
+    - wydajność: podsumowania nie są przeliczane w trakcie zadań, okno nie wysyła kolejnego zapytania, zanim
+      nie dostanie odpowiedzi; podobne zdjęcia liczone raz (z pamięcią), z ograniczeniem porównań dla długich
+      serii niemal identycznych ujęć — analiza 40 tys. zdjęć ~10× szybsza, okno odpowiada w < 0,5 s
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

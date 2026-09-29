@@ -71,15 +71,17 @@ class Zatwierdzanie:
             self.ostatnio = time.monotonic()
 
 
-def _przejdz(korzen: str, licz: dict):
+def _przejdz(korzen: str, licz: dict, straznik=None, nieczytelne: list | None = None):
     """Rekurencyjnie zwraca (ścieżka, nazwa, stat) z pominięciem śmieci."""
     stos = [korzen]
     while stos:
         folder = stos.pop()
         try:
-            wpisy = list(os.scandir(folder))
+            wpisy = list(straznik.wykonaj(os.scandir, folder, folder)) if straznik else list(os.scandir(folder))
         except OSError:
             licz["bledy_dostepu"] += 1
+            if nieczytelne is not None:
+                nieczytelne.append(folder)
             continue
         for w in wpisy:
             try:
@@ -102,27 +104,68 @@ class Przerwano(Exception):
 
 
 def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
-           postep=None, przerwij=None) -> dict:
-    """postep(liczba_plikow, folder) — wywoływane co ok. 0,5 s; przerwij — threading.Event."""
+           postep=None, przerwij=None, straznik=None) -> dict:
+    """Dwa etapy: 1) lista plików (szybko, daje liczbę do paska postępu), 2) odczyt metadanych
+    nowych i zmienionych plików. postep(liczba_plikow, folder, wszystkie=…, etap=…) — co ok. 0,5 s;
+    przerwij — threading.Event; straznik — stabilnosc.Straznik (czekanie na dysk sieciowy)."""
+    from .stabilnosc import Straznik
     korzen = os.path.abspath(korzen)
     if not os.path.isdir(korzen):
         raise NotADirectoryError(korzen)
+    straznik = straznik or Straznik([korzen], przerwij)
     cur = db.execute("INSERT INTO skany(korzen, start) VALUES (?, ?)", (korzen, time.time()))
     skan_id = cur.lastrowid
     db.commit()  # nie trzymaj blokady zapisu podczas przeglądania folderów
     znane = {
         r["sciezka"]: (r["rozmiar"], r["mtime"])
-        for r in db.execute("SELECT sciezka, rozmiar, mtime FROM pliki WHERE korzen = ?", (korzen,))
+        for r in db.execute("SELECT sciezka, rozmiar, mtime FROM pliki WHERE korzen = ? AND blad IS NULL",
+                            (korzen,))
     }
     licz = {"pominiete_pliki": 0, "pominiete_foldery": 0, "bledy_dostepu": 0}
     stat = {"wszystkie": 0, "nowe_lub_zmienione": 0, "bez_zmian": 0}
     niezmienione: list[str] = []
+    nieczytelne: list[str] = []
+    do_odczytu: list = []
     ostatni_wydruk = time.time()
+
+    def zglos(n, gdzie, wszystkie=0, etap="", wymus=False):
+        nonlocal ostatni_wydruk
+        teraz = time.time()
+        if postep is not None and (wymus or teraz - ostatni_wydruk > 0.5):
+            try:
+                postep(n, gdzie, wszystkie=wszystkie, etap=etap)
+            except TypeError:  # starsze wywołania: postep(n, gdzie)
+                postep(n, gdzie)
+            ostatni_wydruk = teraz
+        elif postep is None and teraz - ostatni_wydruk > 2:
+            wypisz(f"  ...{etap or 'przejrzano'}: {n} plików")
+            ostatni_wydruk = teraz
+
+    # 1) lista plików
+    for el in _przejdz(korzen, licz, straznik, nieczytelne):
+        stat["wszystkie"] += 1
+        sciezka, _, st = el
+        if znane.get(sciezka) == (st.st_size, st.st_mtime):
+            stat["bez_zmian"] += 1
+            niezmienione.append(sciezka)
+        else:
+            do_odczytu.append(el)
+        if przerwij is not None and przerwij.is_set():
+            raise Przerwano(korzen)
+        zglos(stat["wszystkie"], os.path.dirname(sciezka), etap="liczenie plików")
+    stat["nowe_lub_zmienione"] = len(do_odczytu)
 
     def zadanie(el):
         sciezka, nazwa, st = el
+        if przerwij is not None and przerwij.is_set():
+            return None
         rodz = typy.rodzaj(nazwa)
-        return sciezka, st, rodz, odczytaj(sciezka, rodz, st.st_mtime)
+        m = odczytaj(sciezka, rodz, st.st_mtime)
+        if m.blad and not os.path.exists(sciezka) and straznik.korzen(sciezka):
+            # błąd odczytu, bo zniknął dysk? poczekaj na niego i spróbuj jeszcze raz
+            if straznik.czekaj_na(straznik.korzen(sciezka)):
+                m = odczytaj(sciezka, rodz, st.st_mtime)
+        return sciezka, st, rodz, m
 
     def zapisz(wynik):
         sciezka, st, rodz, m = wynik
@@ -136,38 +179,21 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
             ),
         )
 
+    # 2) metadane nowych i zmienionych (paczkami — pamięć i blokada bazy pozostają małe)
+    zglos(0, korzen, len(do_odczytu), "odczyt metadanych", wymus=True)
+    zrobione = 0
     with ThreadPoolExecutor(max_workers=watki) as pula:
-        oczekujace = []
-        for el in _przejdz(korzen, licz):
-            stat["wszystkie"] += 1
-            sciezka, _, st = el
-            if znane.get(sciezka) == (st.st_size, st.st_mtime):
-                stat["bez_zmian"] += 1
-                niezmienione.append(sciezka)
-            else:
-                stat["nowe_lub_zmienione"] += 1
-                oczekujace.append(pula.submit(zadanie, el))
-            if len(oczekujace) >= 64:
-                for f in oczekujace:
-                    zapisz(f.result())
-                oczekujace.clear()
-                db.commit()
+        for i in range(0, len(do_odczytu), 256):
+            paczka = do_odczytu[i:i + 256]
+            for wynik in pula.map(zadanie, paczka):
+                if wynik is not None:
+                    zapisz(wynik)
+                    zrobione += 1
+            db.commit()
             if przerwij is not None and przerwij.is_set():
-                for f in oczekujace:
-                    zapisz(f.result())
-                db.commit()
                 raise Przerwano(korzen)
-            teraz = time.time()
-            if postep is not None and teraz - ostatni_wydruk > 0.5:
-                postep(stat["wszystkie"], os.path.dirname(sciezka))
-                ostatni_wydruk = teraz
-            elif postep is None and teraz - ostatni_wydruk > 2:
-                wypisz(f"  ...przejrzano {stat['wszystkie']} plików")
-                ostatni_wydruk = teraz
-        for f in oczekujace:
-            zapisz(f.result())
-    if postep is not None:
-        postep(stat["wszystkie"], korzen)
+            zglos(zrobione, os.path.dirname(paczka[-1][0]), len(do_odczytu), "odczyt metadanych")
+    zglos(zrobione, korzen, len(do_odczytu), "odczyt metadanych", wymus=True)
 
     # Oznacz pliki bez zmian jako widziane w tym skanie, usuń te, których już nie ma.
     for i in range(0, len(niezmienione), 500):
@@ -176,6 +202,11 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
             f"UPDATE pliki SET skan = ? WHERE sciezka IN ({','.join('?' * len(paczka))})",
             [skan_id, *paczka],
         )
+    # folderów, których nie dało się odczytać, nie traktujemy jak usuniętych
+    for f in nieczytelne:
+        pref = f.rstrip("\\/") + os.sep
+        db.execute("UPDATE pliki SET skan = ? WHERE korzen = ? AND substr(sciezka, 1, ?) = ?",
+                   (skan_id, korzen, len(pref), pref))
     usuniete = db.execute(
         "DELETE FROM pliki WHERE korzen = ? AND skan != ?", (korzen, skan_id)
     ).rowcount
@@ -184,7 +215,7 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
         (time.time(), licz["pominiete_pliki"], licz["pominiete_foldery"], licz["bledy_dostepu"], skan_id),
     )
     db.commit()
-    return {**stat, **licz, "usuniete_z_bazy": usuniete, "korzen": korzen}
+    return {**stat, **licz, "usuniete_z_bazy": usuniete, "korzen": korzen, "nieczytelne": nieczytelne}
 
 
 if __name__ == "__main__":  # pragma: no cover

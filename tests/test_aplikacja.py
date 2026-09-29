@@ -58,7 +58,7 @@ def test_ustawienia_skan_raport(app, tmp_path):
     assert stan.projekty.wczytaj(stan.pid)["cel"] == str(cel)
 
     api("/api/skanuj", {})
-    for _ in range(100):
+    for _ in range(400):
         s = json.loads(api("/api/stan")[1])
         if not s["skan"]["trwa"]:
             break

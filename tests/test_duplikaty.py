@@ -35,7 +35,7 @@ def test_wykrywa_tylko_identyczne(tmp_path):
     k = _pliki(tmp_path)
     db = _db(tmp_path, k)
     etapy = []
-    w = duplikaty.szukaj(db, postep=lambda e, *a: etapy.append(e))
+    w = duplikaty.szukaj(db, postep=lambda e, *a, **_: etapy.append(e))
     assert w["grupy"] == 2 and w["nadmiar"] == 3
     assert "dokładne sprawdzanie" in etapy
     g = duplikaty.grupy(db)
@@ -51,7 +51,7 @@ def test_drugie_wyszukiwanie_nie_czyta_plikow(tmp_path):
     db = _db(tmp_path, k)
     duplikaty.szukaj(db)
     bajty = []
-    duplikaty.szukaj(db, postep=lambda e, z, n, b: bajty.append(b))
+    duplikaty.szukaj(db, postep=lambda e, z, n, b, **_: bajty.append(b))
     assert max(bajty) == 0
 
 

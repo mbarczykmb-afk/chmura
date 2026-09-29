@@ -20,7 +20,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, aktualizacje, analiza, duplikaty, dyski, logi, planista, projekty, przychodzace, raport, skaner, wykonawca
+from . import (__version__, aktualizacje, analiza, duplikaty, dyski, logi, planista, projekty, przychodzace, raport,
+               skaner, stabilnosc, wykonawca)
 from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
@@ -43,6 +44,8 @@ class Stan:
         self.ostatni_ping = time.time()
         self.wersja_danych = 0          # rośnie po każdej zmianie danych
         self._podsumowania = (-1, {})   # (wersja, dane) — okno pyta o stan co sekundę
+        self._licze_podsumowania = threading.Lock()
+        self.tempa: dict[str, stabilnosc.Tempo] = {}
         pid = self.projekty.ostatni() or self.projekty.nowy("Mój projekt")
         self._otworz(pid)
 
@@ -52,8 +55,9 @@ class Stan:
         self.baza = self.projekty.baza(pid)
         self.ustawienia = {"zrodla": dyski.normalizuj_wybor(self.projekt.get("zrodla") or []),
                            "cel": self.projekt.get("cel") or ""}
-        self.skan = {"trwa": False, "przejrzano": 0, "folder": "", "komunikat": "", "blad": ""}
-        self.dup = {"trwa": False, "etap": "", "zrobione": 0, "wszystkie": 0, "bajty": 0,
+        self.skan = {"trwa": False, "przejrzano": 0, "wszystkie": 0, "etap": "", "folder": "", "komunikat": "",
+                     "blad": ""}
+        self.dup = {"trwa": False, "etap": "", "zrobione": 0, "wszystkie": 0, "bajty": 0, "bajty_razem": 0,
                     "komunikat": "", "blad": ""}
         self.zad = {n: self._pusty() for n in ("analiza", "plan", "wykonanie", "przychodzace", "aktualizacja")}
         self.miniatury: dict[int, bytes] = {}
@@ -144,31 +148,87 @@ class Stan:
                                                              "harmonogram")},
                 "dup": dup, "zad": zad, "ma_wyniki": ma, "duplikaty": None, "do_cofniecia": None,
                 "analiza": None, "plan": None, "wykonanie": None, "przychodzace": None}
+        dane["biezace"] = self._biezace(skan, dup, zad)
         if ma:
             with self.blokada:
                 wersja, (w_cache, cache) = self.wersja_danych, self._podsumowania
-            if w_cache != wersja or any(z["trwa"] for z in zad.values()) or skan["trwa"] or dup["trwa"]:
-                cache = {}
-                db = self.db()
+            # W trakcie zadania pokazujemy ostatnie podsumowania (przy 50 tys. plików liczenie ich co sekundę
+            # spowalniało zadanie i okno — wątki zadania zajmują procesor); po zakończeniu zadania wersja
+            # danych rośnie i liczymy od nowa.
+            # Liczy tylko jeden wątek naraz — pozostałe zapytania dostają poprzedni wynik.
+            if (w_cache != wersja and not dane["biezace"]
+                    and self._licze_podsumowania.acquire(blocking=w_cache < 0)):
                 try:
-                    if db.execute("SELECT 1 FROM odciski LIMIT 1").fetchone():
-                        cache["duplikaty"] = duplikaty.podsumowanie(db)
-                    cache["do_cofniecia"] = duplikaty.ostatnia_partia(db)
-                    if db.execute("SELECT 1 FROM analiza LIMIT 1").fetchone():
-                        cache["analiza"] = analiza.podsumowanie(db)
-                    if planista.istnieje(db):
-                        cache["plan"] = planista.podsumowanie(db)
-                    cache["wykonanie"] = wykonawca.ostatnia_partia(db)
+                    cache = self._przelicz_podsumowania(wersja)
                 finally:
-                    db.close()
-                try:
-                    cache["przychodzace"] = przychodzace.podsumowanie(self.projekty, self.pid)
-                except Exception:
-                    cache["przychodzace"] = None
-                with self.blokada:
-                    self._podsumowania = (wersja, cache)
+                    self._licze_podsumowania.release()
             dane.update(cache)
         return dane
+
+    def _przelicz_podsumowania(self, wersja: int) -> dict:
+        cache = {}
+        db = self.db()
+        try:
+            if db.execute("SELECT 1 FROM odciski LIMIT 1").fetchone():
+                cache["duplikaty"] = duplikaty.podsumowanie(db)
+            cache["do_cofniecia"] = duplikaty.ostatnia_partia(db)
+            if db.execute("SELECT 1 FROM analiza LIMIT 1").fetchone():
+                cache["analiza"] = analiza.podsumowanie(db)
+            if planista.istnieje(db):
+                cache["plan"] = planista.podsumowanie(db)
+            cache["wykonanie"] = wykonawca.ostatnia_partia(db)
+        finally:
+            db.close()
+        try:
+            cache["przychodzace"] = przychodzace.podsumowanie(self.projekty, self.pid)
+        except Exception:
+            cache["przychodzace"] = None
+        with self.blokada:
+            self._podsumowania = (wersja, cache)
+        return cache
+
+    NAZWY_ZADAN = {"skan": "Skanowanie", "dup": "Szukanie duplikatów", "analiza": "Analiza zdjęć",
+                   "plan": "Tworzenie propozycji", "wykonanie": "Porządkowanie plików",
+                   "przychodzace": "Folder przychodzący", "aktualizacja": "Aktualizacja"}
+
+    def _biezace(self, skan: dict, dup: dict, zad: dict) -> dict | None:
+        """Jedno trwające zadanie w jednolitej postaci — dla paska postępu u góry okna."""
+        if skan["trwa"]:
+            nazwa, z = "skan", {"etap": skan.get("etap") or "", "zrobione": skan.get("zrobione", 0),
+                                "wszystkie": skan.get("wszystkie", 0), "plik": skan.get("folder", ""),
+                                "czeka": skan.get("czeka"), "opis": skan.get("komunikat", "")}
+        elif dup["trwa"]:
+            nazwa, z = "dup", dup
+        else:
+            nazwa = next((n for n, v in zad.items() if v["trwa"]), None)
+            if nazwa is None:
+                return None
+            z = zad[nazwa]
+        w = {"nazwa": nazwa, "tytul": self.NAZWY_ZADAN.get(nazwa, nazwa)}
+        for k in ("etap", "zrobione", "wszystkie", "bajty", "bajty_razem", "plik", "czeka", "opis"):
+            if z.get(k):
+                w[k] = z[k]
+        t = self.tempa.get(nazwa)
+        if t:
+            w.update(t.wynik())
+        return w
+
+    def _tempo(self, nazwa: str, z: dict) -> None:
+        """Zapisz próbkę postępu (pod blokadą) — z niej liczymy prędkość i czas do końca."""
+        t = self.tempa.get(nazwa)
+        if t is None:
+            return
+        klucz = (z.get("etap"), z.get("wszystkie"), z.get("bajty_razem"))
+        if getattr(t, "klucz", None) != klucz:  # nowy etap — liczymy tempo od nowa
+            t.probki.clear()
+            t.klucz = klucz
+        if z.get("bajty_razem"):
+            u = min(1.0, (z.get("bajty") or 0) / z["bajty_razem"])
+        elif z.get("wszystkie"):
+            u = min(1.0, (z.get("zrobione") or 0) / z["wszystkie"])
+        else:
+            return
+        t.dodaj(u, z.get("zrobione") or 0, z.get("bajty") or 0)
 
     def _zajety(self) -> bool:  # wywoływać pod blokadą
         return self.skan["trwa"] or self.dup["trwa"] or any(z["trwa"] for z in self.zad.values())
@@ -183,16 +243,28 @@ class Stan:
             if self._zajety():
                 return "Poczekaj, aż skończy się bieżące zadanie."
             self.zad[nazwa] = {**self._pusty(), "trwa": True, "etap": "przygotowanie"}
+            self.tempa[nazwa] = stabilnosc.Tempo()
         self.przerwij.clear()
 
         def praca():
             db = self.db()
 
-            def postep(etap, zrobione, wszystkie, bajty):
+            def postep(etap, zrobione, wszystkie, bajty, **dod):
                 with self.blokada:
-                    self.zad[nazwa].update(etap=etap, zrobione=zrobione, wszystkie=wszystkie, bajty=bajty)
+                    z = self.zad[nazwa]
+                    if etap != z.get("etap"):
+                        z.pop("bajty_razem", None)
+                        z.pop("plik", None)
+                    z.update(etap=etap, zrobione=zrobione, wszystkie=wszystkie, bajty=bajty, **dod)
+                    self._tempo(nazwa, z)
+
+            def czeka(tekst):
+                with self.blokada:
+                    self.zad[nazwa]["czeka"] = tekst
+            postep.czeka = czeka
             try:
-                komunikat, blad = funkcja(db, postep, self.przerwij), ""
+                with stabilnosc.Czuwanie():
+                    komunikat, blad = funkcja(db, postep, self.przerwij), ""
             except skaner.Przerwano:
                 komunikat, blad = "Przerwano. Postęp zapisany — możesz dokończyć później.", ""
             except Exception as e:
@@ -224,7 +296,9 @@ class Stan:
         with self.blokada:
             if self._zajety():
                 return "Poczekaj, aż skończy się bieżące zadanie."
-            self.skan = {"trwa": True, "przejrzano": 0, "folder": "", "komunikat": "Rozpoczynam…", "blad": ""}
+            self.skan = {"trwa": True, "przejrzano": 0, "wszystkie": 0, "etap": "liczenie plików", "folder": "",
+                         "komunikat": "Rozpoczynam…", "blad": ""}
+            self.tempa["skan"] = stabilnosc.Tempo()
         self.przerwij.clear()
         threading.Thread(target=self._skanuj, args=(foldery,), daemon=True).start()
         return None
@@ -232,15 +306,32 @@ class Stan:
     def _skanuj(self, foldery: list[str]) -> None:
         db = skaner.otworz_baze(self.baza)
         razem = 0
+
+        def czeka(tekst):
+            with self.blokada:
+                self.skan["czeka"] = tekst
+        straznik = stabilnosc.Straznik(foldery, self.przerwij, czeka)
+        nieczytelne: list[str] = []
         try:
-            for i, folder in enumerate(foldery, 1):
-                def postep(n, gdzie, _i=i, _baza=razem):
+            with stabilnosc.Czuwanie():
+                for i, folder in enumerate(foldery, 1):
+                    def postep(n, gdzie, wszystkie=0, etap="", _i=i, _baza=razem):
+                        with self.blokada:
+                            if etap == "liczenie plików":  # przejrzano = wszystkie znalezione pliki
+                                self.skan.update(przejrzano=_baza + n)
+                            self.skan.update(zrobione=n, wszystkie=wszystkie, folder=gdzie, etap=etap,
+                                             komunikat=f"Folder {_i} z {len(foldery)}")
+                            self._tempo("skan", {"etap": (etap, _i), "zrobione": n, "wszystkie": wszystkie})
+                    w = skaner.skanuj(folder, db, postep=postep, przerwij=self.przerwij, straznik=straznik)
+                    razem += w["wszystkie"]
                     with self.blokada:
-                        self.skan.update(przejrzano=_baza + n, folder=gdzie,
-                                         komunikat=f"Folder {_i} z {len(foldery)}")
-                w = skaner.skanuj(folder, db, postep=postep, przerwij=self.przerwij)
-                razem += w["wszystkie"]
+                        self.skan["przejrzano"] = razem
+                    nieczytelne += w.get("nieczytelne") or []
             komunikat, blad = f"Gotowe — przejrzano {razem} plików.", ""
+            if nieczytelne:
+                komunikat += (f" Nie udało się otworzyć {len(nieczytelne)} folderów (np. {nieczytelne[0]}) — "
+                              "ich wcześniejsze wyniki zostały zachowane.")
+                LOG.warning("Nieczytelne foldery przy skanie: %s", nieczytelne[:50])
         except skaner.Przerwano:
             komunikat, blad = "Przerwano. Postęp zapisany — kolejny skan dokończy resztę.", ""
         except Exception as e:  # pokaż błąd w oknie zamiast cichej awarii
@@ -261,7 +352,8 @@ class Stan:
             if self._zajety():
                 return "Poczekaj, aż skończy się bieżące zadanie."
             self.dup = {"trwa": True, "etap": "przygotowanie", "zrobione": 0, "wszystkie": 0, "bajty": 0,
-                        "komunikat": "", "blad": ""}
+                        "bajty_razem": 0, "komunikat": "", "blad": ""}
+            self.tempa["dup"] = stabilnosc.Tempo()
         self.przerwij.clear()
         threading.Thread(target=self._duplikaty, daemon=True).start()
         return None
@@ -269,11 +361,18 @@ class Stan:
     def _duplikaty(self) -> None:
         db = self.db()
 
-        def postep(etap, zrobione, wszystkie, bajty):
+        def postep(etap, zrobione, wszystkie, bajty, **dod):
             with self.blokada:
-                self.dup.update(etap=etap, zrobione=zrobione, wszystkie=wszystkie, bajty=bajty)
+                self.dup.update(etap=etap, zrobione=zrobione, wszystkie=wszystkie, bajty=bajty, **dod)
+                self._tempo("dup", self.dup)
+
+        def czeka(tekst):
+            with self.blokada:
+                self.dup["czeka"] = tekst
+        postep.czeka = czeka
         try:
-            w = duplikaty.szukaj(db, postep=postep, przerwij=self.przerwij)
+            with stabilnosc.Czuwanie():
+                w = duplikaty.szukaj(db, postep=postep, przerwij=self.przerwij)
             komunikat, blad = (f"Znaleziono {w['nadmiar']} zbędnych kopii "
                                f"({raport.rozmiar_txt(w['bajty'])})." if w["nadmiar"]
                                else "Nie znaleziono duplikatów."), ""
@@ -628,6 +727,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij({"blad": "brak dostępu"}, kod=HTTPStatus.FORBIDDEN)
             if not u.path.startswith("/ui/"):
                 stan.ostatni_ping = time.time()
+            if u.path == "/api/ping":
+                return self._wyslij({"ok": True, "wersja": __version__, "zajety": stan.zajety()})
             if u.path == "/api/stan":
                 return self._wyslij(stan.stan())
             if u.path == "/raport":
@@ -869,16 +970,44 @@ def otworz_okno(url: str) -> None:
     webbrowser.open(url)
 
 
+def _dzialajaca_instancja(katalog: Path) -> str | None:
+    """Adres okna już działającego Katalogatora (np. po zamknięciu okna w trakcie długiego zadania)."""
+    plik = katalog / "instancja.json"
+    try:
+        url = json.loads(plik.read_text(encoding="utf-8"))["url"]
+        baza, token = url.split("/?t=")
+        import urllib.request
+        with urllib.request.urlopen(f"{baza}/api/ping?t={token}", timeout=3) as r:
+            if json.loads(r.read()).get("ok"):
+                return url
+    except Exception:
+        pass
+    return None
+
+
 def main(otworz: bool = True) -> None:
     katalog = katalog_danych()
     logi.konfiguruj(katalog)
+    istniejaca = _dzialajaca_instancja(katalog)
+    if istniejaca:  # drugi raz nie uruchamiamy — dwa programy na jednej bazie przeszkadzałyby sobie
+        LOG.info("Katalogator już działa — otwieram jego okno")
+        if otworz:
+            otworz_okno(istniejaca)
+        return
     LOG.info("Start Katalogatora %s — %s", __version__, logi.system())
     serwer, url, stan = uruchom_serwer(katalog)
+    plik_instancji = katalog / "instancja.json"
+    try:
+        plik_instancji.write_text(json.dumps({"url": url, "pid": os.getpid()}), encoding="utf-8")
+    except OSError:
+        pass
 
     def pilnuj():  # zamknięcie okna = koniec programu (skan jest wznawialny)
         while True:
             time.sleep(10)
             if time.time() - stan.ostatni_ping > BEZ_PINGU_ZAMKNIJ_PO:
+                if stan.zajety():
+                    continue  # okno zamknięte/zawieszone, ale zadanie trwa — kończymy dopiero po nim
                 stan.przerwij.set()
                 serwer.shutdown()
                 return
@@ -890,6 +1019,11 @@ def main(otworz: bool = True) -> None:
         serwer.serve_forever()
     finally:
         serwer.server_close()
+        try:
+            if json.loads(plik_instancji.read_text(encoding="utf-8")).get("pid") == os.getpid():
+                plik_instancji.unlink()
+        except (OSError, ValueError):
+            pass
 
 
 if __name__ == "__main__":

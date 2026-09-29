@@ -54,7 +54,7 @@ def sprawdz(proj: projekty.Projekty, pid: str, postep=None, przerwij=None) -> di
         db.execute(f"DELETE FROM pliki WHERE korzen NOT IN ({','.join('?' * len(foldery))})",
                    [os.path.abspath(f) for f in foldery])
         for i, f in enumerate(foldery, 1):
-            skaner.skanuj(f, db, postep=(lambda n, gdzie, _i=i: postep and postep(
+            skaner.skanuj(f, db, postep=(lambda n, gdzie, _i=i, **_: postep and postep(
                 f"skan {_i}/{len(foldery)}", n, 0, 0)), przerwij=przerwij)
         planista.generuj(db, [{"sciezka": f, "tryb": "przenies"} for f in foldery], dane["cel"],
                          postep=postep, przerwij=przerwij, dom=_dom(proj, pid))

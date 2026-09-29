@@ -81,24 +81,38 @@ def _odcisk(sciezka: str, rozmiar: int, pelny: bool, przerwij=None, licz=None) -
 def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -> dict:
     """postep(etap, zrobione, wszystkie, bajty). Zwraca podsumowanie()."""
     przygotuj(db)
+    from .stabilnosc import Straznik
+    straznik = Straznik([r[0] for r in db.execute("SELECT DISTINCT korzen FROM pliki")], przerwij,
+                        getattr(postep, "czeka", None))
     bajty = [0]
+    razem = [0]
+    biezacy = {"etap": "", "zrobione": 0, "wszystkie": 0, "t": 0.0}
 
-    def licz(n):
+    def licz(n):  # wołane w trakcie czytania — pasek rusza się także przy jednym wielkim pliku
         bajty[0] += n
+        teraz = time.monotonic()
+        if postep is not None and teraz - biezacy["t"] > 0.5:
+            biezacy["t"] = teraz
+            postep(biezacy["etap"], biezacy["zrobione"], biezacy["wszystkie"], bajty[0], bajty_razem=razem[0])
 
     def zglos(etap, zrobione, wszystkie):
+        biezacy.update(etap=etap, zrobione=zrobione, wszystkie=wszystkie)
         if postep is not None:
-            postep(etap, zrobione, wszystkie, bajty[0])
+            postep(etap, zrobione, wszystkie, bajty[0], bajty_razem=razem[0])
 
     def policz(etap: str, wiersze: list, pelny: bool) -> None:
         kol = "pelny" if pelny else "szybki"
+        bajty[0] = 0
+        razem[0] = sum(w["rozmiar"] if pelny else min(w["rozmiar"], 2 * BLOK) for w in wiersze)
         zglos(etap, 0, len(wiersze))
 
         def zadanie(w):
             if przerwij is not None and przerwij.is_set():
                 raise Przerwano(w["sciezka"])
             try:
-                return w, _odcisk(w["sciezka"], w["rozmiar"], pelny, przerwij, licz)
+                return w, straznik.wykonaj(_odcisk, w["sciezka"], w["sciezka"], w["rozmiar"], pelny, przerwij, licz)
+            except Przerwano:
+                raise
             except OSError:
                 return w, None  # plik zniknął / brak dostępu — pomijamy
 

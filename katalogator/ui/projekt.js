@@ -12,7 +12,7 @@ function rysujProjekt() {
   const p = stan.projekt || {};
   $("projekt-nazwa").textContent = p.nazwa || "…";
   $("proj-tytul").textContent = p.nazwa || "";
-  document.title = (p.nazwa ? p.nazwa + " — " : "") + "Katalogator";
+  tytulProjektu = (p.nazwa ? p.nazwa + " — " : "") + "Katalogator";
   if (proj.idPoprzedni !== p.id) {           // przełączono projekt: odśwież wszystko
     proj.idPoprzedni = p.id;
     $("proj-notatki").value = p.notatki || "";
