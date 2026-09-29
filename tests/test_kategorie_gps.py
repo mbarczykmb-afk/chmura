@@ -1,5 +1,6 @@
 """1.4: śmieci i obrazy „nie z aparatu”, dokumenty po latach, Odłożone, GPS z XMP / Google Takeout / nazwy folderu."""
 import json
+import re
 import os
 
 from PIL import Image
@@ -83,7 +84,7 @@ def test_decyzje_przekladaja_plan(tmp_path):
     cel = lambda n: db.execute("SELECT cel, kat FROM plan WHERE sciezka LIKE ?", ("%" + n,)).fetchone()
     assert cel("stary.tmp")["cel"].startswith("Odłożone/Śmieci/") and cel("stary.tmp")["kat"] == "smieci"
     assert cel("grafika.png")["kat"] == "podejrzane"
-    ids = {r["wzgledna"].split("/")[-1]: r["id"] for r in db.execute("SELECT rowid id, wzgledna FROM pliki")}
+    ids = {re.split(r"[\\/]", r["wzgledna"])[-1]: r["id"] for r in db.execute("SELECT rowid id, wzgledna FROM pliki")}
     kategorie.zapisz(db, {ids["grafika.png"]: "smieci", ids["skan.png"]: "dokument"})
     planista.zastosuj_kategorie(db)
     assert cel("grafika.png")["cel"] == "Odłożone/Śmieci/Pobrane/grafika.png"
