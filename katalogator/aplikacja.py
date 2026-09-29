@@ -316,9 +316,10 @@ class Stan:
         finally:
             db.close()
 
-    def miniatura(self, id_: int) -> bytes | None:
-        if id_ in self.miniatury:
-            return self.miniatury[id_]
+    def miniatura(self, id_: int, srednia: bool = False) -> bytes | None:
+        klucz = ("s", id_) if srednia else id_
+        if klucz in self.miniatury:
+            return self.miniatury[klucz]
         db = self.db()
         try:
             r = db.execute("SELECT sciezka FROM pliki WHERE rowid=? AND rodzaj='zdjecie'", (id_,)).fetchone()
@@ -330,16 +331,20 @@ class Stan:
             return None
         try:
             import io
-            im, _ = analiza.miniatura(r["sciezka"], min_bok=150)
-            im.thumbnail((260, 260))
+            if srednia:  # do porównywania podobnych — wyraźniejsza niż miniatura z EXIF
+                im, _ = analiza.miniatura(r["sciezka"], min_bok=200)
+                im.thumbnail((600, 600))
+            else:
+                im, _ = analiza.miniatura(r["sciezka"], min_bok=150)
+                im.thumbnail((260, 260))
             buf = io.BytesIO()
             im.save(buf, "JPEG", quality=82)
         except Exception:
             return None
         if len(self.miniatury) > 600:
             self.miniatury.clear()
-        self.miniatury[id_] = buf.getvalue()
-        return self.miniatury[id_]
+        self.miniatury[klucz] = buf.getvalue()
+        return self.miniatury[klucz]
 
     def sciezka_filmu(self, id_: int) -> str | None:
         db = self.db()
@@ -682,7 +687,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._strumien(stan.sciezka_filmu(_int(q, "id", 0)))
             if u.path == "/miniatura":
                 try:
-                    dane = (stan.podglad if q.get("duza") else stan.miniatura)(int(q.get("id", ["0"])[0]))
+                    id_ = int(q.get("id", ["0"])[0])
+                    dane = stan.podglad(id_) if q.get("duza") else stan.miniatura(id_, bool(q.get("srednia")))
                 except ValueError:
                     dane = None
                 if dane is None:

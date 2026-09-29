@@ -127,6 +127,7 @@ function rysujPodobne() {
       const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = d.pomin;
       cb.onchange = () => { d.pomin = cb.checked; rysujPodobne(); };
       pom.append(cb, "zostaw wszystkie"); gl.append(pom); k.append(gl);
+      const siatka = document.createElement("div"); siatka.className = "pod-siatka"; k.append(siatka);
       g.forEach((w, i) => {
         const zost = d.pomin || d.zostaw.has(w.id);
         const r = document.createElement("label"); r.className = "plik zdj " + (zost ? "zostaje" : "odklada");
@@ -138,15 +139,17 @@ function rysujPodobne() {
           rysujPodobne();
         };
         const img = new Image(); img.loading = "lazy"; img.alt = "";
-        img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${w.id}`;
+        img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${w.id}&srednia=1`;
         img.ondblclick = e => { e.preventDefault(); podgladDuzy(w.id, w.wzgledna); };
         const sc = document.createElement("span"); sc.className = "sc"; sc.title = w.sciezka;
         const cz = w.wzgledna.split(/[\\/]/); const nazwa = cz.pop();
         const em = document.createElement("em"); em.textContent = cz.length ? cz.join("\\") + "\\" : "";
         sc.append("\u200E", em, nazwa);
         const z = document.createElement("span"); z.className = "znak";
-        z.textContent = (i === 0 ? "★ " : "") + (zost ? "zostaje" : "odłożę") + " · " + opisZdjecia(w);
-        r.append(c, img, sc, z); k.append(r);
+        z.textContent = (i === 0 ? "★ " : "") + (zost ? "zostaje" : "odłożę");
+        const gora = document.createElement("div"); gora.className = "gora"; gora.append(c, z);
+        const op = document.createElement("span"); op.className = "zn2"; op.textContent = opisZdjecia(w);
+        r.append(gora, img, sc, op); siatka.append(r);
       });
       l.append(k);
     }

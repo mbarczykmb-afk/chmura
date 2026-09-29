@@ -187,8 +187,13 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
 .postep-proj{height:6px;border-radius:3px;background:var(--lin);overflow:hidden;margin-top:6px} .postep-proj i{display:block;height:100%;background:var(--ok)}
 .pw .ok{color:var(--ok);font-weight:700;margin-left:2px}
 .grupa.pod{grid-template-columns:1fr}
-.plik.zdj{grid-template-columns:18px 72px 1fr auto}
-.plik.zdj img{width:72px;height:54px;object-fit:cover;border-radius:4px;background:var(--lin)}
+.pod-siatka{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.plik.zdj{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:8px;border:2px solid var(--lin);border-radius:10px}
+.plik.zdj.zostaje{border-color:color-mix(in srgb,var(--ok) 55%,transparent)}
+.plik.zdj.odklada img{opacity:.55}
+.plik.zdj .gora{display:flex;align-items:center;gap:8px;min-width:0}
+.plik.zdj .gora .znak{overflow:hidden;text-overflow:ellipsis}
+.plik.zdj img{width:100%;height:auto;aspect-ratio:4/3;object-fit:contain;border-radius:6px;background:var(--lin);cursor:zoom-in}
 .plik.zdj .zn2{font-size:11px;color:var(--mut)}
 .grupa-pod .siatka{padding:0;max-height:none;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 .wkrotce-box h2{color:var(--fg)}

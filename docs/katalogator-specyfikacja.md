@@ -148,6 +148,8 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     dwuklik = duży podgląd
 14. **Poprawki 1.2.2** ✅ — nagłówek, kroki i pasek zakładek stoją w miejscu, przewija się tylko lewa
     kolumna i zawartość zakładki; duplikaty wyświetlane po 100 grup („Pokaż kolejne 100 grup”)
+15. **Poprawki 1.2.3** ✅ — Podobne: duże karty (ok. 250 px, całe zdjęcie bez przycinania, podgląd 600 px
+    zamiast miniatury z EXIF), opis pod nazwą pliku
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.
