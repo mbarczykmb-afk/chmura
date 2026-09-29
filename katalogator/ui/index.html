@@ -107,6 +107,10 @@ details.reczne summary{cursor:pointer;margin-bottom:6px}
 .zakladki{display:flex;gap:4px;flex:1}
 .zakladka{border:none;background:none;padding:6px 12px;border-radius:8px;color:var(--mut);font-weight:600}
 .zakladka.akt{background:var(--akc-miekki);color:var(--fg)}
+.zakladka.glowna{margin-left:10px;color:var(--ok);border:2px solid color-mix(in srgb,var(--ok) 60%,transparent);background:color-mix(in srgb,var(--ok) 10%,transparent);font-size:15px;padding:6px 16px}
+.zakladka.glowna.akt{background:var(--ok);color:#fff;border-color:var(--ok)}
+.zakladka.glowna .licz{background:var(--ok)}
+.zakladka.glowna.akt .licz{background:#fff;color:var(--ok)}
 .zakladka .licz{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;background:var(--akc);color:var(--akc-fg);font-size:11px}
 .podsum{margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--bg);font-size:13px}
 .podsum b{font-size:16px}
@@ -180,6 +184,11 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 .karta.duza.zazn{border-color:var(--akc);outline:none}
 .karta.duza .ob{height:auto;aspect-ratio:4/3}
 .karta.duza .ob img{object-fit:contain;cursor:zoom-in}
+.karta .wybor{display:flex;gap:3px;padding:0 6px 8px}
+.karta .wybor button{flex:1;min-width:0;padding:4px 2px;font-size:11px;white-space:nowrap}
+.karta .wybor button.akt{background:var(--akc);color:var(--akc-fg);border-color:var(--akc)}
+.karta .wybor button.akt.s{background:var(--blad);border-color:var(--blad)}
+.karta .powod{color:var(--akc);font-size:11.5px}
 .karta.duza input{width:18px;height:18px;top:8px;left:8px}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:13px;z-index:20;max-width:80vw}
 .grupa-pod{border:1px solid var(--lin);border-radius:10px;padding:10px;background:var(--bg)}
@@ -222,7 +231,7 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
   .edytor{min-height:0}
   .edytor-drzewo,body.pelny .edytor-drzewo{max-height:none;min-height:0}
   .edytor-pliki{min-height:0}
-  .edytor-pliki .siatka,body.pelny .edytor-pliki .siatka,#dok-siatka{flex:1;min-height:0;max-height:none}
+  .edytor-pliki .siatka,body.pelny .edytor-pliki .siatka,#dok-siatka,#inne-siatka{flex:1;min-height:0;max-height:none}
   .stopka{flex:none}
 }
 /* --- pasek bieżącego zadania (zawsze widoczny u góry) --- */
@@ -342,7 +351,7 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
     <section>
       <h2>Duplikaty</h2>
       <p class="opis">Porównuję <b>zawartość</b> plików, nie nazwy. Nic nie jest kasowane — kopie trafiają
-        do folderu <code>_Duplikaty_Katalogator</code>, a operację można cofnąć.</p>
+        do folderu <code>Odłożone\Duplikaty</code>, a operację można cofnąć.</p>
       <button class="glowny" id="szukaj-dup">Szukaj duplikatów</button>
       <div class="postep" id="postep-dup" hidden>
         <div class="liczba"><span id="dup-zrobione">0</span> / <span id="dup-wszystkie">0</span></div>
@@ -413,9 +422,10 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
       <div class="zakladki">
         <button class="zakladka akt" id="tab-raport">Raport</button>
         <button class="zakladka" id="tab-dup">Duplikaty<span class="licz" id="licz-dup" hidden></span></button>
-        <button class="zakladka" id="tab-drzewo">Drzewo<span class="licz" id="licz-drzewo" hidden></span></button>
         <button class="zakladka" id="tab-dok">Dokumenty<span class="licz" id="licz-dok" hidden></span></button>
         <button class="zakladka" id="tab-pod">Podobne<span class="licz" id="licz-pod" hidden></span></button>
+        <button class="zakladka" id="tab-inne" title="Obrazy, które chyba nie są zdjęciami z aparatu — zdecyduj, co z nimi zrobić">Nie z aparatu<span class="licz" id="licz-inne" hidden></span></button>
+        <button class="zakladka glowna" id="tab-drzewo" title="Wynikowe drzewo folderów — tu sprawdzasz i poprawiasz, zanim cokolwiek zostanie przeniesione">🌳 Drzewo<span class="licz" id="licz-drzewo" hidden></span></button>
       </div>
       <button class="maly" id="odswiez" hidden>Odśwież</button>
     </div>
@@ -436,7 +446,8 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
           <option value="">Wszystkie</option><option value="uwagi">🔵 Do sprawdzenia</option>
           <option value="bez_gps">Bez GPS</option><option value="data_z_pliku">Data z pliku</option>
           <option value="kolizje">🟡 Ta sama nazwa</option><option value="pominiete">⛔ Pominięte</option>
-          <option value="bledy">⚠ Błędy</option></select>
+          <option value="bledy">⚠ Błędy</option><option value="dokumenty">📄 Dokumenty</option>
+          <option value="nie_z_aparatu">❔ Nie z aparatu</option><option value="smieci">🗑 Śmieci</option></select>
         <button class="maly" id="pelny-ekran" title="Ukryj lewą kolumnę">⤢ Pełny ekran</button>
       </div>
       <div class="edytor">
@@ -476,12 +487,23 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
     <div id="widok-dok" class="widok" hidden>
       <div class="filtry">
         <span class="info" style="margin-left:0;flex:1">Zdjęcia, które wyglądają jak dokumenty (paragony, skany, kartki). Dwuklik = powiększenie.
-          Zaznaczone trafią do <b>Zdjęcia/Dokumenty</b>.</span>
+          Zaznaczone trafią do <b>Dokumenty / Dokumenty z &lt;rok&gt;</b>, niezaznaczone zostają zwykłymi zdjęciami.</span>
         <button class="maly" id="dok-wszystkie">Zaznacz wszystkie</button>
         <button class="maly" id="dok-zadne">Odznacz wszystkie</button>
       </div>
       <div class="siatka" id="dok-siatka"></div>
       <div class="stopka"><span id="dok-stopka"></span><button class="glowny" id="dok-zapisz">Zapisz decyzje</button></div>
+    </div>
+    <div id="widok-inne" class="widok" hidden>
+      <div class="filtry">
+        <span class="info" style="margin-left:0;flex:1">Obrazy, które chyba <b>nie są zdjęciami z aparatu</b> (grafiki, zrzuty ekranu,
+          pobrane z internetu, małe obrazki bez danych aparatu). Zdecyduj: 📷 zdjęcie, 📄 dokument albo 🗑 śmieci
+          (→ <b>Odłożone/Śmieci</b>). Dwuklik = powiększenie.</span>
+        <button class="maly" id="inne-wsz-zdj">Wszystkie: zdjęcia</button>
+        <button class="maly" id="inne-wsz-smieci">Wszystkie: śmieci</button>
+      </div>
+      <div class="siatka duze" id="inne-siatka"></div>
+      <div class="stopka"><span id="inne-stopka"></span><button class="glowny" id="inne-zapisz">Zapisz decyzje</button></div>
     </div>
     <div id="widok-pod" class="widok" hidden>
       <div class="filtry" id="pod-filtry">
@@ -947,7 +969,8 @@ function rozmiar(b) {
 function kopie(n) { const d = n % 10, s = n % 100; return (d >= 2 && d <= 4 && (s < 12 || s > 14)) ? "kopie" : "kopii"; }
 function data(mtime) { return new Date(mtime * 1000).toLocaleDateString("pl-PL"); }
 
-const ZAKLADKI = {raport: "widok-raport", dup: "widok-dup", drzewo: "widok-drzewo", dok: "widok-dok", pod: "widok-pod"};
+const ZAKLADKI = {raport: "widok-raport", dup: "widok-dup", drzewo: "widok-drzewo", dok: "widok-dok", pod: "widok-pod",
+                  inne: "widok-inne"};
 const przyPokazaniu = {};   // zakładka -> funkcja wywoływana przy wejściu
 const naStan = [];          // funkcje wywoływane po każdym odświeżeniu stanu
 function pokazZakladke(z) {
@@ -1069,7 +1092,7 @@ $("odloz").onclick = async () => {
     usun: g.pliki.map(f => f.id).filter(id => id !== dupDecyzje[g.h].zostaw),
   }));
   const n = decyzje.reduce((s, d) => s + d.usun.length, 0);
-  if (!confirm(`Przenieść ${n} kopii do folderu _Duplikaty_Katalogator?\n\nOryginały zostają na miejscu. Operację można cofnąć.`)) return;
+  if (!confirm(`Przenieść ${n} kopii do folderu Odłożone\\Duplikaty?\n\nOryginały zostają na miejscu. Operację można cofnąć.`)) return;
   $("odloz").disabled = true;
   try {
     const w = await api("/api/duplikaty/przenies", {decyzje});

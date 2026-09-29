@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS decyzje_dok (
 );
 """
 NAGLOWEK = 256 * 1024
+WERSJA_DOKUMENTOW = 2  # 1.4: kartka + drobne znaki w wierszach (wcześniej: jasność i wiersze na całym kadrze)
 PROG_WSTEPNY = 0.45    # etap 1 (miniatura): jasne, mało kolorowe — tylko te sprawdzamy dokładniej
 PROG_KANDYDAT = 0.6    # etap 2 (tekst): od tej oceny zdjęcie pokazujemy jako możliwy dokument
 PROG_PEWNY = 0.8       # od tej — wstępnie zaznaczone
@@ -106,27 +107,60 @@ def ostrosc(im: Image.Image) -> float:
     return float(ImageStat.Stat(g.filter(ImageFilter.FIND_EDGES)).var[0])
 
 
+def _ogr(x: float) -> float:
+    return max(0.0, min(1.0, x))
+
+
+def _rampa(x: float, od: float, do: float) -> float:
+    return _ogr((x - od) / (do - od))
+
+
+def _kartka(im: Image.Image, siatka: int = 48) -> tuple[float, float, tuple | None]:
+    """Największy spójny obszar „kartki” (jasny i bez koloru — papier, także w cieniu).
+    Zwraca (udział w kadrze, wypełnienie prostokąta, prostokąt 0..1)."""
+    hsv = im.convert("RGB").filter(ImageFilter.BoxBlur(3)).convert("HSV")
+    _, s, v = hsv.split()
+    jasne = ImageOps.autocontrast(v, cutoff=1)  # względnie jasne: słabe światło / cień też się liczą
+    maska = ImageChops.multiply(s.point(lambda x: 255 if x < 60 else 0), jasne.point(lambda x: 255 if x > 150 else 0))
+    gw, gh = siatka, max(4, round(siatka * im.height / im.width))
+    ok = [c > 170 for c in maska.resize((gw, gh), Image.Resampling.BOX).tobytes()]
+    widz, najw = [False] * len(ok), []
+    for st in range(len(ok)):
+        if not ok[st] or widz[st]:
+            continue
+        stos, blob = [st], []
+        widz[st] = True
+        while stos:
+            i = stos.pop()
+            blob.append(i)
+            x = i % gw
+            for j in (i - 1 if x > 0 else -1, i + 1 if x < gw - 1 else -1, i - gw, i + gw):
+                if 0 <= j < len(ok) and ok[j] and not widz[j]:
+                    widz[j] = True
+                    stos.append(j)
+        if len(blob) > len(najw):
+            najw = blob
+    if not najw:
+        return 0.0, 0.0, None
+    xs, ys = [i % gw for i in najw], [i // gw for i in najw]
+    x0, x1, y0, y1 = min(xs), max(xs) + 1, min(ys), max(ys) + 1
+    return len(najw) / len(ok), len(najw) / ((x1 - x0) * (y1 - y0)), (x0 / gw, y0 / gh, x1 / gw, y1 / gh)
+
+
 def ocena_dokumentu(im: Image.Image) -> float:
-    """0..1 — jak bardzo obraz przypomina zdjęcie kartki/paragonu/dokumentu."""
+    """Etap 1 (miniatura z nagłówka), 0..1: czy jest tu kartka — jasny, bezbarwny, zwarty prostokąt z drobną
+    teksturą (tekst). Dokument na ciemnym stole też przechodzi; ściana czy niebo bez tekstu — nie."""
     im = im.copy()
-    im.thumbnail((160, 160))
+    im.thumbnail((300, 300))
+    udzial, wyp, bb = _kartka(im, 32)
+    if not bb:
+        return 0.0
     g = im.convert("L")
-    hist = g.histogram()
-    n = sum(hist) or 1
-    jasne = sum(hist[170:]) / n
-    ciemne = sum(hist[:90]) / n
-    nasycenie = ImageStat.Stat(im.convert("HSV")).mean[1] / 255
-    krawedzie = g.filter(ImageFilter.FIND_EDGES)
-    ostre = sum(krawedzie.histogram()[60:]) / n
-
-    def ogr(x):
-        return max(0.0, min(1.0, x))
-
-    s_papier = ogr((jasne - 0.30) / 0.40)
-    s_kolor = 1 - ogr((nasycenie - 0.10) / 0.25)
-    s_tusz = 1.0 if 0.01 <= ciemne <= 0.35 else (ogr(ciemne / 0.01) if ciemne < 0.01 else ogr(1 - (ciemne - 0.35) / 0.3))
-    s_tekst = ogr((ostre - 0.03) / 0.12)
-    return round(0.35 * s_papier + 0.25 * s_kolor + 0.15 * s_tusz + 0.25 * s_tekst, 3)
+    W, H = g.size
+    c = g.crop((int(bb[0] * W), int(bb[1] * H), int(bb[2] * W), int(bb[3] * H)))
+    tekstura = ImageChops.difference(c, c.filter(ImageFilter.BoxBlur(2))).point(
+        lambda v: 255 if v > 10 else 0).tobytes().count(255) / max(1, c.width * c.height)
+    return round(_rampa(udzial, 0.03, 0.08) * _rampa(wyp, 0.45, 0.6) * _rampa(tekstura, 0.05, 0.1), 3)
 
 
 def podpis(im: Image.Image) -> str:
@@ -167,32 +201,39 @@ def _okresowosc(prof: list[float]) -> float:
     return max(0.0, min(max(ac[minimum:]) - ac[minimum], 2.0) / 2)
 
 
-def ocena_tekstu(im: Image.Image, bok: int = 1000, pasy: int = 10) -> float:
-    """0..1 — czy na zdjęciu jest tekst: cienkie ciemne kreski ułożone w regularne wiersze.
-    Śnieg, niebo czy postać na tle ściany są jasne, ale nie mają powtarzających się wierszy."""
+def ocena_tekstu(im: Image.Image, bok: int = 1000, pasy: int = 6) -> float:
+    """Etap 2 (obraz ~1000 px), 0..1 — czy to zdjęcie dokumentu:
+    1) jest kartka (jasny, bezbarwny, zwarty prostokąt),
+    2) na kartce jest tusz — ale nie za dużo (kratki, żaluzje, cegły),
+    3) tusz tworzy drobne znaki (krótkie odcinki w obu kierunkach — litery, nie ciągłe linie czy okna),
+    4) znaki układają się w regularne wiersze (w poziomie albo w pionie — kartka bokiem)."""
+    im = im.convert("RGB")
+    im.thumbnail((bok, bok))
+    udzial, wyp, bb = _kartka(im)
+    if not bb:
+        return 0.0
     g = im.convert("L")
-    g.thumbnail((bok, bok))
-    tlo = g.filter(ImageFilter.BoxBlur(10))
-    tusz = ImageChops.subtract(tlo, g).point(lambda v: 255 if v > 30 else 0)
-    px = tusz.tobytes()
-    n_tusz = px.count(255)
-    udzial = n_tusz / max(1, len(px))
-    grube = tusz.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.MaxFilter(5)).tobytes().count(255)
-    cienkie = 1 - grube / max(1, n_tusz)
-    okres = 0.0
-    for obraz in (tusz, tusz.transpose(Image.Transpose.ROTATE_90)):  # też kartka sfotografowana bokiem
-        w, h = obraz.size
-        prof = obraz.resize((pasy, h), Image.Resampling.BOX).tobytes()
+    W, H = g.size
+    x0, y0, x1, y1 = bb
+    mx, my = (x1 - x0) * 0.06, (y1 - y0) * 0.06  # bez krawędzi kartki
+    c = g.crop((int((x0 + mx) * W), int((y0 + my) * H), int((x1 - mx) * W), int((y1 - my) * H)))
+    if c.width < 40 or c.height < 40:
+        return 0.0
+    tusz = ImageChops.subtract(c.filter(ImageFilter.BoxBlur(8)), c).point(lambda v: 255 if v > 25 else 0)
+    n = tusz.tobytes().count(255)
+    udzial_tuszu = n / (c.width * c.height)
+    biegi, okres = [], 0.0
+    for t in (tusz, tusz.transpose(Image.Transpose.ROTATE_90)):
+        poczatki = ImageChops.difference(t, ImageChops.offset(t, 1, 0)).tobytes().count(255) / 2
+        biegi.append(n / max(1.0, poczatki))  # średnia długość odcinka tuszu w tym kierunku
+        prof = t.resize((pasy, t.height), Image.Resampling.BOX).tobytes()
         for p in range(pasy):
-            okres = max(okres, _okresowosc([prof[y * pasy + p] / 255 for y in range(h)]))
-    siatka = tusz.resize((6, 6), Image.Resampling.BOX).tobytes()
-    pokrycie = sum(1 for v in siatka if 8 <= v <= 110) / 36
-
-    def ogr(x):
-        return max(0.0, min(1.0, x))
-
-    return round(0.5 * ogr(okres / 0.3) + 0.2 * ogr((cienkie - 0.4) / 0.4)
-                 + 0.15 * ogr((pokrycie - 0.3) / 0.4) + 0.15 * ogr((udzial - 0.03) / 0.05), 3)
+            okres = max(okres, _okresowosc([prof[y * pasy + p] / 255 for y in range(t.height)]))
+    s_kartka = _rampa(udzial, 0.04, 0.09) * _rampa(wyp, 0.35, 0.5)
+    s_tusz = _rampa(udzial_tuszu, 0.012, 0.025) * (1 - _rampa(udzial_tuszu, 0.25, 0.35))
+    s_znaki = 1 - _rampa(min(biegi), 4.5, 7.0)
+    s_wiersze = _rampa(okres, 0.25, 0.45)
+    return round(s_kartka * s_tusz * s_znaki * s_wiersze, 3)
 
 
 def _obraz_do_tekstu(sciezka: str, bok: int = 1000) -> Image.Image:
@@ -221,6 +262,12 @@ def analizuj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4)
     (tylko jasne kandydaty na dokumenty). Liczone są tylko nowe/zmienione zdjęcia."""
     przygotuj(db)
     from .skaner import Zatwierdzanie
+    db.execute("CREATE TABLE IF NOT EXISTS analiza_meta (klucz TEXT PRIMARY KEY, wartosc TEXT)")
+    w = db.execute("SELECT wartosc FROM analiza_meta WHERE klucz='wersja_dokumentow'").fetchone()
+    if not w or int(w[0]) < WERSJA_DOKUMENTOW:  # nowy detektor dokumentów — przelicz oceny (decyzje zostają)
+        db.execute("UPDATE analiza SET podpis=NULL, tekst=NULL")
+        db.execute("INSERT OR REPLACE INTO analiza_meta VALUES ('wersja_dokumentow', ?)", (str(WERSJA_DOKUMENTOW),))
+        db.commit()
     zatwierdz = Zatwierdzanie(db)
     wiersze = db.execute(
         """SELECT p.sciezka, p.rozmiar, p.mtime FROM pliki p

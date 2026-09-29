@@ -198,7 +198,7 @@ function rysujPodobne() {
   const bajty = an.tryb === "podobne"
     ? an.grupy.flat().filter(w => doOdl.includes(w.id)).reduce((a, w) => a + w.rozmiar, 0) : 0;
   $("pod-stopka").textContent = doOdl.length
-    ? `Do odłożenia: ${doOdl.length} zdjęć${bajty ? ` (${rozmiar(bajty)})` : ""} — trafią do _Duplikaty_Katalogator (można cofnąć)`
+    ? `Do odłożenia: ${doOdl.length} zdjęć${bajty ? ` (${rozmiar(bajty)})` : ""} — trafią do folderu Odłożone (można cofnąć)`
     : (an.tryb === "podobne" ? "Nic do odłożenia — wszystkie zdjęcia zostają." : "Zaznacz zdjęcia, które chcesz odłożyć.");
   $("pod-odloz").disabled = !doOdl.length;
   $("pod-odloz").textContent = an.tryb === "podobne" ? "Odłóż zaznaczone kopie" : "Odłóż zaznaczone";
@@ -225,10 +225,78 @@ $("pod-filtry").onclick = e => {
 };
 $("pod-odloz").onclick = async () => {
   const ids = doOdlozenia();
-  if (!confirm(`Odłożyć ${ids.length} zdjęć do folderu _Duplikaty_Katalogator?\n\nNic nie jest kasowane — operację można cofnąć w sekcji „Duplikaty”.`)) return;
+  if (!confirm(`Odłożyć ${ids.length} zdjęć do folderu Odłożone?\n\nNic nie jest kasowane — operację można cofnąć w sekcji „Duplikaty”.`)) return;
   try {
     const w = await api("/api/odloz", {ids, typ: an.tryb});
     toast(`Odłożono ${w.przeniesione} zdjęć.` + (w.pominiete.length ? ` Pominięto: ${w.pominiete.length}.` : ""));
     stan = await api("/api/stan"); rysuj(); an.podWczytane = false; wczytajPodobne();
   } catch (e) { toast(e.message); }
 };
+
+// ---------- nie z aparatu: zdjęcie / dokument / śmieci ----------
+const INNE_NA_STRONE = 100;
+const inne = {lista: [], wybor: new Map(), ile: INNE_NA_STRONE, wczytane: false};
+const INNE_OPCJE = [["zdjecie", "📷 Zdjęcie"], ["dokument", "📄 Dokument"], ["smieci", "🗑 Śmieci"]];
+przyPokazaniu.inne = async () => {
+  if (inne.wczytane) return;
+  const r = await api("/api/nie-z-aparatu");
+  inne.lista = r.pliki; inne.wybor = new Map(r.pliki.filter(p => p.decyzja).map(p => [p.id, p.decyzja]));
+  inne.ile = INNE_NA_STRONE; inne.wczytane = true; rysujInne();
+};
+const inneWidoczne = () => inne.lista.slice(0, inne.ile);
+function inneStopka() {
+  const w = inneWidoczne(), n = w.filter(p => inne.wybor.has(p.id)).length;
+  $("inne-stopka").textContent = !inne.lista.length ? "" :
+    `Zdecydowano: ${n} z ${w.length}` + (w.length < inne.lista.length ? ` wyświetlonych (razem ${inne.lista.length})` : "") +
+    " · bez decyzji zostają w drzewie jako zdjęcia „do sprawdzenia”";
+}
+function kartaInne(p) {
+  const k = karta(p.id, "zdjecie", p.wzgledna, (p.data || "").slice(0, 10) + (p.szer ? ` · ${p.szer}×${p.wys}` : "") +
+                  ` · ${rozmiar(p.rozmiar)}`, false, () => undefined, true);
+  k.querySelector("input").remove(); k.onclick = null; k.style.cursor = "default";
+  const pw = document.createElement("div"); pw.className = "m powod"; pw.textContent = "❔ " + p.powod;
+  k.querySelector(".op").append(pw);
+  const wyb = document.createElement("div"); wyb.className = "wybor";
+  for (const [kat, opis] of INNE_OPCJE) {
+    const b = document.createElement("button"); b.className = "maly" + (kat === "smieci" ? " s" : "");
+    b.textContent = opis; b.classList.toggle("akt", inne.wybor.get(p.id) === kat);
+    b.onclick = e => {
+      e.stopPropagation(); inne.wybor.set(p.id, kat);
+      wyb.querySelectorAll("button").forEach(x => x.classList.toggle("akt", x === b)); inneStopka();
+    };
+    wyb.append(b);
+  }
+  k.append(wyb);
+  return k;
+}
+function rysujInne() {
+  const s = $("inne-siatka"); s.replaceChildren();
+  if (!inne.lista.length) s.innerHTML = '<div class="pusto">Nie ma podejrzanych obrazów — wszystko wygląda na zdjęcia z aparatu. 🎉</div>';
+  for (const p of inneWidoczne()) s.append(kartaInne(p));
+  const reszta = inne.lista.length - inneWidoczne().length;
+  if (reszta > 0) {
+    const b = document.createElement("button"); b.className = "wiecej"; b.style.gridColumn = "1/-1";
+    b.textContent = `Pokaż kolejne ${Math.min(INNE_NA_STRONE, reszta)} (zostało ${reszta})`;
+    b.onclick = () => { inne.ile += INNE_NA_STRONE; rysujInne(); };
+    s.append(b);
+  }
+  inneStopka();
+  $("inne-zapisz").disabled = !inne.lista.length;
+}
+$("inne-wsz-zdj").onclick = () => { inneWidoczne().forEach(p => inne.wybor.set(p.id, "zdjecie")); rysujInne(); };
+$("inne-wsz-smieci").onclick = () => { inneWidoczne().forEach(p => inne.wybor.set(p.id, "smieci")); rysujInne(); };
+$("inne-zapisz").onclick = async () => {
+  const wybor = {};
+  for (const p of inneWidoczne()) if (inne.wybor.has(p.id)) wybor[p.id] = inne.wybor.get(p.id);
+  if (!Object.keys(wybor).length) { toast("Najpierw wybierz coś przy obrazach."); return; }
+  try {
+    const w = await api("/api/nie-z-aparatu/zapisz", {wybor});
+    toast(`Zapisano ${w.zapisane} decyzji.` + (w.plan && w.plan.zmienione ? ` Przełożono w drzewie: ${w.plan.zmienione}.` : ""));
+    inne.wczytane = false; an.dokWczytane = false; plan.wczytany = false;
+    stan = await api("/api/stan"); rysuj(); przyPokazaniu.inne();
+  } catch (e) { toast(e.message); }
+};
+naStan.push(() => {
+  const n = stan.nie_z_aparatu;
+  $("licz-inne").hidden = !n; if (n) $("licz-inne").textContent = n;
+});

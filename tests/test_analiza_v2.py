@@ -89,6 +89,52 @@ def test_zdjecia_nie_sa_dokumentami(nazwa, obraz):
     assert analiza.ocena_tekstu(obraz()) < analiza.PROG_KANDYDAT
 
 
+def na_ciemnym_stole():
+    """Kartka zajmuje mały kawałek kadru, reszta to ciemny blat — etap 1 nie może jej zgubić."""
+    im = Image.new("RGB", (4000, 3000), (55, 50, 45))
+    k = kartka(W=1200, H=1600)
+    im.paste(k.crop((120, 160, 1080, 1440)), (1500, 900))
+    return im
+
+
+def zaluzje():
+    im = Image.new("RGB", (4000, 3000), (200, 200, 205))
+    d = ImageDraw.Draw(im)
+    for y in range(0, 3000, 40):
+        d.rectangle((0, y, 4000, y + 8), fill=(90, 90, 95))
+    return im.filter(ImageFilter.GaussianBlur(1.5))
+
+
+def kratki():
+    """Obudowa z kratkami wentylacyjnymi (jak spód dysku) — regularne, ale to nie tekst."""
+    im = Image.new("RGB", (1848, 4000), (195, 196, 200))
+    d = ImageDraw.Draw(im)
+    for y in range(100, 3900, 110):
+        for x in (150, 1050):
+            d.rounded_rectangle((x, y, x + 650, y + 55), 20, fill=(40, 40, 45))
+    return im.filter(ImageFilter.GaussianBlur(2))
+
+
+def okna_budynku():
+    im = Image.new("RGB", (4000, 3000), (215, 205, 185))
+    d = ImageDraw.Draw(im)
+    for i in range(14):
+        for j in range(12):
+            d.rectangle((200 + j * 310, 150 + i * 200, 300 + j * 310, 260 + i * 200), fill=(60, 60, 70))
+    return im
+
+
+def test_kartka_na_ciemnym_stole_przechodzi_oba_etapy():
+    im = na_ciemnym_stole()
+    assert analiza.ocena_dokumentu(im) >= analiza.PROG_WSTEPNY
+    assert analiza.ocena_tekstu(im) >= analiza.PROG_KANDYDAT
+
+
+@pytest.mark.parametrize("nazwa,obraz", [("żaluzje", zaluzje), ("kratki", kratki), ("okna budynku", okna_budynku)])
+def test_regularne_wzory_to_nie_tekst(nazwa, obraz):
+    assert analiza.ocena_tekstu(obraz()) < analiza.PROG_KANDYDAT
+
+
 def _krajobraz(z, W=1600, H=720):
     """Niebo + góry — podobny układ, różna treść (jak zgłoszona błędna grupa)."""
     r = random.Random(z)

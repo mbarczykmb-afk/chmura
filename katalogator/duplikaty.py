@@ -20,7 +20,9 @@ from concurrent.futures import ThreadPoolExecutor
 from .skaner import Przerwano, Zatwierdzanie
 
 BLOK = 1 << 20
-FOLDER_DUPLIKATOW = "_Duplikaty_Katalogator"
+FOLDER_ODLOZONE = "Odłożone"   # <korzeń>/Odłożone/{Duplikaty,Podobne,Nieostre}/<ścieżka>
+PODFOLDERY = {"duplikat": "Duplikaty", "podobne": "Podobne", "nieostre": "Nieostre"}
+FOLDER_DUPLIKATOW = "_Duplikaty_Katalogator"  # do wersji 1.3 — nadal pomijany przy skanie
 
 SCHEMAT = """
 CREATE TABLE IF NOT EXISTS odciski (
@@ -45,7 +47,7 @@ CREATE TABLE IF NOT EXISTS operacje (
 # Ścieżki, które zwykle są kopiami — plik z nich zostawiamy tylko w ostateczności.
 _PODEJRZANE = re.compile(
     r"kopia|copy|duplikat|backup|kopie zapasowe|whatsapp|messenger|download|pobrane|"
-    r"temp\b|tmp\b|\(\d+\)|" + FOLDER_DUPLIKATOW.lower(),
+    r"temp\b|tmp\b|\(\d+\)|odłożone|" + FOLDER_DUPLIKATOW.lower(),
     re.IGNORECASE,
 )
 
@@ -220,8 +222,8 @@ def grupy(db: sqlite3.Connection, rodzaj: str | None = None, od: int = 0, ile: i
     return wynik
 
 
-def _cel_przeniesienia(korzen: str, wzgledna: str) -> str:
-    cel = os.path.join(korzen, FOLDER_DUPLIKATOW, wzgledna)
+def _cel_przeniesienia(korzen: str, wzgledna: str, typ: str = "duplikat") -> str:
+    cel = os.path.join(korzen, FOLDER_ODLOZONE, PODFOLDERY.get(typ, "Inne"), wzgledna)
     baza, ext = os.path.splitext(cel)
     i = 2
     while os.path.exists(cel):
@@ -231,7 +233,7 @@ def _cel_przeniesienia(korzen: str, wzgledna: str) -> str:
 
 
 def przenies(db: sqlite3.Connection, decyzje: list[dict]) -> dict:
-    """decyzje: [{"zostaw": id, "usun": [id, ...]}]. Przenosi do <korzeń>/_Duplikaty_Katalogator/."""
+    """decyzje: [{"zostaw": id, "usun": [id, ...]}]. Przenosi do <korzeń>/Odłożone/Duplikaty/."""
     przygotuj(db)
     partia = int(time.time() * 1000)
     przeniesione, pominiete, bajty = 0, [], 0
@@ -271,12 +273,12 @@ def przenies(db: sqlite3.Connection, decyzje: list[dict]) -> dict:
 
 
 def _odloz_wiersz(db: sqlite3.Connection, w, partia: int, typ: str) -> str | None:
-    """Przenosi plik do <korzeń>/_Duplikaty_Katalogator/<ścieżka>. Zwraca opis błędu albo None."""
+    """Przenosi plik do <korzeń>/Odłożone/<Duplikaty|Podobne|Nieostre>/<ścieżka>. Zwraca opis błędu albo None."""
     try:
         st = os.stat(w["sciezka"])
         if (st.st_size, st.st_mtime) != (w["rozmiar"], w["mtime"]):
             return f"Zmieniony od skanu: {w['wzgledna']}"
-        cel = _cel_przeniesienia(w["korzen"], w["wzgledna"])
+        cel = _cel_przeniesienia(w["korzen"], w["wzgledna"], typ)
         os.makedirs(os.path.dirname(cel), exist_ok=True)
         os.rename(w["sciezka"], cel)
     except OSError as e:
@@ -341,14 +343,15 @@ def cofnij(db: sqlite3.Connection) -> dict:
 
 
 def _usun_puste(db: sqlite3.Connection, partia: int) -> None:
-    """Sprząta puste podfoldery w _Duplikaty_Katalogator po cofnięciu."""
+    """Sprząta puste podfoldery w Odłożone (i dawnym _Duplikaty_Katalogator) po cofnięciu."""
+    granice = (FOLDER_ODLOZONE, FOLDER_DUPLIKATOW)
     for (do_,) in db.execute("SELECT do_ FROM operacje WHERE partia = ?", (partia,)):
         folder = os.path.dirname(do_)
-        while FOLDER_DUPLIKATOW in folder:
+        while any(g in folder for g in granice):
             try:
                 os.rmdir(folder)
             except OSError:
                 break
-            if os.path.basename(folder) == FOLDER_DUPLIKATOW:
+            if os.path.basename(folder) in granice:
                 break
             folder = os.path.dirname(folder)

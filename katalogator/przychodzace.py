@@ -60,7 +60,7 @@ def sprawdz(proj: projekty.Projekty, pid: str, postep=None, przerwij=None) -> di
                          postep=postep, przerwij=przerwij, dom=_dom(proj, pid))
         # niepewna data -> zostaje w folderze przychodzącym
         db.execute("UPDATE plan SET pominiety=1, uwaga=COALESCE(uwaga,'') || ' — zostaje do ręcznego przejrzenia' "
-                   "WHERE tryb='przenies' AND uwaga LIKE '%data z pliku%'")
+                   "WHERE tryb='przenies' AND (uwaga LIKE '%data z pliku%' OR kat IN ('smieci', 'podejrzane'))")
         db.commit()
         return podsumowanie(proj, pid, db)
     finally:

@@ -15,7 +15,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from pathlib import PurePath
 
-from . import analiza, duplikaty, dyski, miejsca
+from . import analiza, duplikaty, dyski, kategorie, miejsca
 
 SCHEMAT = """
 CREATE TABLE IF NOT EXISTS plan (
@@ -49,7 +49,22 @@ PRZERWA_WYJAZDU = timedelta(hours=48)
 MARGINES_WYJAZDU = timedelta(hours=6)
 _NAGRANIE = re.compile(r"^(vid|pxl|img|mov|mvi|dsc|gopr|gh\d|dji|wp_|video|signal|screen)|(19|20)\d{6}", re.I)
 _ZLE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
-DOKUMENTY = "Zdjęcia/Dokumenty"
+DOKUMENTY = "Dokumenty"
+
+
+def folder_dokumentow(data: str | None) -> str:
+    """Dokumenty sortowane po latach, bez dalszych podfolderów: Dokumenty/Dokumenty z 2023."""
+    d = _dt(data)
+    return f"{DOKUMENTY}/{DOKUMENTY} z {d.year}" if d else f"{DOKUMENTY}/Bez daty"
+
+
+def folder_smieci(p: dict) -> str:
+    """Odłożone/Śmieci/<nazwa folderu, z którego pochodzi plik>."""
+    nad = os.path.basename(os.path.dirname(p["sciezka"]))
+    return kategorie.SMIECI + ("/" + czysta_nazwa(nad) if nad and not re.fullmatch(r"[A-Za-z]:?", nad) else "")
+
+
+_UWAGA_PODEJRZANE = re.compile(r";?\s*nie z aparatu\? \([^)]*\) — zdecyduj w zakładce „Nie z aparatu”")
 
 
 def przygotuj(db: sqlite3.Connection) -> None:
@@ -58,8 +73,13 @@ def przygotuj(db: sqlite3.Connection) -> None:
     if "stara_data" not in kol:  # baza z wersji 1.0
         db.execute("ALTER TABLE plan_zmiany ADD COLUMN stara_data TEXT")
         db.execute("ALTER TABLE plan_zmiany ADD COLUMN nowa_data TEXT")
+    kol = {r[1] for r in db.execute("PRAGMA table_info(plan)")}
+    if "alt" not in kol:  # od 1.4: miejsce „jako zwykłe zdjęcie” i kategoria (śmieci / nie z aparatu)
+        db.execute("ALTER TABLE plan ADD COLUMN alt TEXT")
+        db.execute("ALTER TABLE plan ADD COLUMN kat TEXT")
     duplikaty.przygotuj(db)
     analiza.przygotuj(db)
+    kategorie.przygotuj(db)
 
 
 def czysta_nazwa(n: str, zapas: str = "_") -> str:
@@ -109,6 +129,8 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
     _odciski_dla_celu(db, zrodlowe, istniejace, przerwij)
 
     dokumenty = analiza.dokumenty_potwierdzone(db)
+    decyzje = kategorie.decyzje(db)
+    wym = kategorie.wymiary(db)
     wpisy: list[dict] = []
     for p in istniejace:
         wpisy.append({"p": p, "cel": _rel(p["sciezka"], cel), "tryb": "istniejacy", "stan": "istniejacy", "uwaga": None})
@@ -116,7 +138,7 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
     # pliki towarzyszące (xmp, srt, RAW obok JPG) idą za plikiem głównym
     grupy = defaultdict(list)
     for p in zrodlowe:
-        grupy[(os.path.dirname(p["sciezka"]).lower(), PurePath(p["sciezka"]).stem.lower())].append(p)
+        grupy[(os.path.dirname(p["sciezka"]).lower(), _rdzen(os.path.basename(p["sciezka"])))].append(p)
     prowadzacy: dict[int, dict] = {}
     for g in grupy.values():
         if len(g) > 1:
@@ -126,19 +148,19 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
                 if p is not glowny:
                     prowadzacy[p["id"]] = glowny
 
-    media = [p for p in zrodlowe if p["id"] not in prowadzacy and p["sciezka"] not in dokumenty
+    media = [p for p in zrodlowe if p["id"] not in prowadzacy
              and (p["rodzaj"] == "zdjecie" or (p["rodzaj"] == "film" and _wlasne_nagranie(p)))]
     etykiety, dom = _etykiety_miejsc(media, dom)
 
     folder: dict[int, str] = {}
     uwagi: dict[int, str | None] = {}
+    alt: dict[int, str] = {}      # gdzie trafiłby jako zwykłe zdjęcie (gdy zmienisz zdanie)
+    kat: dict[int, str] = {}
     for p in zrodlowe:
         if p["id"] in prowadzacy:
             continue
         uw = []
-        if p["sciezka"] in dokumenty:
-            f = DOKUMENTY
-        elif p["id"] in etykiety:
+        if p["id"] in etykiety:
             d = _dt(p["data"]) or datetime.fromtimestamp(p["mtime"])
             fr, uw_m = etykiety[p["id"]]
             rodz = "Zdjęcia" if p["rodzaj"] == "zdjecie" else "Filmy"
@@ -156,6 +178,22 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
                 uw.append("brak tagów")
         else:
             f = _prefiks_zrodla(p)
+        alt[p["id"]] = f.strip("/")
+        # kategorie: decyzja użytkownika > potwierdzony dokument > automatyczne śmieci > podejrzane
+        d_uz = decyzje.get(p["sciezka"])
+        w = wym.get(p["sciezka"])
+        powod_s = kategorie.smieci(p, w)
+        if d_uz == "smieci" or (powod_s and d_uz is None):
+            f, uw = folder_smieci(p), [f"śmieci: {powod_s}" if powod_s else "śmieci (Twoja decyzja)"]
+            kat[p["id"]] = "smieci"
+        elif d_uz == "dokument" or (p["sciezka"] in dokumenty and d_uz != "zdjecie"):
+            f, uw = folder_dokumentow(p["data"]), []
+            kat[p["id"]] = "dokument"
+        elif d_uz is None:
+            powod_p = kategorie.podejrzane(p, w)
+            if powod_p:
+                uw.append(f"nie z aparatu? ({powod_p}) — zdecyduj w zakładce „Nie z aparatu”")
+                kat[p["id"]] = "podejrzane"
         folder[p["id"]] = f.strip("/")
         uwagi[p["id"]] = "; ".join(uw) or None
     for p in zrodlowe:
@@ -164,6 +202,9 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
             while g["id"] in prowadzacy:
                 g = prowadzacy[g["id"]]
             folder[p["id"]] = folder[g["id"]]
+            alt[p["id"]] = alt.get(g["id"], folder[g["id"]])
+            if g["id"] in kat:
+                kat[p["id"]] = kat[g["id"]]
             uwagi[p["id"]] = f"razem z {os.path.basename(g['sciezka'])}"
 
     # identyczne pliki: już obecne w celu / powtórzone w źródłach
@@ -187,23 +228,38 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
             stan, uw = "duplikat", f"kopia pliku {widziane[h]['wzgledna']}"
         elif h:
             widziane[h] = p
-        wpisy.append({"p": p, "cel": folder[p["id"]] + "/" + czysta_nazwa(os.path.basename(p["sciezka"])),
-                      "tryb": p["tryb"], "stan": stan, "uwaga": uw})
+        nazwa = czysta_nazwa(os.path.basename(p["sciezka"]))
+        wpisy.append({"p": p, "cel": folder[p["id"]] + "/" + nazwa, "alt": alt.get(p["id"], folder[p["id"]]) + "/" + nazwa,
+                      "kat": kat.get(p["id"]), "tryb": p["tryb"], "stan": stan, "uwaga": uw})
 
     _rozwiaz_kolizje(wpisy)
     db.execute("DELETE FROM plan")
     db.execute("DELETE FROM plan_ops")
     db.execute("DELETE FROM plan_zmiany")
     db.executemany(
-        "INSERT INTO plan(plik_id, sciezka, rodzaj, rozmiar, data, cel, tryb, stan, pominiety, uwaga) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO plan(plik_id, sciezka, rodzaj, rozmiar, data, cel, tryb, stan, pominiety, uwaga, alt, kat) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         [(w["p"]["id"], w["p"]["sciezka"], w["p"]["rodzaj"], w["p"]["rozmiar"], w["p"]["data"], w["cel"], w["tryb"],
-          w["stan"], 1 if w["stan"] in ("juz_jest", "duplikat") else 0, w["uwaga"]) for w in wpisy])
+          w["stan"], 1 if w["stan"] in ("juz_jest", "duplikat") else 0, w["uwaga"], w.get("alt"), w.get("kat"))
+         for w in wpisy])
     db.execute("DELETE FROM plan_meta")
     db.executemany("INSERT INTO plan_meta VALUES (?,?)",
                    [("cel", cel), ("utworzono", str(time.time())), ("dom", dom or "")])
     db.commit()
     return podsumowanie(db)
+
+
+def _rdzen(nazwa: str) -> str:
+    """Wspólny rdzeń pliku i jego towarzyszy: IMG_1.jpg, IMG_1.xmp, IMG_1.jpg.json,
+    IMG_1.jpg.supplemental-metadata.json (Google Zdjęcia) -> „img_1”."""
+    n = nazwa.lower()
+    for kon in (".json", ".xmp"):
+        if n.endswith(kon) and n.count(".") > 1:
+            n = n[: -len(kon)]
+            if n.endswith(".supplemental-metadata"):
+                n = n[: -len(".supplemental-metadata")]
+            break
+    return PurePath(n).stem
 
 
 def _prefiks_zrodla(p: dict) -> str:
@@ -253,8 +309,13 @@ def _etykiety_miejsc(media: list[dict], dom_wymuszony: str | None = None
         else:
             w = next((w for w in wyjazdy if w["start"] - MARGINES_WYJAZDU <= p["_dt"] <= w["koniec"] + MARGINES_WYJAZDU),
                      None)
-            m = w["etykieta"] if w else dom
-            uw = "bez GPS — dopasowano do wyjazdu" if w else ("bez GPS" if dom else None)
+            z_folderu = None if w else miejsca.z_folderu(p.get("wzgledna") or "")
+            if w:
+                m, uw = w["etykieta"], "bez GPS — dopasowano do wyjazdu"
+            elif z_folderu:
+                m, uw = z_folderu, "bez GPS — miejsce z nazwy folderu"
+            else:
+                m, uw = dom, ("bez GPS" if dom else None)
         if m is None:
             fr = ""
         elif m == dom:
@@ -519,15 +580,44 @@ def ponow(db: sqlite3.Connection) -> dict:
     return {"zmienione": len(zm), "opis": op["opis"]}
 
 
-def oznacz_dokumenty(db: sqlite3.Connection, sciezki: set[str]) -> dict:
-    """Po potwierdzeniu dokumentów: przenosi je w istniejącym planie do Zdjęcia/Dokumenty."""
-    if not sciezki or not istnieje(db):
+def zastosuj_kategorie(db: sqlite3.Connection) -> dict:
+    """Po decyzjach (dokumenty, „nie z aparatu”): przekłada pliki w istniejącym planie.
+    Dokument -> Dokumenty/Dokumenty z RRRR, śmieci -> Odłożone/Śmieci, zdjęcie -> tam, gdzie zwykłe zdjęcie."""
+    if not istnieje(db):
         return {"zmienione": 0}
-    ids = [r[0] for r in db.execute("SELECT id, sciezka FROM plan WHERE tryb!='istniejacy'")
-           if r[1] in sciezki]
-    ids = [r["id"] for r in db.execute(f"SELECT id, cel FROM plan WHERE id IN ({','.join('?' * len(ids))})", ids)
-           if not r["cel"].startswith(DOKUMENTY + "/")] if ids else []
-    return przenies_pliki(db, ids, DOKUMENTY, f"Dokumenty: {len(ids)} zdjęć") if ids else {"zmienione": 0}
+    przygotuj(db)
+    dok = analiza.dokumenty_potwierdzone(db)
+    dec = kategorie.decyzje(db)
+    zmiany_kat: dict[int, str | None] = {}
+    grupy: dict[str, list] = defaultdict(list)
+    for w in db.execute("SELECT id, sciezka, cel, alt, kat, data, pominiety FROM plan WHERE tryb!='istniejacy'"):
+        d_uz = dec.get(w["sciezka"])
+        folder = w["cel"].rsplit("/", 1)[0]
+        w_kategorii = folder.startswith(DOKUMENTY + "/") or folder.startswith(kategorie.SMIECI)
+        if d_uz == "smieci":
+            cel_f, k = (folder if folder.startswith(kategorie.SMIECI) else folder_smieci(w)), "smieci"
+        elif d_uz == "dokument" or (w["sciezka"] in dok and d_uz != "zdjecie"):
+            cel_f, k = folder_dokumentow(w["data"]), "dokument"
+        elif d_uz == "zdjecie" or (w["kat"] == "dokument" and w["sciezka"] not in dok):
+            cel_f, k = (w["alt"].rsplit("/", 1)[0] if w["alt"] and w_kategorii else folder), None
+        else:
+            continue
+        if k != w["kat"]:
+            zmiany_kat[w["id"]] = k
+        if cel_f != folder:
+            grupy[cel_f].append(w)
+    zmiany = []
+    for f, lista in grupy.items():
+        for (i, c), w in zip(_wolne_w_folderze(db, f, [(w["id"], w["cel"].rsplit("/", 1)[-1]) for w in lista]), lista):
+            zmiany.append((i, c, w["pominiety"]))
+    for i, k in zmiany_kat.items():
+        uw = db.execute("SELECT uwaga FROM plan WHERE id=?", (i,)).fetchone()[0] or ""
+        uw = _UWAGA_PODEJRZANE.sub("", uw).strip("; ") or None  # decyzja podjęta — pytanie znika
+        db.execute("UPDATE plan SET kat=?, uwaga=? WHERE id=?", (k, uw, i))
+    if not zmiany:
+        db.commit()
+        return {"zmienione": 0}
+    return _zastosuj(db, f"Kategorie (dokumenty / śmieci / zdjęcia): {len(zmiany)} plików", zmiany)
 
 
 # --- wyszukiwanie i zmiany zbiorcze --------------------------------------------------
@@ -538,6 +628,9 @@ FILTRY = {
     "bez_gps": "uwaga LIKE '%bez GPS%' AND pominiety=0",
     "data_z_pliku": "uwaga LIKE '%data z pliku%' AND pominiety=0",
     "pominiete": "pominiety=1 AND tryb!='istniejacy'",
+    "smieci": "kat='smieci' AND tryb!='istniejacy'",
+    "nie_z_aparatu": "kat='podejrzane' AND tryb!='istniejacy'",
+    "dokumenty": "kat='dokument' AND tryb!='istniejacy'",
     "bledy": "wynik LIKE 'blad%'",
     "kolizje": "pominiety=0 AND lower(cel) IN (SELECT lower(cel) FROM plan WHERE pominiety=0 GROUP BY lower(cel) "
                "HAVING COUNT(*) > 1)",

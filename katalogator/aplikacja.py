@@ -21,7 +21,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, aktualizacje, analiza, duplikaty, dyski, logi, planista, projekty, przychodzace, raport,
-               skaner, stabilnosc, wykonawca)
+               kategorie, skaner, stabilnosc, wykonawca)
 from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
@@ -188,6 +188,7 @@ class Stan:
                 cache["analiza"] = analiza.podsumowanie(db)
             if planista.istnieje(db):
                 cache["plan"] = planista.podsumowanie(db)
+            cache["nie_z_aparatu"] = sum(1 for p in kategorie.do_sprawdzenia(db) if not p["decyzja"])
             cache["wykonanie"] = wykonawca.ostatnia_partia(db)
         finally:
             db.close()
@@ -776,6 +777,8 @@ def _handler(stan: Stan, token: str, zamknij):
                                               _int(q, "od", 0), min(_int(q, "ile", 200), 500)))
             if u.path == "/api/plan/sprawdz":
                 return self._wyslij(stan.z_db(wykonawca.sprawdz))
+            if u.path == "/api/nie-z-aparatu":
+                return self._wyslij({"pliki": stan.z_db(kategorie.do_sprawdzenia)})
             if u.path == "/api/dokumenty":
                 return self._wyslij({"kandydaci": stan.z_db(analiza.kandydaci_dokumentow)})
             if u.path == "/api/podobne":
@@ -914,7 +917,10 @@ def _handler(stan: Stan, token: str, zamknij):
                 "/api/dokumenty/zapisz": lambda db: {
                     **analiza.zapisz_decyzje(db, [int(i) for i in dane.get("tak") or []],
                                              [int(i) for i in dane.get("nie") or []]),
-                    "plan": planista.oznacz_dokumenty(db, analiza.dokumenty_potwierdzone(db))},
+                    "plan": planista.zastosuj_kategorie(db)},
+                "/api/nie-z-aparatu/zapisz": lambda db: {
+                    **kategorie.zapisz(db, {int(k): str(v) for k, v in (dane.get("wybor") or {}).items()}),
+                    "plan": planista.zastosuj_kategorie(db)},
                 "/api/odloz": lambda db: duplikaty.odloz(db, [int(i) for i in dane.get("ids") or []],
                                                          "podobne" if dane.get("typ") == "podobne" else "nieostre"),
             }

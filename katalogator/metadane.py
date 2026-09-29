@@ -85,11 +85,15 @@ def _aparat(marka, model) -> str | None:
 
 
 def _stopnie(wart, ref) -> float | None:
+    """Stopnie z EXIF: (st, min, sek), (st, min) albo same stopnie; bez NaN (ułamki 0/0 z niektórych aparatów)."""
     try:
-        st, mi, se = (float(x) for x in wart)
+        cz = [float(x) for x in (wart if isinstance(wart, (tuple, list)) else (wart,))]
     except (TypeError, ValueError, ZeroDivisionError):
         return None
-    w = st + mi / 60 + se / 3600
+    cz = (cz + [0.0, 0.0])[:3]
+    if any(c != c or c in (float("inf"), float("-inf")) for c in cz):
+        return None
+    w = cz[0] + cz[1] / 60 + cz[2] / 3600
     if isinstance(ref, bytes):
         ref = ref.decode(errors="ignore")
     if str(ref).strip().upper() in ("S", "W"):
@@ -97,11 +101,107 @@ def _stopnie(wart, ref) -> float | None:
     return w
 
 
+def _ustaw_gps(m: Metadane, lat, lon) -> bool:
+    try:
+        lat, lon = float(lat), float(lon)
+    except (TypeError, ValueError):
+        return False
+    if abs(lat) <= 90 and abs(lon) <= 180 and (abs(lat) > 1e-6 or abs(lon) > 1e-6) and lat == lat and lon == lon:
+        m.lat, m.lon = round(lat, 6), round(lon, 6)
+        return True
+    return False
+
+
+# XMP: exif:GPSLatitude="50,16.8667N" / "50,16,52N" / <exif:GPSLatitude>…</…>, drony: drone-dji:GpsLatitude="+50.1"
+_XMP_GPS = re.compile(rb'(?:exif:GPS|drone-dji:Gps)(Latitude|Longitude)(?:="|>)\s*([+-]?[\d.]+(?:,[\d.]+){0,2})\s*([NSEW]?)', re.I)
+_XMP_DATA = re.compile(rb'(?:exif:DateTimeOriginal|photoshop:DateCreated|xmp:CreateDate)(?:="|>)\s*(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?)')
+
+
+def z_xmp(dane: bytes, m: Metadane) -> None:
+    """GPS i data z pakietu XMP (Lightroom, Photoshop, Google Zdjęcia, drony, pliki .xmp obok zdjęcia)."""
+    if not dane:
+        return
+    if m.lat is None:
+        wsp = {}
+        for os_, wart, ref in _XMP_GPS.findall(dane[:2_000_000]):
+            cz = [float(x) for x in wart.decode().split(",")]
+            w = cz[0] + (cz[1] / 60 if len(cz) > 1 else 0) + (cz[2] / 3600 if len(cz) > 2 else 0)
+            if ref.upper() in (b"S", b"W"):
+                w = -w
+            wsp.setdefault(os_.decode().lower(), w)
+        if "latitude" in wsp and "longitude" in wsp:
+            _ustaw_gps(m, wsp["latitude"], wsp["longitude"])
+    if m.zrodlo_daty != "exif":
+        d = _XMP_DATA.search(dane[:2_000_000])
+        if d:
+            try:
+                dt = datetime.fromisoformat(d.group(1).decode())
+                if dt.year >= ROK_MIN:
+                    m.data, m.zrodlo_daty = dt, "exif"
+            except ValueError:
+                pass
+
+
+def z_takeout(dane: bytes, m: Metadane) -> None:
+    """Plik .json z eksportu Google Zdjęć (Takeout): geoData / geoDataExif, photoTakenTime."""
+    import json
+    try:
+        j = json.loads(dane.decode("utf-8", errors="replace"))
+    except ValueError:
+        return
+    if not isinstance(j, dict):
+        return
+    if m.lat is None:
+        for k in ("geoDataExif", "geoData"):
+            g = j.get(k) or {}
+            if isinstance(g, dict) and _ustaw_gps(m, g.get("latitude"), g.get("longitude")):
+                break
+    if m.zrodlo_daty != "exif":
+        t = (j.get("photoTakenTime") or {}).get("timestamp") if isinstance(j.get("photoTakenTime"), dict) else None
+        try:
+            dt = datetime.fromtimestamp(int(t)) if t else None
+        except (ValueError, OSError, OverflowError):
+            dt = None
+        if dt and dt.year >= ROK_MIN:
+            m.data, m.zrodlo_daty = dt, "exif"
+
+
+def z_bocznych(sciezki: list[str], m: Metadane) -> None:
+    """Pliki towarzyszące leżące obok zdjęcia/filmu: .json (Google), .xmp (Lightroom, darktable…)."""
+    for s in sciezki:
+        if m.lat is not None and m.zrodlo_daty == "exif":
+            return
+        try:
+            with open(s, "rb") as f:
+                dane = f.read(2_000_000)
+        except OSError:
+            continue
+        (z_takeout if s.lower().endswith(".json") else z_xmp)(dane, m)
+
+
+def boczne_nazwy(sciezka: str) -> list[str]:
+    """Możliwe nazwy plików towarzyszących: IMG_1.jpg.json, IMG_1.jpg.supplemental-metadata.json, IMG_1.json,
+    IMG_1.xmp, IMG_1.jpg.xmp (porównywane bez wielkości liter)."""
+    rdzen = str(PurePath(sciezka).with_suffix(""))
+    return [sciezka + ".json", sciezka + ".supplemental-metadata.json", rdzen + ".json",
+            rdzen + ".xmp", sciezka + ".xmp"]
+
+
 def z_obrazu(sciezka: str, m: Metadane) -> None:
     if Image is None:
         return
     with Image.open(sciezka) as im:  # leniwe: czyta tylko nagłówek
         exif = im.getexif()
+        xmp = im.info.get("xmp") or im.info.get("XML:com.adobe.xmp") or b""
+    if isinstance(xmp, str):
+        xmp = xmp.encode("utf-8", errors="ignore")
+    try:
+        _z_exif(exif, m)
+    finally:
+        z_xmp(xmp, m)  # GPS/data dopisane w programie do zdjęć (bez dodatkowego czytania pliku)
+
+
+def _z_exif(exif, m: Metadane) -> None:
     if not exif:
         return
     ifd = exif.get_ifd(0x8769)
@@ -117,8 +217,8 @@ def z_obrazu(sciezka: str, m: Metadane) -> None:
     gps = exif.get_ifd(0x8825)
     if gps and 2 in gps and 4 in gps:
         lat, lon = _stopnie(gps[2], gps.get(1, "N")), _stopnie(gps[4], gps.get(3, "E"))
-        if lat is not None and lon is not None and (abs(lat) > 1e-6 or abs(lon) > 1e-6):
-            m.lat, m.lon = round(lat, 6), round(lon, 6)
+        if lat is not None and lon is not None:
+            _ustaw_gps(m, lat, lon)
 
 
 # --- filmy MP4/MOV/3GP ---------------------------------------------------
@@ -402,7 +502,7 @@ def z_muzyki(sciezka: str, m: Metadane) -> None:
 _MP4_PODOBNE = {".mp4", ".mov", ".m4v", ".3gp"}
 
 
-def odczytaj(sciezka: str, rodzaj: str, mtime: float) -> Metadane:
+def odczytaj(sciezka: str, rodzaj: str, mtime: float, boczne: list[str] | None = None) -> Metadane:
     m = Metadane()
     ext = PurePath(sciezka).suffix.lower()
     try:
@@ -422,6 +522,11 @@ def odczytaj(sciezka: str, rodzaj: str, mtime: float) -> Metadane:
             z_muzyki(sciezka, m)
     except Exception as e:  # uszkodzony / nietypowy plik — nie przerywa skanu
         m.blad = f"{type(e).__name__}: {e}"[:200]
+    if boczne and rodzaj in (typy.ZDJECIE, typy.FILM):
+        try:
+            z_bocznych(boczne, m)
+        except Exception:
+            pass
     if rodzaj in (typy.ZDJECIE, typy.FILM) and m.data is None:
         d = data_z_nazwy(sciezka)
         if d:

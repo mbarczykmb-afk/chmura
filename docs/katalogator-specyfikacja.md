@@ -171,6 +171,28 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     podsumowania dużego projektu liczone w tle — okno pokazuje się od razu („Wczytuję wyniki projektu…”)
 18. **Poprawki 1.3.2** ✅ — stały rozmiar kart (240 px, całe zdjęcie 4:3, jak w porównywarce) w Drzewie,
     Dokumentach i Podobnych — bez rozciągania do szerokości okna; w Drzewie większy podgląd i dwuklik = powiększenie
+19. **Kategorie, dokumenty, GPS** ✅ (1.4):
+    - zakładka **Drzewo** ostatnia i wyróżniona (to wynik całej pracy);
+    - **Dokumenty** sortowane po latach, bez dalszych podfolderów: `Dokumenty/Dokumenty z 2023/`
+      (bez daty: `Dokumenty/Bez daty`); niezaznaczone kandydaty zostają zwykłymi zdjęciami;
+    - **Odłożone**: `Odłożone/Duplikaty`, `Odłożone/Podobne`, `Odłożone/Nieostre` (w folderze źródłowym,
+      z cofaniem) i `Odłożone/Śmieci` (w bibliotece); folder „Odłożone” jest pomijany przy skanie;
+    - **Śmieci** automatycznie: puste pliki, ikony/kursory, pliki tymczasowe i niedokończone pobrania, skróty,
+      miniatury i pamięć podręczna, obrazki ≤ 256 px bez danych aparatu (nigdy zdjęcie z EXIF aparatu/GPS);
+    - **Nie z aparatu** — nowa zakładka: grafiki PNG/GIF/WebP/BMP, zrzuty ekranu, pliki z „Pobrane”/internetu,
+      małe obrazy i obrazy bez danych aparatu i daty; dla każdego wybór 📷 zdjęcie / 📄 dokument / 🗑 śmieci;
+      bez decyzji zostają zdjęciami „do sprawdzenia”; decyzje przekładają plan (z cofaniem);
+      filtry w drzewie: Dokumenty, Nie z aparatu, Śmieci; folder przychodzący zostawia takie pliki do przejrzenia;
+    - **wykrywanie dokumentów od nowa**: etap 1 szuka *kartki* (największy jasny, bezbarwny, zwarty obszar —
+      także na ciemnym stole i w cieniu) z drobną teksturą; etap 2 na kartce: ilość tuszu, **drobne znaki**
+      (krótkie odcinki w obu kierunkach — litery, nie ciągłe linie, okna czy kratki) i **wiersze**; na zestawie
+      testowym 24/24 dokumentów, 0/29 fałszywych (kratki wentylacyjne, żaluzje, okna, śnieg, liście, tłum, banery);
+      stare oceny przeliczane automatycznie przy następnej analizie (decyzje zostają);
+    - **GPS**: odporny odczyt współrzędnych (zapis (st, min), same stopnie, 0/0), GPS i data z **XMP** w pliku
+      (Lightroom, Photoshop, drony — bez dodatkowego czytania z dysku), z plików **.json Google Zdjęć (Takeout)**
+      i **.xmp** obok zdjęcia (json idzie w drzewie razem ze zdjęciem); zdjęcia bez GPS: dopasowanie do wyjazdu
+      (±6 h), potem **miejsce z nazwy folderu** („2004 Zakopane”, „Wakacje Hel”, „Chorwacja 2019”, także bez
+      polskich liter), potem „w domu”; po aktualizacji pierwszy skan czyta nagłówki ponownie
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

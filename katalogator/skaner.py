@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import typy
-from .metadane import odczytaj
+from .metadane import boczne_nazwy, odczytaj
 
 SCHEMAT = """
 CREATE TABLE IF NOT EXISTS pliki (
@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS skany (
     bledy_dostepu     INTEGER DEFAULT 0
 );
 """
+
+
+WERSJA_ODCZYTU = 2  # 1.4: GPS i data z XMP oraz plików .json/.xmp obok zdjęć
 
 
 def otworz_baze(sciezka: str | Path) -> sqlite3.Connection:
@@ -116,11 +119,14 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
     cur = db.execute("INSERT INTO skany(korzen, start) VALUES (?, ?)", (korzen, time.time()))
     skan_id = cur.lastrowid
     db.commit()  # nie trzymaj blokady zapisu podczas przeglądania folderów
+    db.execute("CREATE TABLE IF NOT EXISTS skaner_meta (klucz TEXT PRIMARY KEY, wartosc TEXT)")
+    w = db.execute("SELECT wartosc FROM skaner_meta WHERE klucz = ?", ("wersja:" + korzen,)).fetchone()
+    aktualne = bool(w) and int(w[0]) >= WERSJA_ODCZYTU  # starsza wersja: czytamy nagłówki jeszcze raz (np. GPS z XMP)
     znane = {
         r["sciezka"]: (r["rozmiar"], r["mtime"])
         for r in db.execute("SELECT sciezka, rozmiar, mtime FROM pliki WHERE korzen = ? AND blad IS NULL",
                             (korzen,))
-    }
+    } if aktualne else {}
     licz = {"pominiete_pliki": 0, "pominiete_foldery": 0, "bledy_dostepu": 0}
     stat = {"wszystkie": 0, "nowe_lub_zmienione": 0, "bez_zmian": 0}
     niezmienione: list[str] = []
@@ -141,10 +147,13 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
             wypisz(f"  ...{etap or 'przejrzano'}: {n} plików")
             ostatni_wydruk = teraz
 
-    # 1) lista plików
+    # 1) lista plików (przy okazji: pliki towarzyszące .json/.xmp — źródło GPS i daty)
+    boczne: dict[str, str] = {}
     for el in _przejdz(korzen, licz, straznik, nieczytelne):
         stat["wszystkie"] += 1
-        sciezka, _, st = el
+        sciezka, nazwa_el, st = el
+        if nazwa_el.lower().endswith((".json", ".xmp")):
+            boczne[os.path.normcase(sciezka)] = sciezka
         if znane.get(sciezka) == (st.st_size, st.st_mtime):
             stat["bez_zmian"] += 1
             niezmienione.append(sciezka)
@@ -160,11 +169,12 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
         if przerwij is not None and przerwij.is_set():
             return None
         rodz = typy.rodzaj(nazwa)
-        m = odczytaj(sciezka, rodz, st.st_mtime)
+        b = [boczne[k] for k in (os.path.normcase(x) for x in boczne_nazwy(sciezka)) if k in boczne] if boczne else None
+        m = odczytaj(sciezka, rodz, st.st_mtime, b)
         if m.blad and not os.path.exists(sciezka) and straznik.korzen(sciezka):
             # błąd odczytu, bo zniknął dysk? poczekaj na niego i spróbuj jeszcze raz
             if straznik.czekaj_na(straznik.korzen(sciezka)):
-                m = odczytaj(sciezka, rodz, st.st_mtime)
+                m = odczytaj(sciezka, rodz, st.st_mtime, b)
         return sciezka, st, rodz, m
 
     def zapisz(wynik):
@@ -210,6 +220,7 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
     usuniete = db.execute(
         "DELETE FROM pliki WHERE korzen = ? AND skan != ?", (korzen, skan_id)
     ).rowcount
+    db.execute("INSERT OR REPLACE INTO skaner_meta VALUES (?, ?)", ("wersja:" + korzen, str(WERSJA_ODCZYTU)))
     db.execute(
         "UPDATE skany SET koniec=?, pominiete_pliki=?, pominiete_foldery=?, bledy_dostepu=? WHERE id=?",
         (time.time(), licz["pominiete_pliki"], licz["pominiete_foldery"], licz["bledy_dostepu"], skan_id),

@@ -15,7 +15,7 @@ def test_normalizuj_wybor(tmp_path):
 
 
 def test_podfoldery_pomija_ukryte_i_smieci(tmp_path):
-    for n in ("Zdjęcia", "muzyka", ".ukryty", ".wdmc", "$RECYCLE.BIN", "_Duplikaty_Katalogator"):
+    for n in ("Zdjęcia", "muzyka", ".ukryty", ".wdmc", "$RECYCLE.BIN", "_Duplikaty_Katalogator", "Odłożone"):
         (tmp_path / n).mkdir()
     (tmp_path / "plik.txt").write_text("x")
     r = dyski.podfoldery(str(tmp_path))

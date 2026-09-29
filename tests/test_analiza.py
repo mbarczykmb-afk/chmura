@@ -8,14 +8,23 @@ from katalogator import analiza, duplikaty, skaner
 
 
 def _dokument(sciezka, szum=0):
-    im = Image.new("RGB", (1200, 1600), (245, 243, 238))
-    d = ImageDraw.Draw(im)
+    """Kartka z tekstem (litery, nie paski) sfotografowana na stole."""
+    from PIL import ImageFont
+    slowa = "faktura paragon suma razem kwota netto brutto data nabywca umowa strona termin".split()
+    im = Image.new("RGB", (1400, 1800), (120, 95, 70))
+    k = Image.new("RGB", (1200, 1600), (245, 243, 238))
+    d = ImageDraw.Draw(k)
+    f = ImageFont.load_default(size=26)
     for y in range(120, 1500, 42):
         x = 100
-        while x < 1080:
-            w = random.randint(30, 110)
-            d.rectangle((x, y, x + w, y + 14), fill=(30, 30, 35))
-            x += w + 18
+        while True:
+            w = random.choice(slowa)
+            dl = d.textlength(w + " ", font=f)
+            if x + dl > 1100:
+                break
+            d.text((x, y), w, fill=(30, 30, 35), font=f)
+            x += dl
+    im.paste(k, (100, 100))
     im.save(sciezka, quality=88)
 
 
@@ -120,6 +129,6 @@ def test_odloz_podobne_i_cofnij(tmp_path):
     duplikaty.przygotuj(db)
     ids = {r["wzgledna"]: r["rowid"] for r in db.execute("SELECT rowid, wzgledna FROM pliki")}
     w = duplikaty.odloz(db, [ids["b.jpg"]], "podobne")
-    assert w["przeniesione"] == 1 and (k / duplikaty.FOLDER_DUPLIKATOW / "b.jpg").exists()
+    assert w["przeniesione"] == 1 and (k / "Odłożone" / "Podobne" / "b.jpg").exists()
     assert duplikaty.ostatnia_partia(db)["typ"] == "podobne"
     assert duplikaty.cofnij(db)["przywrocone"] == 1 and (k / "b.jpg").exists()

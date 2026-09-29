@@ -242,3 +242,78 @@ def fraza(etyk: str) -> str:
     if etyk.startswith("@"):
         return KRAJE.get(etyk[1:], "za granicą")
     return miejscownik(etyk)[0]
+
+
+# --- miejsce z nazwy folderu (zdjęcia bez GPS, np. „2004 Zakopane”, „Wakacje Hel”, „Chorwacja 2019”) ----------
+KRAJE_NAZWY = {
+    "włochy": "IT", "chorwacja": "HR", "hiszpania": "ES", "grecja": "GR", "egipt": "EG", "turcja": "TR",
+    "niemcy": "DE", "czechy": "CZ", "słowacja": "SK", "ukraina": "UA", "węgry": "HU", "litwa": "LT",
+    "łotwa": "LV", "austria": "AT", "szwajcaria": "CH", "francja": "FR", "anglia": "GB", "londyn": "GB",
+    "irlandia": "IE", "holandia": "NL", "belgia": "BE", "dania": "DK", "szwecja": "SE", "norwegia": "NO",
+    "finlandia": "FI", "estonia": "EE", "portugalia": "PT", "bułgaria": "BG", "rumunia": "RO",
+    "słowenia": "SI", "czarnogóra": "ME", "albania": "AL", "serbia": "RS", "cypr": "CY", "malta": "MT",
+    "islandia": "IS", "usa": "US", "tunezja": "TN", "maroko": "MA", "tajlandia": "TH", "dubaj": "AE",
+    "izrael": "IL", "japonia": "JP", "chiny": "CN", "indie": "IN", "wietnam": "VN", "dominikana": "DO",
+    "kuba": "CU", "gruzja": "GE", "madera": "PT", "kreta": "GR", "rodos": "GR", "korfu": "GR",
+    "zakynthos": "GR", "teneryfa": "ES", "majorka": "ES", "sycylia": "IT", "rzym": "IT", "paryż": "FR",
+    "praga": "CZ", "wiedeń": "AT", "berlin": "DE", "barcelona": "ES", "wenecja": "IT", "budapeszt": "HU",
+    "wilno": "LT", "lwów": "UA", "zanzibar": "TZ", "malediwy": "MV", "kanada": "CA", "meksyk": "MX",
+}
+# jednowyrazowe nazwy miejscowości, które są też zwykłymi słowami — z nazwy folderu ich nie bierzemy
+_ZWYKLE_SLOWA = {"góra", "wola", "dom", "las", "ruda", "huta", "środa", "rawa", "zdjęcia", "wakacje", "ferie",
+                 "morze", "góry", "kolonia", "osiedle", "nowa", "nowe", "stare", "most", "brzeg", "wieś", "sól",
+                 "zdrój", "gród", "kamień", "łąka", "piła", "jawor", "lipiec", "maj", "marzec"}
+_MIN_LUDNOSC = 2500
+# małe, ale popularne miejsca wyjazdów — rozpoznawane mimo małej liczby mieszkańców
+_TURYSTYCZNE = {"hel", "jurata", "chałupy", "dębki", "rewal", "rowy", "mielno", "sarbinowo", "pobierowo",
+                "krynica morska", "jastrzębia góra", "białka tatrzańska", "bukowina tatrzańska", "poronin",
+                "kościelisko", "wetlina", "cisna", "polańczyk", "solina", "szczawnica", "łeba", "jastarnia",
+                "karpacz", "mikołajki", "ustka", "władysławowo", "międzyzdroje", "świeradów-zdrój", "korbielów",
+                "zawoja", "rabka-zdrój", "ustrzyki dolne", "szklarska poręba", "krynica-zdrój", "ełk"}
+
+
+@lru_cache(maxsize=1)
+def _indeks_nazw() -> dict[str, str]:
+    """„zakopane” -> „Zakopane” (także bez polskich liter: „krakow” -> „Kraków”)."""
+    ind: dict[str, tuple[int, str]] = {}
+    with gzip.open(PLIK, "rt", encoding="utf-8") as f:
+        for linia in f:
+            cz = linia.rstrip("\n").split("\t")
+            if len(cz) < 5 or cz[2] != "PL" or not cz[3]:
+                continue
+            try:
+                lud = int(cz[4])
+            except ValueError:
+                continue
+            if (lud < _MIN_LUDNOSC and cz[3].lower() not in _TURYSTYCZNE) or cz[3].lower() in _ZWYKLE_SLOWA:
+                continue
+            for k in {cz[3].lower(), _bez_ogonkow(cz[3].lower())}:
+                if k not in ind or ind[k][0] < lud:
+                    ind[k] = (lud, cz[3])
+    return {k: v[1] for k, v in ind.items()}
+
+
+def _bez_ogonkow(s: str) -> str:
+    return s.translate(str.maketrans("ąćęłńóśźż", "acelnoszz"))
+
+
+_SLOWO = re.compile(r"[^\W\d_]+(?:-[^\W\d_]+)?")
+
+
+def z_folderu(sciezka_wzgledna: str) -> str | None:
+    """Etykieta miejsca (jak etykieta()) z nazw folderów — od najbliższego pliku w górę; None, gdy brak."""
+    ind = _indeks_nazw()
+    czesci = re.split(r"[\\/]+", sciezka_wzgledna)[:-1]
+    for folder in reversed(czesci):
+        slowa = _SLOWO.findall(folder)
+        for dl in (3, 2, 1):  # najpierw dłuższe nazwy: „Szklarska Poręba”, „Bielsko-Biała”
+            for i in range(len(slowa) - dl + 1):
+                fraza_ = " ".join(slowa[i:i + dl]).lower()
+                if fraza_ in KRAJE_NAZWY and dl == 1:
+                    return "@" + KRAJE_NAZWY[fraza_]
+                if dl == 1 and len(fraza_) < 4 and fraza_ not in _TURYSTYCZNE:
+                    continue
+                trafienie = ind.get(fraza_) or ind.get(_bez_ogonkow(fraza_))
+                if trafienie:
+                    return trafienie
+    return None

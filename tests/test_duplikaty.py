@@ -76,7 +76,7 @@ def test_przenies_i_cofnij(tmp_path):
     w = duplikaty.przenies(db, [{"zostaw": g["zostaw"], "usun": usun}])
     assert w["przeniesione"] == 2 and not w["pominiete"]
     assert not (k / "Pobrane" / "wakacje.jpg").exists()
-    assert (k / duplikaty.FOLDER_DUPLIKATOW / "Pobrane" / "wakacje.jpg").exists()
+    assert (k / "Odłożone" / "Duplikaty" / "Pobrane" / "wakacje.jpg").exists()
     assert (k / "Zdjecia" / "2020" / "wakacje.jpg").exists()
     assert duplikaty.podsumowanie(db)["nadmiar"] == 1
     # ponowny skan nie widzi odłożonych duplikatów
@@ -86,7 +86,7 @@ def test_przenies_i_cofnij(tmp_path):
     c = duplikaty.cofnij(db)
     assert c["przywrocone"] == 2 and not c["bledy"]
     assert (k / "Pobrane" / "wakacje.jpg").exists()
-    assert not (k / duplikaty.FOLDER_DUPLIKATOW).exists()
+    assert not (k / "Odłożone").exists()
     assert duplikaty.ostatnia_partia(db) is None
 
 

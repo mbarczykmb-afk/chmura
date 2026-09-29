@@ -63,7 +63,7 @@ def test_propozycja(swiat):
     assert "bez GPS" in c["IMG_hel_bez_gps.jpg"][3]
     assert c["VID_20230711_120000.mp4"][0] == "Filmy/Filmy z 2023/Lipiec na Helu/VID_20230711_120000.mp4"
     assert c["IMG_rzym.jpg"][1] == "juz_jest"                              # identyczny plik jest już w celu
-    assert c["paragon.jpg"][0] == "Zdjęcia/Dokumenty/paragon.jpg"
+    assert c["paragon.jpg"][0] == "Dokumenty/Dokumenty z 2023/paragon.jpg"
     assert c["DSC_0001.xmp"][0] == z23 + "Marzec w domu/DSC_0001.xmp"       # idzie za zdjęciem
     assert c["DSC_0001.dng"][0] == z23 + "Marzec w domu/DSC_0001.dng"
     assert c["01.mp3"][0] == "Muzyka/Dżem/Detox/01.mp3"
@@ -119,7 +119,7 @@ def test_wykonanie_kopiuj_i_cofnij(swiat):
     planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
     w = wykonawca.wykonaj(db)
     assert w["zrobione"] == 17 and w["bledy"] == 0
-    doc = cel / "Zdjęcia" / "Dokumenty" / "paragon.jpg"
+    doc = cel / "Dokumenty" / "Dokumenty z 2023" / "paragon.jpg"
     assert doc.read_bytes() == (k / "Telefon" / "paragon.jpg").read_bytes()
     assert os.path.getmtime(doc) == pytest.approx(os.path.getmtime(k / "Telefon" / "paragon.jpg"), abs=1)
     assert (k / "Telefon" / "paragon.jpg").exists()          # kopiowanie zostawia oryginał
@@ -127,7 +127,7 @@ def test_wykonanie_kopiuj_i_cofnij(swiat):
     assert wykonawca.wykonaj(db)["zrobione"] == 0            # drugi raz nic nie robi
     c = wykonawca.cofnij(db)
     assert c["cofniete"] == 17 and not c["bledy"] and not doc.exists()
-    assert not (cel / "Zdjęcia" / "Dokumenty").exists() and (cel / "Zdjęcia" / "Stare").exists()
+    assert not (cel / "Dokumenty").exists() and (cel / "Zdjęcia" / "Stare").exists()
 
 
 def test_wykonanie_przenies_usuwa_puste_i_cofa(swiat):
