@@ -549,7 +549,7 @@ def wyklucz(db: sqlite3.Connection, ids: list[int] | None = None, folder: str | 
     else:
         wiersze = db.execute(f"SELECT id, cel FROM plan WHERE tryb!='istniejacy' AND id IN "
                              f"({','.join('?' * len(ids or []))})", [int(i) for i in ids or []]).fetchall()
-    opis = ("Wykluczenie" if wartosc else "Przywrócenie") + (f" folderu {folder}" if folder else f" {len(wiersze)} plików")
+    opis = ("Pominięcie" if wartosc else "Cofnięcie pominięcia") + (f" folderu {folder}" if folder else f" {len(wiersze)} plików")
     return _zastosuj(db, opis, [(r["id"], r["cel"], 1 if wartosc else 0) for r in wiersze])
 
 

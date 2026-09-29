@@ -179,6 +179,7 @@ class Stan:
                 "dup": dup, "zad": zad, "ma_wyniki": ma, "duplikaty": None, "do_cofniecia": None,
                 "analiza": None, "plan": None, "wykonanie": None, "przychodzace": None}
         dane["biezace"] = self._biezace(skan, dup, zad)
+        dane["powitanie_widziane"] = bool(aktualizacje._ustawienia(self.katalog).get("powitanie_widziane"))
         if ma:
             with self.blokada:
                 wersja, (w_cache, cache) = self.wersja_danych, self._podsumowania
@@ -219,6 +220,7 @@ class Stan:
             if planista.istnieje(db):
                 cache["plan"] = planista.podsumowanie(db)
             cache["nie_z_aparatu"] = sum(1 for p in kategorie.do_sprawdzenia(db) if not p["decyzja"])
+            cache["plikow"] = db.execute("SELECT COUNT(*) FROM pliki").fetchone()[0]
             cache["wykonanie"] = wykonawca.ostatnia_partia(db)
         finally:
             db.close()
@@ -933,9 +935,8 @@ def _handler(stan: Stan, token: str, zamknij):
                     webbrowser.open(adres)
                 return self._wyslij({"ok": True})
             if u.path == "/api/program/ustawienia":
-                d = aktualizacje.zapisz_ustawienia(stan.katalog, sprawdzaj_aktualizacje=bool(
-                    dane.get("sprawdzaj_aktualizacje", True)))
-                return self._wyslij(d)
+                zmiany = {k: bool(dane[k]) for k in ("sprawdzaj_aktualizacje", "powitanie_widziane") if k in dane}
+                return self._wyslij(aktualizacje.zapisz_ustawienia(stan.katalog, **zmiany))
             if u.path == "/api/aktualizacja/instaluj":
                 blad = stan.zainstaluj_aktualizacje(str(dane.get("url", "")), zamknij)
                 return self._wyslij({"blad": blad} if blad else {"ok": True},

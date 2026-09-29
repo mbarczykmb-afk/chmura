@@ -314,7 +314,7 @@ function podgladFilmu(id) {
   return box;
 }
 function odtworz(id) {
-  const n = document.createElement("div"); n.className = "nakladka";
+  const n = document.createElement("div"); n.className = "nakladka"; n.dataset.podglad = "1";
   const v = document.createElement("video"); v.controls = true; v.autoplay = true;
   v.src = `/plik?t=${encodeURIComponent(TOKEN)}&id=${id}`;
   v.style.cssText = "max-width:90vw;max-height:85vh;border-radius:8px;background:#000";
@@ -327,9 +327,12 @@ async function edycja(sciezka, dane) {
   let w;
   try { w = await api(sciezka, dane); }
   catch (e) { toast(e.message); return null; }
-  if (w.scalono) toast("Scalono z istniejącym folderem.");
-  else if (w.foldery) toast(`Zmieniono ${w.zmienione} plików` + (w.pominiete ? ` (pominięto ${w.pominiete} — to nie zdjęcia/filmy lub brak daty)` : "") + ".");
-  else if (w.opis) toast((sciezka.endsWith("cofnij") ? "Cofnięto: " : "Ponowiono: ") + w.opis);
+  const cofalne = !/\/(cofnij|ponow)$/.test(sciezka);
+  const cofnijTo = cofalne ? () => edycja("/api/plan/cofnij", {}) : null;
+  if (w.scalono) toast("Scalono z istniejącym folderem.", cofnijTo);
+  else if (w.foldery) toast(`Zmieniono: ${plikow(w.zmienione)}` + (w.pominiete ? ` (pominięto ${w.pominiete} — to nie zdjęcia/filmy lub brak daty)` : "") + ".", cofnijTo);
+  else if (!cofalne && w.opis) toast((sciezka.endsWith("cofnij") ? "Cofnięto: " : "Ponowiono: ") + w.opis);
+  else if (cofalne && w.zmienione) toast(`Zmieniono: ${plikow(w.zmienione)}.`, cofnijTo);
   plan.zazn.clear();
   const r = await api("/api/plan/drzewo");
   plan.foldery = r.foldery; plan.podsum = r.podsumowanie;

@@ -217,6 +217,17 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     tylko w bardzo wąskim oknie), brak wychodzenia treści poza okno < 900 px, zawijany wiersz harmonogramu,
     „Brak duplikatów” zamiast „Jeszcze nie szukano”, nazwa folderu zamiast pełnej ścieżki w Drzewie, postęp zadania
     tylko na pasku u góry, okno programu otwierane na cały ekran
+24. **Wygoda pracy** ✅ (1.6):
+    - **przewodnik**: sekcje lewej kolumny zwijane do jednej linijki ze streszczeniem („✓ Zeskanowano 50 000 plików”,
+      „✓ 5 915 zbędnych kopii · 27 MB”…); otwarta jest sekcja bieżącego kroku (wyróżniona), reszta na kliknięcie;
+      kroki u góry otwierają swoje sekcje; puste zakładki mają własne przyciski („Szukaj duplikatów”, „Analizuj”);
+    - **klawiatura** w Dokumentach, Podobnych i „Nie z aparatu”: strzałki = wybór zdjęcia (także w powiększeniu),
+      1/2/3 = zdjęcie/dokument/śmieci i od razu następne, spacja = powiększ, Esc = zamknij, Z = zostaw/odłóż (Podobne);
+      ściągawka nad zdjęciami;
+    - **„↶ Cofnij” w komunikacie** po każdej decyzji (kategorie, zapis zbiorczy, odłożenie kopii, zmiany w Drzewie);
+    - **nazewnictwo**: „Pomiń / Nie pomijaj” (zamiast Wyklucz / Przywróć), „Odłóż” = do folderu Odłożone;
+      podpowiedzi przy przyciskach; polska odmiana w komunikatach;
+    - **ekran powitalny** (4 kroki + słowniczek), raz przy pierwszym uruchomieniu, potem z menu „? → Jak zacząć”
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

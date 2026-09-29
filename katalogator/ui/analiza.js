@@ -31,7 +31,8 @@ function rysujAnalizeLewa() {
   an.bylaAnaliza = !!a;
 }
 const BRAK_ANALIZY = () => stan.wczytuje ? '<div class="pusto">Wczytuję wyniki projektu…</div>'
-  : '<div class="pusto">Najpierw kliknij „Analizuj zdjęcia” w lewej kolumnie.</div>';
+  : `<div class="pusto">Zdjęcia nie są jeszcze przeanalizowane.<br><button class="glowny" style="width:auto;margin-top:12px"
+     ${zajety() || !stan.ma_wyniki ? "disabled" : ""} onclick="document.getElementById('analizuj').click()">Analizuj zdjęcia</button></div>`;
 naStan.push(rysujAnalizeLewa);
 
 $("analizuj").onclick = async () => {
@@ -64,15 +65,22 @@ function przyciskiWyboru(obecna, wybierz, pozwolCofniecie = true) {
 
 // Wariant zapisywany od razu (Duplikaty, Podobne): decyzja dla wskazanych plików + przełożenie w drzewie.
 function przyciskiKategorii(ids, obecna, poZmianie) {
-  return przyciskiWyboru(obecna, async nowa => {
+  let poprzednia = obecna || "";
+  const wyb = przyciskiWyboru(obecna, async nowa => {
     const w = await api("/api/kategoria", {ids, kat: nowa});
+    const bylo = poprzednia; poprzednia = nowa;
     toast(nowa ? `Zapisano: ${KAT_NAZWY[nowa]}` + (w.plan && w.plan.zmienione ? " — przełożono w drzewie." : ".")
-               : "Cofnięto decyzję.");
+               : "Usunięto decyzję.", async () => {
+      await api("/api/kategoria", {ids, kat: bylo}); poprzednia = bylo; wyb.ustaw(bylo);
+      if (poZmianie) poZmianie(bylo);
+      toast("Cofnięto."); if (typeof plan !== "undefined") plan.wczytany = false;
+    });
     if (typeof plan !== "undefined") plan.wczytany = false;
     if (typeof inne !== "undefined") inne.wczytane = false;
     an.dokWczytane = false;
     if (poZmianie) poZmianie(nowa);
   });
+  return wyb;
 }
 
 function karta(id, rodzaj, tytul, podpis, zaznaczona, klik, duza = false) {
@@ -144,13 +152,16 @@ function rysujDokumenty() {
 $("dok-wszystkie").onclick = () => { dokWidoczne().forEach(d => an.dokWybor.set(d.id, "dokument")); rysujDokumenty(); };
 $("dok-zadne").onclick = () => { dokWidoczne().forEach(d => an.dokWybor.set(d.id, "zdjecie")); rysujDokumenty(); };
 $("dok-zapisz").onclick = async () => {
-  const wybor = {};  // decydujemy tylko o tym, co było widać
-  for (const d of dokWidoczne()) wybor[d.id] = an.dokWybor.get(d.id) || "zdjecie";
+  const wybor = {}, bylo = {};  // decydujemy tylko o tym, co było widać
+  for (const d of dokWidoczne()) {
+    wybor[d.id] = an.dokWybor.get(d.id) || "zdjecie";
+    bylo[d.id] = d.kat || (d.decyzja === 1 ? "dokument" : d.decyzja === 0 ? "zdjecie" : "");
+  }
   try {
     const w = await api("/api/nie-z-aparatu/zapisz", {wybor});
     const n = Object.values(wybor).filter(k => k === "dokument").length;
-    toast(`Zapisano ${w.zapisane} decyzji (dokumentów: ${n}).` +
-          (w.plan && w.plan.zmienione ? ` Przełożono w drzewie: ${w.plan.zmienione}.` : ""));
+    toast(`Zapisano: ${plikow(w.zapisane, ["decyzja", "decyzje", "decyzji"])} (dokumentów: ${n}).` +
+          (w.plan && w.plan.zmienione ? ` Przełożono w drzewie: ${plikow(w.plan.zmienione)}.` : ""), () => cofnijZapis(bylo));
     if (typeof inne !== "undefined") inne.wczytane = false;
     an.dokWczytane = false; plan.wczytany = false;
     stan = await api("/api/stan"); rysuj(); przyPokazaniu.dok();
@@ -257,7 +268,7 @@ function doOdlozenia() {
   return ids;
 }
 function podgladDuzy(id, nazwa) {
-  const n = document.createElement("div"); n.className = "nakladka";
+  const n = document.createElement("div"); n.className = "nakladka"; n.dataset.podglad = "1";
   const img = new Image(); img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${id}&duza=1`; img.alt = nazwa;
   img.style.cssText = "max-width:90vw;max-height:85vh;border-radius:8px;background:#000";
   n.append(img); n.onclick = () => n.remove(); document.body.append(n);
@@ -272,7 +283,11 @@ $("pod-odloz").onclick = async () => {
   if (!confirm(`Odłożyć ${ids.length} zdjęć do folderu Odłożone?\n\nNic nie jest kasowane — operację można cofnąć w sekcji „Duplikaty”.`)) return;
   try {
     const w = await api("/api/odloz", {ids, typ: an.tryb});
-    toast(`Odłożono ${w.przeniesione} zdjęć.` + (w.pominiete.length ? ` Pominięto: ${w.pominiete.length}.` : ""));
+    toast(`Odłożono ${w.przeniesione} zdjęć.` + (w.pominiete.length ? ` Pominięto: ${w.pominiete.length}.` : ""), async () => {
+      const c = await api("/api/duplikaty/cofnij", {});
+      toast(`Przywrócono ${c.przywrocone} zdjęć.`);
+      stan = await api("/api/stan"); rysuj(); an.podWczytane = false; wczytajPodobne();
+    });
     stan = await api("/api/stan"); rysuj(); an.podWczytane = false; wczytajPodobne();
   } catch (e) { toast(e.message); }
 };
@@ -321,12 +336,13 @@ function rysujInne() {
 $("inne-wsz-zdj").onclick = () => { inneWidoczne().forEach(p => inne.wybor.set(p.id, "zdjecie")); rysujInne(); };
 $("inne-wsz-smieci").onclick = () => { inneWidoczne().forEach(p => inne.wybor.set(p.id, "smieci")); rysujInne(); };
 $("inne-zapisz").onclick = async () => {
-  const wybor = {};
-  for (const p of inneWidoczne()) if (inne.wybor.has(p.id)) wybor[p.id] = inne.wybor.get(p.id);
+  const wybor = {}, bylo = {};
+  for (const p of inneWidoczne()) if (inne.wybor.has(p.id)) { wybor[p.id] = inne.wybor.get(p.id); bylo[p.id] = p.decyzja || ""; }
   if (!Object.keys(wybor).length) { toast("Najpierw wybierz coś przy obrazach."); return; }
   try {
     const w = await api("/api/nie-z-aparatu/zapisz", {wybor});
-    toast(`Zapisano ${w.zapisane} decyzji.` + (w.plan && w.plan.zmienione ? ` Przełożono w drzewie: ${w.plan.zmienione}.` : ""));
+    toast(`Zapisano: ${plikow(w.zapisane, ["decyzja", "decyzje", "decyzji"])}.` + (w.plan && w.plan.zmienione ? ` Przełożono w drzewie: ${plikow(w.plan.zmienione)}.` : ""),
+          () => cofnijZapis(bylo));
     inne.wczytane = false; an.dokWczytane = false; plan.wczytany = false;
     stan = await api("/api/stan"); rysuj(); przyPokazaniu.inne();
   } catch (e) { toast(e.message); }
@@ -335,3 +351,11 @@ naStan.push(() => {
   const n = stan.nie_z_aparatu;
   $("licz-inne").hidden = !n; if (n) $("licz-inne").textContent = n;
 });
+
+async function cofnijZapis(bylo) {  // przywraca decyzje sprzed zapisu zbiorczego
+  await api("/api/nie-z-aparatu/zapisz", {wybor: bylo});
+  toast("Cofnięto zapis decyzji.");
+  inne.wczytane = false; an.dokWczytane = false; if (typeof plan !== "undefined") plan.wczytany = false;
+  stan = await api("/api/stan"); rysuj();
+  if (przyPokazaniu[zakladka]) przyPokazaniu[zakladka]();
+}

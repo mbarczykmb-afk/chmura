@@ -194,7 +194,8 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 .wybor button.akt.s{background:var(--blad);border-color:var(--blad)}
 .karta .powod{color:var(--akc);font-size:11.5px}
 .karta.duza input{width:18px;height:18px;top:8px;left:8px}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:13px;z-index:20;max-width:80vw}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:13px;z-index:20;max-width:80vw;display:flex;gap:14px;align-items:center;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+.toast-cofnij{background:transparent;color:var(--bg);border:1px solid color-mix(in srgb,var(--bg) 50%,transparent);padding:3px 10px;font-weight:600;white-space:nowrap}
 .grupa-pod{border:1px solid var(--lin);border-radius:10px;padding:10px;background:var(--bg)}
 .grupa-pod .gl{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
 .grupa-pod .gl strong{flex:1}
@@ -239,6 +240,36 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
   .stopka{flex:none}
 }
 body.pracuje main>div:first-child .postep{display:none}
+/* przewodnik: zwijane sekcje lewej kolumny */
+section.przew h2{cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none}
+section.przew h2::after{content:"▾";margin-left:auto;color:var(--mut);font-size:13px;transition:transform .15s}
+section.przew.zwiniety h2::after{transform:rotate(-90deg)}
+section.przew h2:focus-visible{outline:2px solid var(--akc);outline-offset:4px;border-radius:4px}
+section.przew .streszczenie{display:none;color:var(--mut);font-size:13px;margin-top:4px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+section.przew.zwiniety{padding-top:12px;padding-bottom:12px}
+section.przew.zwiniety .tresc{display:none}
+section.przew.zwiniety .streszczenie{display:block}
+section.przew.zwiniety h2{margin:0}
+section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 55%,var(--lin));box-shadow:0 0 0 3px color-mix(in srgb,var(--akc) 12%,transparent)}
+/* klawiatura */
+.kursor{outline:3px solid var(--akc)!important;outline-offset:2px}
+.klawiatura{font-size:12px;color:var(--mut);padding:6px 16px;border-bottom:1px solid var(--lin);flex:none}
+.klawiatura b{display:inline-block;min-width:16px;text-align:center;padding:0 4px;border:1px solid var(--lin);border-bottom-width:2px;border-radius:4px;background:var(--bg);color:var(--fg);font-weight:600}
+/* ekran powitalny */
+.powitanie{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;display:grid;place-items:center;padding:16px}
+.pw-okno{background:var(--panel);border-radius:16px;max-width:760px;width:100%;padding:24px 26px;box-shadow:0 12px 50px rgba(0,0,0,.35);max-height:92vh;overflow:auto}
+.pw-okno h2{margin:0 0 6px;font-size:22px}
+.pw-kroki{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:18px 0}
+.pw-kroki div{background:var(--bg);border:1px solid var(--lin);border-radius:12px;padding:14px;font-size:13px;color:var(--mut);position:relative}
+.pw-kroki div>b:first-of-type{display:block;color:var(--fg);font-size:14.5px;margin:6px 0 4px}
+.pw-kroki div>b{color:var(--fg)}
+.pw-kroki span{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--akc);color:var(--akc-fg);font-weight:700;font-size:13px}
+.pw-slownik{font-size:13px;margin-bottom:14px} .pw-slownik summary{cursor:pointer;color:var(--akc)}
+.pw-slownik dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:10px 0 0}
+.pw-slownik dt{font-weight:600} .pw-slownik dd{margin:0;color:var(--mut)}
+.pw-dol{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.pw-dol label{font-size:13px;color:var(--mut);display:flex;gap:6px;align-items:center}
+.pw-dol .glowny{width:auto;padding:10px 22px}
 #galeria-nakladka{position:fixed;inset:0;z-index:1500;background:var(--bg)}
 #galeria-nakladka iframe{border:0;width:100%;height:100%;display:block}
 #biblioteka-btn{font-weight:600}
@@ -269,6 +300,7 @@ body.pracuje main>div:first-child .postep{display:none}
   <div style="position:relative">
     <button id="pomoc-btn" title="Pomoc, zgłaszanie problemów, aktualizacje">?</button>
     <div class="menu" id="pomoc-menu" hidden>
+      <button id="m-powitanie">👋 Jak zacząć</button>
       <button id="m-zglos">🐞 Zgłoś problem / wyślij raport…</button>
       <button id="m-aktualizacje">⟳ Sprawdź aktualizacje</button>
       <button id="m-o">ℹ O programie</button>
@@ -346,7 +378,7 @@ body.pracuje main>div:first-child .postep{display:none}
     <section>
       <h2>Skanowanie</h2>
       <p class="opis">Tylko odczyt — nic nie jest przenoszone ani zmieniane. Można przerwać i wznowić później.</p>
-      <button class="glowny" id="skanuj">Skanuj</button>
+      <button class="glowny" id="skanuj" title="Tylko odczyt — nic nie jest zmieniane">Skanuj</button>
       <div class="postep" id="postep" hidden>
         <div class="liczba"><span id="przejrzano">0</span> plików</div>
         <div class="pasek"><i></i></div>
@@ -363,7 +395,7 @@ body.pracuje main>div:first-child .postep{display:none}
       <h2>Duplikaty</h2>
       <p class="opis">Porównuję <b>zawartość</b> plików, nie nazwy. Nic nie jest kasowane — kopie trafiają
         do folderu <code>Odłożone\Duplikaty</code>, a operację można cofnąć.</p>
-      <button class="glowny" id="szukaj-dup">Szukaj duplikatów</button>
+      <button class="glowny" id="szukaj-dup" title="Porównuje zawartość plików — tylko odczyt">Szukaj duplikatów</button>
       <div class="postep" id="postep-dup" hidden>
         <div class="liczba"><span id="dup-zrobione">0</span> / <span id="dup-wszystkie">0</span></div>
         <div class="pasek"><i></i></div>
@@ -384,7 +416,7 @@ body.pracuje main>div:first-child .postep{display:none}
       <h2>Analiza zdjęć</h2>
       <p class="opis">Szuka zdjęć dokumentów (paragony, skany), podobnych zdjęć (np. kopii z WhatsAppa)
         i nieostrych. Czyta tylko miniatury z nagłówków plików, więc działa szybko także przez sieć.</p>
-      <button class="glowny" id="analizuj">Analizuj zdjęcia</button>
+      <button class="glowny" id="analizuj" title="Szuka dokumentów, podobnych i nieostrych zdjęć — tylko odczyt">Analizuj zdjęcia</button>
       <div id="zad-analiza"></div>
       <div class="podsum" id="podsum-analiza" hidden></div>
     </section>
@@ -394,7 +426,7 @@ body.pracuje main>div:first-child .postep{display:none}
       <p class="opis">Układa pliki według zasad: <i>Zdjęcia z 2023 → Marzec w Olkuszu</i>, muzyka wg wykonawców
         i albumów, pozostałe z dotychczasowymi nazwami folderów. Najpierw możesz wszystko poprawić w zakładce
         <b>Drzewo</b> — pliki ruszę dopiero po Twoim potwierdzeniu.</p>
-      <button class="glowny" id="generuj">Utwórz propozycję drzewa</button>
+      <button class="glowny" id="generuj" title="Układa pliki w propozycję folderów — nic jeszcze nie jest przenoszone">Utwórz propozycję drzewa</button>
       <div id="zad-plan"></div>
       <div class="podsum" id="podsum-plan" hidden></div>
       <div id="zad-wykonanie"></div>
@@ -466,33 +498,33 @@ body.pracuje main>div:first-child .postep{display:none}
         <div class="edytor-pliki">
           <div class="folder-nagl">
             <b id="plan-folder"></b>
-            <button class="maly" id="f-zmien">Zmień nazwę</button>
-            <button class="maly" id="f-przenies">Przenieś folder…</button>
-            <button class="maly" id="f-wyklucz">Wyklucz</button>
-            <button class="maly" id="f-przywroc">Przywróć</button>
-            <button class="maly" id="f-wszystkie">Zaznacz wszystkie</button>
+            <button class="maly" id="f-zmien" title="Zmień nazwę tego folderu w propozycji (gdy nazwa już istnieje — foldery się scalą)">✏ Zmień nazwę</button>
+            <button class="maly" id="f-przenies" title="Przenieś cały folder w inne miejsce drzewa">Przenieś folder…</button>
+            <button class="maly" id="f-wyklucz" title="Pomiń: pliki z tego folderu nie zostaną skopiowane ani przeniesione — zostają tam, gdzie są">⛔ Pomiń</button>
+            <button class="maly" id="f-przywroc" title="Cofnij pominięcie — pliki znowu zostaną uporządkowane">↩ Nie pomijaj</button>
+            <button class="maly" id="f-wszystkie" title="Zaznacz wszystkie pliki w tym folderze (Shift+klik zaznacza zakres)">Zaznacz wszystkie</button>
             <button class="maly" id="f-przejrzany" title="Oznacz, że ten folder jest już sprawdzony">✓ Przejrzany</button>
             <button class="maly" id="f-nastepny" title="Przejdź do następnego folderu, którego jeszcze nie przejrzałeś">Następny →</button>
           </div>
           <div class="akcje-zazn" id="akcje-zazn" hidden>
             <span id="ile-zazn"></span>
-            <button class="maly" id="z-przenies">Przenieś do…</button>
-            <button class="maly" id="z-nowy">Nowy folder z zaznaczonych…</button>
-            <button class="maly" id="z-miejsce">Ustaw miejsce…</button>
-            <button class="maly" id="z-data">Ustaw datę…</button>
-            <button class="maly" id="z-wyklucz">Wyklucz</button>
-            <button class="maly" id="z-przywroc">Przywróć</button>
+            <button class="maly" id="z-przenies" title="Przenieś zaznaczone pliki do innego folderu propozycji">Przenieś do…</button>
+            <button class="maly" id="z-nowy" title="Utwórz nowy folder i przenieś do niego zaznaczone pliki">Nowy folder z zaznaczonych…</button>
+            <button class="maly" id="z-miejsce" title="Np. „Hel” — zdjęcia trafią do „&lt;Miesiąc&gt; na Helu”">📍 Ustaw miejsce…</button>
+            <button class="maly" id="z-data" title="Popraw rok i miesiąc (np. skany ze złą datą) — plik nie jest zmieniany">📅 Ustaw datę…</button>
+            <button class="maly" id="z-wyklucz" title="Pomiń zaznaczone: nie zostaną skopiowane ani przeniesione">⛔ Pomiń</button>
+            <button class="maly" id="z-przywroc" title="Cofnij pominięcie zaznaczonych">↩ Nie pomijaj</button>
             <button class="maly" id="z-odznacz">Odznacz</button>
           </div>
           <div class="leg-plan" style="padding:6px 12px;border-bottom:1px solid var(--lin)"><span>🟢 nowe</span><span>⚪ już są</span>
-            <span>🔵 do sprawdzenia</span><span>🟡 ta sama nazwa</span><span>⛔ pominięte</span>
+            <span>🔵 do sprawdzenia</span><span>🟡 ta sama nazwa</span><span title="Pominięte: zostają tam, gdzie są — nie będą kopiowane ani przenoszone">⛔ pominięte</span>
             <span style="margin-left:auto">Shift+klik — zaznacz zakres · przeciągnij na folder — przenieś</span></div>
           <div class="siatka" id="plan-pliki"></div>
         </div>
       </div>
       <div class="stopka">
         <span id="plan-stopka"></span>
-        <button class="glowny" id="plan-wykonaj">Uporządkuj pliki…</button>
+        <button class="glowny" id="plan-wykonaj" title="Kopiuje / przenosi pliki według drzewa (przed startem pokażę podsumowanie; można cofnąć)">Uporządkuj pliki…</button>
       </div>
     </div>
     <div id="widok-dok" class="widok" hidden>
@@ -503,7 +535,7 @@ body.pracuje main>div:first-child .postep{display:none}
         <button class="maly" id="dok-zadne">Wszystkie: zdjęcia</button>
       </div>
       <div class="siatka" id="dok-siatka"></div>
-      <div class="stopka"><span id="dok-stopka"></span><button class="glowny" id="dok-zapisz">Zapisz decyzje</button></div>
+      <div class="stopka"><span id="dok-stopka"></span><button class="glowny" id="dok-zapisz" title="Zapisuje wybory dla wyświetlonych zdjęć i przekłada je w Drzewie (można cofnąć)">Zapisz decyzje</button></div>
     </div>
     <div id="widok-inne" class="widok" hidden>
       <div class="filtry">
@@ -514,7 +546,7 @@ body.pracuje main>div:first-child .postep{display:none}
         <button class="maly" id="inne-wsz-smieci">Wszystkie: śmieci</button>
       </div>
       <div class="siatka duze" id="inne-siatka"></div>
-      <div class="stopka"><span id="inne-stopka"></span><button class="glowny" id="inne-zapisz">Zapisz decyzje</button></div>
+      <div class="stopka"><span id="inne-stopka"></span><button class="glowny" id="inne-zapisz" title="Zapisuje wybory i przekłada pliki w Drzewie (można cofnąć)">Zapisz decyzje</button></div>
     </div>
     <div id="widok-pod" class="widok" hidden>
       <div class="filtry" id="pod-filtry">
@@ -537,7 +569,7 @@ body.pracuje main>div:first-child .postep{display:none}
       <div class="lista-dup" id="lista-dup"></div>
       <div class="stopka" id="stopka-dup" hidden>
         <span id="stopka-opis"></span>
-        <button class="glowny" id="odloz">Odłóż zaznaczone kopie</button>
+        <button class="glowny" id="odloz" title="Odłóż = przenieś kopie do folderu Odłożone\Duplikaty; nic nie jest kasowane (można cofnąć)">Odłóż zaznaczone kopie</button>
       </div>
     </div>
   </section>
@@ -1006,9 +1038,23 @@ function pokazZakladke(z) {
   if (z === "dup" && !dupGrupy.length) wczytajGrupy(true);
   if (przyPokazaniu[z]) przyPokazaniu[z]();
 }
-function toast(tekst) {
-  const t = document.createElement("div"); t.className = "toast"; t.textContent = tekst;
-  document.body.append(t); setTimeout(() => t.remove(), 3500);
+// „1 plik”, „2 pliki”, „5 plików”
+function plikow(n, formy = ["plik", "pliki", "plików"]) {
+  const d = n % 10, s = n % 100;
+  return `${n.toLocaleString("pl-PL")} ${n === 1 ? formy[0] : (d >= 2 && d <= 4 && (s < 12 || s > 14)) ? formy[1] : formy[2]}`;
+}
+// Komunikat na dole okna; cofnij() — przycisk „Cofnij” (komunikat wisi wtedy dłużej).
+function toast(tekst, cofnij) {
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+  const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status");
+  const s = document.createElement("span"); s.textContent = tekst; t.append(s);
+  if (cofnij) {
+    const b = document.createElement("button"); b.className = "toast-cofnij"; b.textContent = "↶ Cofnij";
+    b.title = "Cofnij to, co przed chwilą zrobiono";
+    b.onclick = async () => { t.remove(); try { await cofnij(); } catch (e) { toast(e.message); } };
+    t.append(b);
+  }
+  document.body.append(t); setTimeout(() => t.remove(), cofnij ? 9000 : 3500);
 }
 // Wspólny wygląd postępu dla zadań w tle (analiza, plan, wykonanie)
 function rysujZadanie(nazwa, kontener) {
@@ -1046,7 +1092,8 @@ function rysujGrupy() {
   $("dup-info").textContent = p ? `${p.nadmiar} zbędnych kopii · ${rozmiar(p.bajty)}` : "";
   if (!dupGrupy.length) {
     l.innerHTML = `<div class="zachęta"><div><strong>${p ? "Brak duplikatów w tej kategorii" : "Jeszcze nie szukano duplikatów"}</strong>
-      ${p ? "" : "Kliknij „Szukaj duplikatów” po lewej."}</div></div>`;
+      ${p ? "" : `<button class="glowny" style="width:auto;margin-top:12px" ${zajety() || !stan.ma_wyniki ? "disabled" : ""}
+        onclick="document.getElementById('szukaj-dup').click()">Szukaj duplikatów</button>`}</div></div>`;
     $("stopka-dup").hidden = true; return;
   }
   for (const g of dupGrupy) {
@@ -1121,9 +1168,11 @@ $("odloz").onclick = async () => {
   $("odloz").disabled = true;
   try {
     const w = await api("/api/duplikaty/przenies", {decyzje});
-    let msg = `Odłożono ${w.przeniesione} plików (${rozmiar(w.bajty)}).`;
-    if (w.pominiete.length) msg += `\n\nPominięto ${w.pominiete.length}:\n` + w.pominiete.slice(0, 8).join("\n");
-    alert(msg);
+    if (w.pominiete.length) alert(`Pominięto ${w.pominiete.length}:\n` + w.pominiete.slice(0, 8).join("\n"));
+    toast(`Odłożono ${w.przeniesione} plików (${rozmiar(w.bajty)}) do Odłożone\\Duplikaty.`, async () => {
+      const c = await api("/api/duplikaty/cofnij", {});
+      toast(`Przywrócono ${c.przywrocone} plików.`); await odswiez(); wczytajGrupy(true);
+    });
   } catch (e) { alert(e.message); }
   await odswiez(); wczytajGrupy(true);
 };
@@ -1176,6 +1225,7 @@ function rysujDup() {
 <script src="/ui/plan.js"></script>
 <script src="/ui/analiza.js"></script>
 <script src="/ui/projekt.js"></script>
+<script src="/ui/przewodnik.js"></script>
 <script src="/ui/pomoc.js"></script>
 </body>
 </html>
