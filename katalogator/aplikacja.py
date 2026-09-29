@@ -674,9 +674,9 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij(dyski.podfoldery(q.get("sciezka", [""])[0]))
             if u.path == "/api/duplikaty":
                 try:
-                    od, ile = int(q.get("od", ["0"])[0]), min(int(q.get("ile", ["40"])[0]), 200)
+                    od, ile = int(q.get("od", ["0"])[0]), min(int(q.get("ile", ["100"])[0]), 200)
                 except ValueError:
-                    od, ile = 0, 40
+                    od, ile = 0, 100
                 return self._wyslij(stan.grupy(q.get("rodzaj", [""])[0], od, ile))
             if u.path == "/plik":
                 return self._strumien(stan.sciezka_filmu(_int(q, "id", 0)))

@@ -192,6 +192,25 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
 .plik.zdj .zn2{font-size:11px;color:var(--mut)}
 .grupa-pod .siatka{padding:0;max-height:none;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 .wkrotce-box h2{color:var(--fg)}
+
+/* --- Układ „zamrożony”: nagłówek, kroki i pasek zakładek stoją, przewija się tylko zawartość --- */
+@media (min-width:901px){
+  html,body{height:100%}
+  body{display:flex;flex-direction:column;overflow:hidden}
+  header,.baner,nav.kroki{flex:none}
+  main{flex:1;min-height:0;align-items:stretch;padding-bottom:16px}
+  main>div:first-child{overflow-y:auto;min-height:0;padding-right:6px;scrollbar-gutter:stable}
+  .raport{min-height:0;height:100%}
+  .raport .pasek-g{flex:none}
+  #widok-raport,.widok,#widok-dup{flex:1;min-height:0}
+  .raport iframe{min-height:0;height:100%}
+  .lista-dup{max-height:none;min-height:0}
+  .edytor{min-height:0}
+  .edytor-drzewo,body.pelny .edytor-drzewo{max-height:none;min-height:0}
+  .edytor-pliki{min-height:0}
+  .edytor-pliki .siatka,body.pelny .edytor-pliki .siatka,#dok-siatka{flex:1;min-height:0;max-height:none}
+  .stopka{flex:none}
+}
 </style>
 </head>
 <body>
@@ -360,7 +379,7 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
       </div>
       <button class="maly" id="odswiez" hidden>Odśwież</button>
     </div>
-    <div id="widok-raport" style="display:flex;flex-direction:column;flex:1">
+    <div id="widok-raport" style="display:flex;flex-direction:column;flex:1;min-height:0">
       <div class="zachęta" id="zacheta">
         <div><strong>Tu pojawi się raport ze skanu</strong>
         Ile masz zdjęć i filmów, ile ma lokalizację GPS, z jakich lat, co zajmuje miejsce i ile jest możliwych duplikatów.</div>
@@ -826,6 +845,7 @@ $("zamknij").onclick = async () => {
 
 // ---------- duplikaty ----------
 const IKONY = {zdjecie: "🖼️", film: "🎬", muzyka: "🎵", towarzyszacy: "📎", inne: "📄"};
+const DUP_NA_STRONE = 100;
 let dupGrupy = [], dupDecyzje = {}, dupFiltr = "", dupKoniec = false, bylDup = false, zakladka = "raport";
 
 function rozmiar(b) {
@@ -877,10 +897,10 @@ function zajety() {
 
 async function wczytajGrupy(odNowa) {
   if (odNowa) { dupGrupy = []; dupDecyzje = {}; dupKoniec = false; }
-  const r = await api(`/api/duplikaty?rodzaj=${dupFiltr}&od=${dupGrupy.length}&ile=40`);
+  const r = await api(`/api/duplikaty?rodzaj=${dupFiltr}&od=${dupGrupy.length}&ile=${DUP_NA_STRONE}`);
   r.grupy.forEach(g => { dupDecyzje[g.h] = {zostaw: g.zostaw, pomin: false}; });
   dupGrupy = dupGrupy.concat(r.grupy);
-  dupKoniec = r.grupy.length < 40;
+  dupKoniec = r.grupy.length < DUP_NA_STRONE;
   rysujGrupy();
 }
 
@@ -931,7 +951,7 @@ function rysujGrupy() {
     k.append(mini, prawa); l.append(k);
   }
   if (!dupKoniec) {
-    const b = document.createElement("button"); b.className = "wiecej"; b.textContent = "Pokaż więcej grup";
+    const b = document.createElement("button"); b.className = "wiecej"; b.textContent = `Pokaż kolejne ${DUP_NA_STRONE} grup`;
     b.onclick = () => wczytajGrupy(false); l.append(b);
   }
   let n = 0, b = 0;
