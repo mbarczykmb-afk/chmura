@@ -228,6 +228,18 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     - **nazewnictwo**: „Pomiń / Nie pomijaj” (zamiast Wyklucz / Przywróć), „Odłóż” = do folderu Odłożone;
       podpowiedzi przy przyciskach; polska odmiana w komunikatach;
     - **ekran powitalny** (4 kroki + słowniczek), raz przy pierwszym uruchomieniu, potem z menu „? → Jak zacząć”
+25. **Audyt 1.6.1 — bezpieczeństwo danych** ✅:
+    - „przenieś”, gdy źródło i cel to ten sam folder pod dwiema nazwami (np. `Z:\Biblioteka` i
+      `\\192.168.100.28\Public\Biblioteka`): wcześniej jedyna kopia mogła zostać usunięta — teraz rozpoznawane
+      (ten sam plik) i nic nie jest ruszane; to samo w Duplikatach;
+    - sprzątanie pustych folderów po przeniesieniu usuwa tylko znane śmieci systemowe (Thumbs.db, desktop.ini,
+      .DS_Store, .wdmc, @eaDir…) — nigdy folderów ukrytych, „Odłożone” ani nieznanych plików — i nigdy nie
+      wychodzi ponad wybrane foldery (wcześniej po przeniesieniu wszystkiego granica „znikała”);
+    - skan nie wymaga istnienia miejsca docelowego (nowy folder powstanie przy porządkowaniu);
+    - galeria „biblioteka” bez wybranego miejsca docelowego jest pusta (nie pokazuje źródeł);
+    - kopia w bibliotece nie trafia do „Podobnych” w parze z oryginałem; decyzje po porządkowaniu znów
+      natychmiastowe (podobne liczone od nowa tylko, gdy zmienią się przeanalizowane zdjęcia);
+    - testy odtwarzające każdy z przypadków (stara wersja je oblewa)
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

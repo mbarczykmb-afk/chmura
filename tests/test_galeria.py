@@ -103,3 +103,9 @@ def test_blokada_po_wielu_zlych_pinach(biblioteka, monkeypatch):
     finally:
         s.stop()
     assert kody[:8] == [401] * 8 and kody[8] == 429  # nawet dobry PIN czeka, gdy ktoś zgaduje
+
+
+def test_pusty_zakres_to_pusta_biblioteka(biblioteka):
+    tmp, db, cel = biblioteka
+    assert galeria.Galeria(tmp / "k.db", lambda: []).lata()["razem"] == 0
+    assert galeria.Galeria(tmp / "k.db", lambda: None).lata()["razem"] == 3

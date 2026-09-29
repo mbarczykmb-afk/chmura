@@ -409,7 +409,10 @@ def _odcisk_danych(db: sqlite3.Connection, prog: int) -> tuple:
     """Tani „odcisk” stanu bazy: zmienia się, gdy dochodzą/znikają zdjęcia lub wyniki analizy."""
     plik = next((r[2] for r in db.execute("PRAGMA database_list") if r[1] == "main"), "")
     a = db.execute("SELECT COUNT(*), MAX(rowid) FROM analiza").fetchone()
-    p = db.execute("SELECT COUNT(*), MAX(rowid) FROM pliki").fetchone()
+    # tylko przeanalizowane i nadal istniejące zdjęcia — np. dopisanie plików biblioteki po porządkowaniu
+    # nie zmienia wyniku, więc nie liczymy wszystkiego od nowa
+    p = db.execute(f"SELECT COUNT(*), MAX(p.rowid), TOTAL(p.rowid) FROM pliki p JOIN analiza a ON {_AKTUALNE} "
+                   "WHERE p.rodzaj='zdjecie'").fetchone()
     o = db.execute("SELECT COUNT(pelny), MAX(rowid) FROM odciski").fetchone() if _ma_odciski(db) else (0, 0)
     return (plik or id(db), prog, *a, *p, *o)
 
@@ -469,9 +472,11 @@ def _grupy_podobnych(db: sqlite3.Connection, prog: int, postep=None) -> list[lis
         if len(czlonkowie) < 2:
             continue
         g = [hashe[i][1] for i in czlonkowie]
-        pelne = {w["pelny"] for w in g}
-        if len(pelne) == 1 and None not in pelne:
-            continue  # same identyczne — to zakładka „Duplikaty”
+        # same identyczne pliki (np. zdjęcie i jego kopia w bibliotece) — to zakładka „Duplikaty”, nie „Podobne”;
+        # bez pełnego odcisku rozpoznajemy je po rozmiarze w bajtach i odcisku obrazu
+        tozsamosc = {w["pelny"] or f"{w['rozmiar']}:{w['dhash']}" for w in g}
+        if len(tozsamosc) == 1:
+            continue
         wykorzystane.update(czlonkowie)
         g.sort(key=lambda w: (-(w["szer"] or 0) * (w["wys"] or 0), -(w["ostrosc"] or 0), w["mtime"]))
         wynik.append(g)

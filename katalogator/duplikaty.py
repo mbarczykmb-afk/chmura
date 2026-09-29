@@ -271,6 +271,12 @@ def przenies(db: sqlite3.Connection, decyzje: list[dict]) -> dict:
             pominiete.append(f"Nie ma pliku do zostawienia: {zostaw['wzgledna']}")
             continue
         for i in d["usun"]:
+            try:  # ten sam plik widziany dwa razy (ten sam folder pod dwiema nazwami) — to nie kopia
+                if os.path.samefile(zostaw["sciezka"], wiersze[i]["sciezka"]):
+                    pominiete.append(f"To ten sam plik (ten sam folder dodany dwa razy?): {wiersze[i]['wzgledna']}")
+                    continue
+            except OSError:
+                pass
             blad = _odloz_wiersz(db, wiersze[i], partia, "duplikat")
             if blad:
                 pominiete.append(blad)

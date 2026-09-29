@@ -206,3 +206,57 @@ def test_swieza_baza_otwierana_naraz(tmp_path):
         for w in watki:
             w.join()
     assert not bledy, bledy[:3]
+
+
+def _porzadkuj(zrodlo, cel, db_plik):
+    from katalogator import planista
+    db = skaner.otworz_baze(db_plik)
+    skaner.skanuj(str(zrodlo), db, wypisz=lambda *_: None)
+    planista.generuj(db, [{"sciezka": str(zrodlo), "tryb": "przenies"}], str(cel), dom="Olkusz")
+    return db, wykonawca.wykonaj(db)
+
+
+def test_ten_sam_folder_pod_dwiema_nazwami_nic_nie_znika(tmp_path):
+    """Źródło Z:\\Biblioteka i cel \\\\NAS\\Biblioteka to ten sam folder: „przenieś” nie może usunąć jedynej kopii."""
+    from test_katalogator import _jpg_z_exif
+    bib = tmp_path / "Biblioteka"
+    f = bib / "Zdjęcia" / "Zdjęcia z 2023" / "Marzec w domu"
+    f.mkdir(parents=True)
+    _jpg_z_exif(f / "IMG_20230310.jpg", data="2023:03:10 12:00:00")
+    druga_nazwa = tmp_path / "NAS_Biblioteka"
+    try:
+        os.symlink(bib, druga_nazwa, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("dowiązania symboliczne wymagają uprawnień (Windows bez trybu dewelopera)")
+    db, w = _porzadkuj(bib, druga_nazwa, tmp_path / "k.db")
+    assert (f / "IMG_20230310.jpg").exists()
+    assert len(list(bib.rglob("*.jpg"))) == 1
+
+
+def test_sprzatanie_nie_rusza_cudzych_folderow_ani_nie_wychodzi_poza_zrodlo(tmp_path):
+    from test_katalogator import _jpg_z_exif
+    nad = tmp_path / "Zdjecia_stare"          # folder nad wybranym źródłem
+    zr = nad / "2019"
+    (zr / "wakacje" / ".prywatne").mkdir(parents=True)
+    (zr / "wakacje" / ".prywatne" / "notatka.txt").write_text("ważne")
+    (zr / "wakacje" / "Odłożone").mkdir()
+    (zr / "wakacje" / "Odłożone" / "moje.txt").write_text("też ważne")
+    (zr / "inne").mkdir()
+    (zr / "inne" / "Thumbs.db").write_bytes(b"x")
+    _jpg_z_exif(zr / "wakacje" / "IMG_1.jpg", data="2019:07:10 12:00:00")
+    _jpg_z_exif(zr / "inne" / "IMG_2.jpg", data="2019:07:11 12:00:00")
+    db, w = _porzadkuj(zr, tmp_path / "Biblioteka", tmp_path / "k.db")
+    assert w["zrobione"] == 2
+    assert (zr / "wakacje" / ".prywatne" / "notatka.txt").read_text() == "ważne"
+    assert (zr / "wakacje" / "Odłożone" / "moje.txt").exists()
+    assert not (zr / "inne").exists()      # pusty (tylko Thumbs.db) — sprzątnięty
+    assert nad.exists()                    # nigdy ponad wybrany folder
+
+
+def test_ten_sam_plik_rozpoznany():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "a.jpg")
+        open(p, "wb").write(b"x")
+        assert wykonawca._ten_sam_plik(p, os.path.join(d, ".", "a.jpg"))
+        assert not wykonawca._ten_sam_plik(p, os.path.join(d, "b.jpg"))

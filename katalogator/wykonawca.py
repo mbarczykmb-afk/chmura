@@ -153,6 +153,8 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
                       f"wolne {spr['wolne'] / 1e9:.1f} GB.")
     cel_root = spr["cel"]
     wiersze = do_zrobienia(db)
+    # granice sprzątania pustych folderów: foldery źródłowe sprzed porządkowania (potem ich wpisy znikają z bazy)
+    korzenie = [r[0] for r in db.execute("SELECT DISTINCT korzen FROM pliki")]
     partia = int(time.time() * 1000)
     bajty = [0]
     razem = spr["bajtow"]
@@ -197,7 +199,7 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
                 break
         db.commit()  # po każdym pliku: kopiowanie następnego może trwać minuty
     db.commit()
-    usuniete_foldery = _usun_puste(przeniesione_foldery, db) if usun_puste else 0
+    usuniete_foldery = _usun_puste(przeniesione_foldery, korzenie) if usun_puste else 0
     if postep:
         postep("gotowe", len(wiersze), len(wiersze), bajty[0], bajty_razem=razem)
     return {"zrobione": ok, "bledy": bledy, "bajty": bajty[0], "partia": partia,
@@ -214,6 +216,11 @@ def _wykonaj_plik(db, w, cel_root: str, partia: int, przerwij, licz, przeniesion
         raise OSError("plik zmienił się od skanu — przeskanuj ponownie")
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     tryb_logu = w["tryb"]
+    if _ten_sam_plik(w["sciezka"], dst):
+        # to już jest ten plik (np. ten sam folder pod dwiema nazwami: Z:\… i \\192.168…\…) — nic nie ruszamy,
+        # a zwłaszcza nie usuwamy „oryginału”, który jest jedyną kopią
+        db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
+        return
     if os.path.exists(dst) and os.path.getsize(dst) == w["rozmiar"] and \
             _hash(dst, przerwij) == _hash(w["sciezka"], przerwij, licz):
         # identyczny plik już jest w bibliotece — nie tworzymy kopii „ (2)”
@@ -256,6 +263,15 @@ def _wykonaj_plik(db, w, cel_root: str, partia: int, przerwij, licz, przeniesion
     db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
 
 
+def _ten_sam_plik(a: str, b: str) -> bool:
+    try:
+        if os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b)):
+            return True
+        return os.path.exists(b) and os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
 def _do_biblioteki(db, zrodlowy, dst: str, cel_root: str) -> None:
     """Plik w bibliotece od razu trafia do bazy (z datą, GPS i aparatem źródła) — przeglądarka biblioteki
     i kolejne propozycje widzą go bez ponownego skanowania."""
@@ -273,22 +289,41 @@ def _do_biblioteki(db, zrodlowy, dst: str, cel_root: str) -> None:
                [dane[k] for k in kol])
 
 
-def _usun_puste(foldery: set[str], db) -> int:
-    """Usuwa foldery źródłowe, które po przeniesieniu zostały puste (lub mają tylko śmieci)."""
-    zrodla = [r[0] for r in db.execute("SELECT DISTINCT korzen FROM pliki")]
-    granice = {os.path.normcase(os.path.normpath(z)) for z in zrodla}
+# Tylko to wolno usunąć razem z pustym folderem: pliki i foldery tworzone automatycznie przez system i programy.
+_SMIECI_DO_USUNIECIA_PLIKI = {"thumbs.db", "desktop.ini", ".ds_store", "ehthumbs.db", ".picasa.ini", ".nomedia"}
+_SMIECI_DO_USUNIECIA_FOLDERY = {".wdmc", "@eadir", ".appledouble", ".thumbnails", ".spotlight-v100", ".fseventsd",
+                                ".trashes"}
+
+
+def _smiec(w) -> bool:
+    n = w.name.lower()
+    if w.is_dir(follow_symlinks=False):
+        return n in _SMIECI_DO_USUNIECIA_FOLDERY
+    return n in _SMIECI_DO_USUNIECIA_PLIKI or n.startswith("._")
+
+
+def _usun_puste(foldery: set[str], korzenie: list[str]) -> int:
+    """Usuwa foldery źródłowe, które po przeniesieniu zostały puste (lub mają tylko systemowe śmieci).
+    Nigdy nie wychodzi poza wybrane foldery i nie usuwa niczego, co nie jest znanym śmieciem (np. folderów
+    ukrytych, „Odłożone” czy plików, których nie skanowaliśmy)."""
+    granice = [os.path.normcase(os.path.normpath(k)).rstrip("\\/") for k in korzenie if k]
+
+    def wewnatrz(f: str) -> bool:
+        nf = os.path.normcase(os.path.normpath(f))
+        return any(nf.startswith(g + os.sep) for g in granice)
+
     usuniete = 0
     for f in sorted(foldery, key=len, reverse=True):
-        while f and os.path.normcase(os.path.normpath(f)) not in granice:
+        while f and wewnatrz(f):
             try:
                 wpisy = list(os.scandir(f))
             except OSError:
                 break
-            if any(not (typy.pominac_plik(w.name) if w.is_file() else typy.pominac_folder(w.name)) for w in wpisy):
+            if not all(_smiec(w) for w in wpisy):
                 break
             try:
                 for w in wpisy:
-                    shutil.rmtree(w.path) if w.is_dir() else os.remove(w.path)
+                    shutil.rmtree(w.path) if w.is_dir(follow_symlinks=False) else os.remove(w.path)
                 os.rmdir(f)
                 usuniete += 1
             except OSError:

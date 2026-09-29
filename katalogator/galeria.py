@@ -52,8 +52,10 @@ class Galeria:
 
     def _warunek(self) -> tuple[str, list]:
         k = self.korzenie()
-        if not k:
+        if k is None:  # wszystko w bazie
             return "", []
+        if not k:  # zakres pusty (np. biblioteka, gdy nie wybrano miejsca docelowego)
+            return " AND 0", []
         czesci, arg = [], []
         for r in k:
             r = os.path.abspath(r)

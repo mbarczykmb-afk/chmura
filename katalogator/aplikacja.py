@@ -331,13 +331,14 @@ class Stan:
     def rozpocznij_skan(self) -> str | None:
         foldery = [z["sciezka"] for z in self.ustawienia["zrodla"]]
         cel = self.ustawienia["cel"]
-        if cel and not any(dyski.zawiera(z, cel) for z in foldery):
-            foldery.append(cel)  # miejsce docelowe też skanujemy (o ile nie leży w źródle)
         if not foldery:
             return "Najpierw wybierz folder do uporządkowania."
         brak = [f for f in foldery if not os.path.isdir(f)]
         if brak:
             return "Nie mogę otworzyć folderu: " + ", ".join(brak)
+        # miejsce docelowe też skanujemy (o ile już istnieje i nie leży w źródle) — nowy folder powstanie przy porządkowaniu
+        if cel and os.path.isdir(cel) and not any(dyski.zawiera(z, cel) for z in foldery):
+            foldery.append(cel)
         with self.blokada:
             if self._zajety():
                 return "Poczekaj, aż skończy się bieżące zadanie."
