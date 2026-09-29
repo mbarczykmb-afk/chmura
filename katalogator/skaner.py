@@ -54,10 +54,20 @@ def otworz_baze(sciezka: str | Path) -> sqlite3.Connection:
     „database is locked”."""
     db = sqlite3.connect(str(sciezka), timeout=30)
     db.row_factory = sqlite3.Row
-    if str(sciezka) != ":memory:":
-        db.execute("PRAGMA journal_mode=WAL")
-        db.execute("PRAGMA synchronous=NORMAL")
     db.execute("PRAGMA busy_timeout=30000")
+    if str(sciezka) != ":memory:":
+        # Przełączenie na WAL potrzebuje wyłącznej blokady i nie czeka na innych — robimy je tylko raz
+        # (tryb zapisuje się w pliku bazy), a gdy baza jest akurat zajęta, ponawiamy chwilę później.
+        for proba in range(50):
+            try:
+                if db.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal":
+                    db.execute("PRAGMA journal_mode=WAL")
+                break
+            except sqlite3.OperationalError:
+                if proba == 49:
+                    raise
+                time.sleep(0.1)
+        db.execute("PRAGMA synchronous=NORMAL")
     db.executescript(SCHEMAT)
     return db
 

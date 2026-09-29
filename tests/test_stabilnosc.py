@@ -160,3 +160,49 @@ def test_grupy_podobnych_szybkie_i_ograniczone(tmp_path):
     assert g and max(len(x) for x in g) <= analiza.MAKS_SASIADOW + 1
     t0 = time.time()
     assert analiza.grupy_podobnych(db) is g and time.time() - t0 < 0.1  # drugi raz z pamięci
+
+
+def test_otwarcie_bazy_gdy_skan_zapisuje(tmp_path):
+    """Zgłoszone „database is locked”: okno otwiera bazę, gdy skan w tle trzyma transakcję zapisu."""
+    baza = tmp_path / "k.db"
+    skaner.otworz_baze(baza).close()
+    trzyma = threading.Event()
+
+    def skan():  # jak skaner: długa transakcja zapisu we własnym wątku
+        zapis = skaner.otworz_baze(baza)
+        zapis.execute("BEGIN IMMEDIATE")
+        zapis.execute("INSERT INTO skany(korzen, start) VALUES ('x', 0)")
+        trzyma.set()
+        time.sleep(0.5)
+        zapis.commit()
+        zapis.close()
+    t = threading.Thread(target=skan)
+    t.start()
+    trzyma.wait()
+    db = skaner.otworz_baze(baza)  # nie może się wywrócić
+    assert db.execute("SELECT COUNT(*) FROM pliki").fetchone()[0] == 0
+    t.join()
+
+
+def test_swieza_baza_otwierana_naraz(tmp_path):
+    """Nowy projekt: okno i skan otwierają nieistniejącą jeszcze bazę w tej samej chwili
+    (przełączanie na WAL wywracało się z „database is locked” — kilka razy na kilkaset prób)."""
+    bledy = []
+    for runda in range(40):
+        baza = tmp_path / f"k{runda}.db"
+        start = threading.Barrier(8)
+
+        def otworz():
+            start.wait()
+            try:
+                db = skaner.otworz_baze(baza)
+                db.execute("SELECT COUNT(*) FROM pliki").fetchone()
+                db.close()
+            except Exception as e:  # pragma: no cover - raport błędu
+                bledy.append(repr(e))
+        watki = [threading.Thread(target=otworz) for _ in range(8)]
+        for w in watki:
+            w.start()
+        for w in watki:
+            w.join()
+    assert not bledy, bledy[:3]

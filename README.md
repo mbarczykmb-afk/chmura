@@ -82,10 +82,11 @@ Konfiguracje i skrypty dla wybranej opcji trafią do tego repozytorium.
 ## Katalogator — porządkowanie zdjęć, filmów, muzyki i plików
 
 Specyfikacja: [`docs/katalogator-specyfikacja.md`](docs/katalogator-specyfikacja.md).
-Wersja 1.1: projekty (praca na kilka dni: notatki, dziennik, przejrzane foldery), skan
-i raport, duplikaty, analiza zdjęć (dokumenty, podobne, nieostre), propozycja drzewa
-(„Zdjęcia z 2023 → Marzec w Olkuszu”), edytor z wyszukiwarką i zmianami zbiorczymi,
-porządkowanie z weryfikacją i cofaniem, folder przychodzący z harmonogramem. Nazwy miejscowości: © GeoNames, CC BY 4.0.
+Wersja 1.4: projekty (praca na kilka dni), skan i raport, duplikaty, analiza zdjęć (dokumenty, podobne, nieostre,
+„nie z aparatu”), śmieci, propozycja drzewa („Zdjęcia z 2023 → Marzec w Olkuszu”, „Dokumenty z 2023”), edytor
+z wyszukiwarką i zmianami zbiorczymi, porządkowanie z weryfikacją i cofaniem, folder przychodzący z harmonogramem,
+stabilna praca na dużych bibliotekach (50 tys. plików, przerwy w dostępie do dysku sieciowego).
+Nazwy miejscowości: © GeoNames, CC BY 4.0.
 
 **Instalacja:**
 1. Wejdź na <https://github.com/mbarczykmb-afk/chmura/releases> i pobierz najnowszy
@@ -94,35 +95,37 @@ porządkowanie z weryfikacją i cofaniem, folder przychodzący z harmonogramem. 
    o nieznanym wydawcy → *Więcej informacji* → *Uruchom mimo to*. Instalator tworzy skrót
    w menu Start (i opcjonalnie na pulpicie); program trafia do `%LOCALAPPDATA%\Programs\Katalogator`.
    Wersja przenośna bez instalacji: `Katalogator.exe` z tej samej strony.
-   Program sam powiadomi o nowej wersji (*? → O programie* — można wyłączyć) i zainstaluje ją jednym kliknięciem.
-3. Otworzy się okno programu. W sekcji *Co porządkujemy?* rozwiń dysk
-   (np. `Z:` — dyski sieciowe mają ikonę 🌐) i przy folderach zaznacz ✓
-   **K** (kopiuj — oryginały zostają) albo **P** (przenieś); *Dokąd?* →
-   *Wybierz folder…* (można utworzyć nowy) → *Skanuj* → raport.
-4. **Duplikaty:** *Szukaj duplikatów* → zakładka *Duplikaty* → w każdej grupie
-   zaznacz plik, który zostaje → *Odłóż zaznaczone kopie*. Kopie trafiają do
-   folderu `_Duplikaty_Katalogator` (nic nie jest kasowane; *Cofnij* przywraca).
-   Gdy wszystko sprawdzisz, folder `_Duplikaty_Katalogator` możesz usunąć ręcznie.
-5. **Analiza zdjęć** → zakładki *Dokumenty* (zdjęcia paragonów/skanów do potwierdzenia)
-   i *Podobne* (np. kopie z WhatsAppa, seria ujęć; najmniej ostre).
-6. **Utwórz propozycję drzewa** → zakładka *Drzewo*: popraw nazwy folderów, przeciągaj
-   pliki i foldery, wykluczaj; *Cofnij/Ponów* (Ctrl+Z/Y).
-7. **Uporządkuj pliki…** → kopiowanie/przenoszenie wg ptaszków K/P z weryfikacją każdej
-   kopii; *Cofnij porządkowanie* przywraca stan sprzed operacji.
-8. **Projekty** (przycisk z nazwą projektu u góry) → każdy projekt ma własne foldery,
-   propozycję, notatki i dziennik; w *Drzewie* oznaczaj foldery „✓ Przejrzany” i przechodź
-   do kolejnych przyciskiem *Następny →* — możesz wrócić do pracy za kilka dni.
-10. **Problemy:** *? → Zgłoś problem* pokazuje raport diagnostyczny (wersja, ustawienia,
-   dziennik błędów — bez zawartości plików). *Kopiuj* / *Zapisz plik* i wyślij go w rozmowie
-   z Claude albo *Utwórz zgłoszenie na GitHubie*. Dziennik błędów:
-   `%LOCALAPPDATA%\Katalogator\logi\katalogator.log`.
-9. **Nowe pliki** → dodaj folder przychodzący (np. zrzuty z telefonu), wpisz *Mieszkam w*,
-   *Sprawdź nowe pliki* → *Przenieś do biblioteki*; opcjonalnie *Automatycznie codziennie o…*
-   (Harmonogram zadań Windows uruchamia `Katalogator.exe --auto <projekt>`).
+   Program sam powiadomi o nowej wersji (*? → Sprawdź aktualizacje*) i zainstaluje ją jednym kliknięciem.
+
+**Praca krok po kroku:**
+1. *Co porządkujemy?* — rozwiń dysk (sieciowe mają ikonę 🌐) i przy folderach zaznacz **K** (kopiuj — oryginały
+   zostają) albo **P** (przenieś). *Dokąd?* → *Wybierz folder…* → **Skanuj** → raport.
+2. **Szukaj duplikatów** → zakładka *Duplikaty* (po 100 grup): w każdej grupie wybierz plik, który zostaje →
+   *Odłóż zaznaczone kopie*. Kopie trafiają do `Odłożone\Duplikaty` (nic nie jest kasowane; *Cofnij* przywraca).
+3. **Analizuj zdjęcia** → zakładki:
+   - *Dokumenty* — zdjęcia kartek, paragonów, skanów: 📷 zdjęcie / 📄 dokument / 🗑 śmieci → *Zapisz decyzje*;
+     dokumenty trafią do `Dokumenty\Dokumenty z <rok>`;
+   - *Podobne* — seria ujęć, kopie z WhatsAppa: najlepsze zostaje, reszta do `Odłożone\Podobne`;
+   - *Nie z aparatu* — grafiki, zrzuty ekranu, obrazki z internetu: zdecyduj, co to jest.
+   Przyciski 📷 / 📄 / 🗑 są też w Duplikatach i Podobnych (zapis od razu, ponowny klik cofa).
+4. **Utwórz propozycję** → zakładka **🌳 Drzewo** (najważniejsza): popraw nazwy folderów, przeciągaj pliki,
+   *Ustaw miejsce…*, *Ustaw datę…*, wykluczaj; filtry (do sprawdzenia, bez GPS, dokumenty, śmieci…); *Cofnij/Ponów*.
+   Śmieci (ikony, pliki tymczasowe, puste, skróty) program sam odkłada do `Odłożone\Śmieci`.
+5. **Uporządkuj pliki…** — kopiowanie/przenoszenie z weryfikacją każdej kopii; *Cofnij porządkowanie* przywraca stan.
+   Pasek u góry pokazuje postęp, prędkość i czas do końca; gdy dysk sieciowy zniknie, program czeka i ponawia.
+6. **Projekty** (przycisk z nazwą projektu u góry) — osobne foldery, notatki i dziennik; w *Drzewie* oznaczaj
+   foldery „✓ Przejrzany” i przechodź dalej przyciskiem *Następny →*.
+7. **Nowe pliki** — folder przychodzący (np. zrzuty z telefonu), *Mieszkam w*, *Sprawdź nowe pliki* →
+   *Przenieś do biblioteki*; opcjonalnie codziennie o wybranej godzinie (Harmonogram zadań Windows).
+8. **Problemy:** *? → Zgłoś problem* — raport diagnostyczny (bez zawartości plików) do skopiowania, zapisania albo
+   zgłoszenia na GitHubie. Dziennik błędów: `%LOCALAPPDATA%\Katalogator\logi\katalogator.log`.
+
+Miejsce zdjęć: GPS z EXIF, XMP, plików `.json` Google Zdjęć i `.xmp`; bez GPS — dopasowanie do wyjazdu, nazwa
+folderu („2004 Zakopane”), a na końcu „w domu”.
 
 Projekty (ustawienia, bazy, dziennik): `%LOCALAPPDATA%\Katalogator\projekty\`. Program działa tylko
-lokalnie (127.0.0.1), nic nie wysyła do internetu. Zamknięcie okna kończy
-program; przerwany skan wznawia się od miejsca przerwania.
+lokalnie (127.0.0.1), nic nie wysyła do internetu. Zamknięcie okna w trakcie zadania nie przerywa pracy —
+ponowne uruchomienie otwiera okno działającego programu; przerwane zadania wznawiają się od miejsca przerwania.
 
 <details><summary>Dla zaawansowanych: uruchomienie z Pythona / linia poleceń</summary>
 

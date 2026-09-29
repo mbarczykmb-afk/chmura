@@ -601,7 +601,12 @@ def zastosuj_kategorie(db: sqlite3.Connection) -> dict:
         elif d_uz == "zdjecie" or (w["kat"] == "dokument" and w["sciezka"] not in dok) or (
                 w["kat"] == "smieci" and d_uz is None and not (w["uwaga"] or "").startswith("śmieci:")):
             # decyzja cofnięta albo zmieniona na zdjęcie — wraca tam, gdzie trafiłby zwykły plik
-            cel_f, k = (w["alt"].rsplit("/", 1)[0] if w["alt"] and w_kategorii else folder), None
+            if w_kategorii and not w["alt"]:  # plan sprzed 1.4 (bez „alt”): rok i miesiąc z daty
+                d = _dt(w["data"])
+                alt_f = (f"Zdjęcia/Zdjęcia z {d.year}/{MIESIACE[d.month - 1]}" if d else "Zdjęcia/Bez daty")
+            else:
+                alt_f = w["alt"].rsplit("/", 1)[0] if w["alt"] else folder
+            cel_f, k = (alt_f if w_kategorii else folder), None
         else:
             continue
         if k != w["kat"]:

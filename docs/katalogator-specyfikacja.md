@@ -50,7 +50,7 @@ Zdjęcia/
 - Odmiana nazw: słownik polskich miejscowości w miejscowniku („w Olkuszu”,
   „w Zakopanem”, „na Helu”); gdy brak w słowniku → „Marzec – Olkusz”.
 - **Detektor zdjęć dokumentów** (paragony, skany, kartki, dowody): proponuje
-  przeniesienie do `Zdjęcia/Dokumenty/`, ale **dopiero po przejrzeniu
+  przeniesienie do `Dokumenty/Dokumenty z <rok>/` (od 1.4), ale **dopiero po przejrzeniu
   i potwierdzeniu** w osobnym widoku z miniaturami.
 
 ### Filmy
@@ -196,6 +196,10 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
 20. **Decyzja 📷 / 📄 / 🗑 wszędzie** ✅ (1.4.1) — te same trzy przyciski (zdjęcie / dokument / śmieci) w Duplikatach
     (dla całej grupy), Podobnych (dla każdego zdjęcia) — zapis od razu i przełożenie w drzewie, ponowny klik cofa
     decyzję — oraz w Dokumentach (zamiast ptaszka; propozycja programu wstępnie wybrana, „Zapisz decyzje”)
+21. **Audyt 1.4.2** ✅ — naprawione „database is locked” przy pierwszym otwarciu nowego projektu (okno i skan
+    przełączały bazę na WAL w tej samej chwili; test odtwarzający), decyzje kategorii działają też na planach sprzed 1.4,
+    README zaktualizowane; pełny przebieg na 50 tys. plików: skan 46 s, duplikaty 12 s, analiza 133 s, plan 6 s,
+    porządkowanie 53 s, okno odpowiada < 0,6 s
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.
