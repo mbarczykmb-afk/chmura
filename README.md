@@ -86,7 +86,8 @@ Specyfikacja: [`docs/katalogator-specyfikacja.md`](docs/katalogator-specyfikacja
 Wersja 1.4: projekty (praca na kilka dni), skan i raport, duplikaty, analiza zdjęć (dokumenty, podobne, nieostre,
 „nie z aparatu”), śmieci, propozycja drzewa („Zdjęcia z 2023 → Marzec w Olkuszu”, „Dokumenty z 2023”), edytor
 z wyszukiwarką i zmianami zbiorczymi, porządkowanie z weryfikacją i cofaniem, folder przychodzący z harmonogramem,
-stabilna praca na dużych bibliotekach (50 tys. plików, przerwy w dostępie do dysku sieciowego).
+stabilna praca na dużych bibliotekach (sprawdzone: 200 tys. plików, filmy 400 GB, przerwy w dostępie do
+dysku sieciowego).
 Nazwy miejscowości: © GeoNames, CC BY 4.0.
 
 **Instalacja:**
@@ -114,6 +115,10 @@ Nazwy miejscowości: © GeoNames, CC BY 4.0.
    Śmieci (ikony, pliki tymczasowe, puste, skróty) program sam odkłada do `Odłożone\Śmieci`.
 5. **Uporządkuj pliki…** — kopiowanie/przenoszenie z weryfikacją każdej kopii; *Cofnij porządkowanie* przywraca stan.
    Pasek u góry pokazuje postęp, prędkość i czas do końca; gdy dysk sieciowy zniknie, program czeka i ponawia.
+   Duże pliki (filmy po kilkadziesiąt–kilkaset GB): przerwana kopia rusza dalej od miejsca przerwania, nie od
+   zera. Dysk docelowy sformatowany jako FAT32 nie mieści plików > 4 GB — program ostrzeże przed startem.
+   Orientacyjnie: każdy plik jest kopiowany i sprawdzany, więc przez sieć z WD My Cloud (~40 MB/s)
+   400 GB to ok. 5–6 godzin — najlepiej na noc (komputer nie uśnie w trakcie).
 6. **Projekty** (przycisk z nazwą projektu u góry) — osobne foldery, notatki i dziennik; w *Drzewie* oznaczaj
    foldery „✓ Przejrzany” i przechodź dalej przyciskiem *Następny →*.
 7. **Nowe pliki** — folder przychodzący (np. zrzuty z telefonu), *Mieszkam w*, *Sprawdź nowe pliki* →

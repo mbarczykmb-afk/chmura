@@ -434,16 +434,21 @@ def _grupy_podobnych(db: sqlite3.Connection, prog: int, postep=None) -> list[lis
     podpisy = [bytes.fromhex(w["podpis"]) for _, w in hashe]
     liczby = [h for h, _ in hashe]
     sasiedzi: dict[int, set[int]] = {}
-    pasma = prog + 1
-    szer = 64 // pasma
-    for b in range(pasma):
-        if postep:
-            postep("szukanie podobnych zdjęć", b, pasma, 0)
-        przes = b * szer
-        maska = (1 << (szer if b < pasma - 1 else 64 - przes)) - 1
-        kubelki: dict[int, list[int]] = {}
-        for i, (h, _) in enumerate(hashe):
-            kubelki.setdefault((h >> przes) & maska, []).append(i)
+    odrzucone: set[tuple[int, int]] = set()
+    # Odcisk dzielimy na prog+2 pasm: dwa odciski różniące się o ≤ prog bitów mają co najmniej DWA pasma
+    # identyczne, więc wystarczy porównywać odciski ze wspólną parą pasm. Kubełki są wtedy ok. 60× mniejsze
+    # niż przy jednym paśmie (200 tys. zdjęć: kilkanaście sekund zamiast kilku minut), a nic nie umyka.
+    pasma = prog + 2
+    granice = [round(64 * k / pasma) for k in range(pasma + 1)]
+    maski = [((1 << (granice[k + 1] - granice[k])) - 1, granice[k]) for k in range(pasma)]
+    kawalki = [[(h >> przes) & m for m, przes in maski] for h in liczby]
+    pary = [(x, y) for x in range(pasma) for y in range(x + 1, pasma)]
+    for n, (pa, pb) in enumerate(pary):
+        if postep and n % 3 == 0:
+            postep("szukanie podobnych zdjęć", n, len(pary), 0)
+        kubelki: dict[tuple[int, int], list[int]] = {}
+        for i, k in enumerate(kawalki):
+            kubelki.setdefault((k[pa], k[pb]), []).append(i)
         for lista in kubelki.values():
             if len(lista) < 2 or len(lista) > MAKS_KUBELEK:
                 continue
@@ -453,7 +458,7 @@ def _grupy_podobnych(db: sqlite3.Connection, prog: int, postep=None) -> list[lis
                 if len(si) >= MAKS_SASIADOW:
                     continue
                 for j in lista[x + 1:]:
-                    if (hi ^ liczby[j]).bit_count() > prog or j in si:
+                    if (hi ^ liczby[j]).bit_count() > prog or j in si or (i, j) in odrzucone:
                         continue
                     if len(sasiedzi.get(j, ())) >= MAKS_SASIADOW:
                         continue
@@ -463,6 +468,9 @@ def _grupy_podobnych(db: sqlite3.Connection, prog: int, postep=None) -> list[lis
                     if szar <= PROG_SZAROSCI and kol <= PROG_KOLORU:
                         sasiedzi.setdefault(i, set()).add(j)
                         sasiedzi.setdefault(j, set()).add(i)
+                        si = sasiedzi[i]
+                    else:
+                        odrzucone.add((i, j))
     wykorzystane: set[int] = set()
     wynik = []
     for wzor in sorted(sasiedzi, key=lambda i: -len(sasiedzi[i])):

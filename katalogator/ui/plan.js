@@ -74,7 +74,13 @@ async function otworzWykonanie() {
     opis.innerHTML = `Miejsce docelowe: <b></b><br>
       Skopiuję <b>${p.kopiuj}</b> plików (${rozmiar(p.kopiuj_b)}), przeniosę <b>${p.przenies}</b> (${rozmiar(p.przenies_b)}).<br>
       Potrzebne miejsce: <b>${rozmiar(s.potrzeba)}</b> · wolne: <b>${rozmiar(s.wolne)}</b>` +
-      (s.starczy ? "" : `<br><span style="color:var(--blad)">Za mało miejsca — zwolnij miejsce albo wyklucz część plików.</span>`);
+      (s.starczy ? "" : `<br><span style="color:var(--blad)">Za mało miejsca — zwolnij miejsce albo wyklucz część plików.</span>`) +
+      (s.za_duze_fat ? `<br><span style="color:var(--blad)">Dysk docelowy ma system FAT32, który nie mieści plików
+        większych niż 4 GB — ${plikow(s.za_duze_fat)} nie da się tam zapisać. Sformatuj dysk jako exFAT lub NTFS
+        albo pomiń te pliki.</span>` : "") +
+      (s.potrzeba > 50e9 ? `<br><span class="gdzie">Duże porządkowanie: każdy plik jest kopiowany i sprawdzany,
+        więc przez sieć może to potrwać wiele godzin (${rozmiar(s.potrzeba)} ≈ ${czasTxt(s.potrzeba / 20e6)} przy
+        40 MB/s). Komputer nie uśnie, a przerwaną kopię dużego pliku wznowię od miejsca przerwania.</span>` : "");
     opis.querySelector("b").textContent = s.cel;
     $("wyk-start").disabled = !s.starczy || !s.plikow;
   }

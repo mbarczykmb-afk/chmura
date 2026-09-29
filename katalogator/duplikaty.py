@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS odciski (
     szybki  TEXT,
     pelny   TEXT
 );
+CREATE INDEX IF NOT EXISTS ix_odciski_pelny ON odciski(pelny);
 CREATE TABLE IF NOT EXISTS operacje (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
     partia  INTEGER NOT NULL,
@@ -203,6 +204,17 @@ def _ocena(plik: dict, cele: set[str]) -> tuple:
     return (podejrzana, w_celu, plik["mtime"], len(plik["wzgledna"]), plik["wzgledna"])
 
 
+_PAMIEC_GRUP: dict = {}
+
+
+def _odcisk_stanu(db: sqlite3.Connection) -> tuple:
+    """Tani „odcisk” plików i odcisków — zmienia się po skanie, szukaniu, odłożeniu i porządkowaniu."""
+    plik = next((r[2] for r in db.execute("PRAGMA database_list") if r[1] == "main"), "")
+    return (plik or id(db),
+            *db.execute("SELECT COUNT(*), MAX(rowid), TOTAL(rowid), TOTAL(mtime), TOTAL(rozmiar) FROM pliki").fetchone(),
+            *db.execute("SELECT COUNT(*), TOTAL(rowid), COUNT(pelny), MAX(pelny), MIN(pelny) FROM odciski").fetchone())
+
+
 def grupy(db: sqlite3.Connection, rodzaj: str | None = None, od: int = 0, ile: int = 50,
           cele: set[str] | None = None) -> list[dict]:
     przygotuj(db)
@@ -212,11 +224,14 @@ def grupy(db: sqlite3.Connection, rodzaj: str | None = None, od: int = 0, ile: i
         filtr = "WHERE EXISTS (SELECT 1 FROM odciski o3 JOIN pliki p3 ON p3.sciezka=o3.sciezka " \
                 "WHERE o3.pelny = g.h AND p3.rodzaj = ?)"
         arg.append(rodzaj)
-    naglowki = db.execute(
-        f"SELECT g.h, g.rozmiar, g.n FROM ({_GRUPY}) g {filtr} "
-        f"ORDER BY (g.n - 1) * g.rozmiar DESC, g.h LIMIT ? OFFSET ?",
-        [*arg, ile, od],
-    ).fetchall()
+    # lista grup (przy 200 tys. plików liczy się ponad sekundę) jest pamiętana — kolejne strony są natychmiast
+    klucz = (_odcisk_stanu(db), rodzaj)
+    if _PAMIEC_GRUP.get("klucz") != klucz:
+        _PAMIEC_GRUP.clear()
+        _PAMIEC_GRUP.update(klucz=klucz, naglowki=[tuple(r) for r in db.execute(
+            f"SELECT g.h, g.rozmiar, g.n FROM ({_GRUPY}) g {filtr} ORDER BY (g.n - 1) * g.rozmiar DESC, g.h",
+            arg)])
+    naglowki = [dict(zip(("h", "rozmiar", "n"), r)) for r in _PAMIEC_GRUP["naglowki"][od:od + ile]]
     wynik = []
     for g in naglowki:
         pliki = [dict(r) for r in db.execute(

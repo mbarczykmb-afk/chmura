@@ -590,7 +590,13 @@ def zastosuj_kategorie(db: sqlite3.Connection) -> dict:
     dec = kategorie.decyzje(db)
     zmiany_kat: dict[int, str | None] = {}
     grupy: dict[str, list] = defaultdict(list)
-    for w in db.execute("SELECT id, sciezka, cel, alt, kat, data, pominiety, uwaga FROM plan WHERE tryb!='istniejacy'"):
+    # tylko pliki, których to dotyczy: z decyzją, potwierdzone dokumenty i te już w kategorii (reszta bez zmian);
+    # przy 200 tys. plików przejście całego planu w Pythonie przy każdym kliknięciu trwało sekundę
+    db.execute("CREATE TEMP TABLE IF NOT EXISTS _kat_sciezki (sciezka TEXT PRIMARY KEY)")
+    db.execute("DELETE FROM temp._kat_sciezki")
+    db.executemany("INSERT OR IGNORE INTO temp._kat_sciezki VALUES (?)", ((x,) for x in (*dec, *dok)))
+    for w in db.execute("SELECT id, sciezka, cel, alt, kat, data, pominiety, uwaga FROM plan WHERE tryb!='istniejacy' "
+                        "AND (kat IN ('dokument', 'smieci') OR sciezka IN (SELECT sciezka FROM temp._kat_sciezki))"):
         d_uz = dec.get(w["sciezka"])
         folder = w["cel"].rsplit("/", 1)[0]
         w_kategorii = folder.startswith(DOKUMENTY + "/") or folder.startswith(kategorie.SMIECI)

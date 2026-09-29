@@ -147,7 +147,7 @@ def test_weryfikacja_chroni_oryginal(swiat, monkeypatch):
     k, cel, db = swiat
     planista.generuj(db, [{"sciezka": str(k / "Praca"), "tryb": "przenies"}], str(cel))
     monkeypatch.setattr(wykonawca, "ten_sam_wolumin", lambda a, b: False)  # wymuś kopiowanie
-    monkeypatch.setattr(wykonawca, "_hash", lambda *a, **kw: "zly")
+    monkeypatch.setattr(wykonawca, "_sumy_kawalkow", lambda *a, **kw: ["zly"])  # kopia „różni się”
     w = wykonawca.wykonaj(db)
     assert w["bledy"] == 1 and (k / "Praca" / "umowa.pdf").exists()
     assert not (cel / "Praca" / "umowa.pdf").exists() and not list(cel.rglob("*" + wykonawca.TMP))

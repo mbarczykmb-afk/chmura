@@ -12,6 +12,7 @@ Zasady bezpieczeństwa:
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 import sqlite3
@@ -34,9 +35,15 @@ CREATE TABLE IF NOT EXISTS wykonanie (
     czas     REAL NOT NULL,
     cofniete INTEGER NOT NULL DEFAULT 0
 );
+-- przerwane kopie dużych plików czekające na wznowienie (sprzątane, gdy plan już ich nie potrzebuje)
+CREATE TABLE IF NOT EXISTS niedokonczone (tmp TEXT PRIMARY KEY);
 """
 BLOK = 4 << 20
 TMP = ".katalogator-tmp"
+STAN = ".json"  # obok pliku tymczasowego: skąd kopia i sumy gotowych kawałków (do wznowienia)
+KAWALEK = 64 << 20  # jednostka wznawiania i sprawdzania kopii (wielokrotność BLOK)
+WZNAWIANIE_OD = 256 << 20  # od tej wielkości przerwana kopia jest wznawiana, a nie zaczynana od zera
+ZAPIS_STANU_CO = 20.0  # s
 
 
 def przygotuj(db: sqlite3.Connection) -> None:
@@ -80,35 +87,117 @@ def _hash(sciezka: str, przerwij=None, licz=None) -> str:
 
 
 def kopiuj_z_weryfikacja(zrodlo: str, cel: str, przerwij=None, licz=None) -> None:
-    """Kopiuje do pliku tymczasowego, liczy sumę w locie, weryfikuje kopię i nadaje nazwę."""
+    """Kopiuje do pliku tymczasowego, liczy sumy kawałków w locie, weryfikuje kopię i nadaje nazwę.
+
+    Duży plik (od WZNAWIANIE_OD) po przerwie — zerwana sieć, „Przerwij”, zamknięty program — jest kopiowany
+    dalej od ostatniego zapisanego kawałka, a nie od zera. Sumy kawałków pochodzą ze źródła, więc końcowe
+    sprawdzenie obejmuje także część skopiowaną przed przerwą.
+    """
     tmp = cel + TMP
-    h = hashlib.blake2b(digest_size=20)
+    st = os.stat(zrodlo)
+    duzy = st.st_size >= WZNAWIANIE_OD
+    sumy = _wczytaj_stan(tmp, zrodlo, st) if duzy else []
+    zachowaj = duzy  # po przerwie duży plik tymczasowy zostaje do wznowienia
     try:
-        with open(zrodlo, "rb") as fz, open(tmp, "wb") as fc:
-            while True:
-                if przerwij is not None and przerwij.is_set():
-                    raise Przerwano(zrodlo)
-                k = fz.read(BLOK)
-                if not k:
-                    break
-                h.update(k)
-                fc.write(k)
-                if licz:
-                    licz(len(k))
-            fc.flush()
-            os.fsync(fc.fileno())
-        if _hash(tmp, przerwij) != h.hexdigest():
+        start = len(sumy) * KAWALEK
+        with open(zrodlo, "rb") as fz, open(tmp, "r+b" if start else "wb") as fc:
+            fz.seek(start)
+            fc.seek(start)
+            fc.truncate(start)
+            if start and licz:
+                licz(start)
+            h, w_kawalku, zapis = hashlib.blake2b(digest_size=20), 0, time.monotonic()
+            try:
+                while True:
+                    if przerwij is not None and przerwij.is_set():
+                        raise Przerwano(zrodlo)
+                    k = fz.read(min(BLOK, KAWALEK - w_kawalku))  # kawałki zawsze równe (wznawianie od granicy)
+                    if k:
+                        h.update(k)
+                        fc.write(k)
+                        w_kawalku += len(k)
+                        if licz:
+                            licz(len(k))
+                    if w_kawalku >= KAWALEK or (not k and w_kawalku):
+                        sumy.append(h.hexdigest())
+                        h, w_kawalku = hashlib.blake2b(digest_size=20), 0
+                        if duzy and time.monotonic() - zapis > ZAPIS_STANU_CO:
+                            _zapisz_stan(fc, tmp, zrodlo, st, sumy)
+                            zapis = time.monotonic()
+                    if not k:
+                        break
+                fc.flush()
+                os.fsync(fc.fileno())
+            except BaseException:
+                if duzy:
+                    try:  # zapisane dotąd kawałki — tylko gdy na pewno są na dysku
+                        _zapisz_stan(fc, tmp, zrodlo, st, sumy)
+                    except OSError:
+                        pass
+                raise
+        if _sumy_kawalkow(tmp, przerwij, licz) != sumy:
+            zachowaj = False
             raise OSError("kopia różni się od oryginału (błąd zapisu lub sieci)")
         shutil.copystat(zrodlo, tmp)
         if os.path.exists(cel):
+            zachowaj = False
             raise FileExistsError(cel)
         os.replace(tmp, cel)
+        zachowaj = False
     finally:
-        if os.path.exists(tmp):
-            try:
-                os.remove(tmp)
-            except OSError:
-                pass
+        if not zachowaj:
+            for sm in (tmp, tmp + STAN):
+                if os.path.exists(sm):
+                    try:
+                        os.remove(sm)
+                    except OSError:
+                        pass
+
+
+def _sumy_kawalkow(sciezka: str, przerwij=None, licz=None) -> list[str]:
+    sumy = []
+    with open(sciezka, "rb") as f:
+        while True:
+            h, n = hashlib.blake2b(digest_size=20), 0
+            while n < KAWALEK:
+                if przerwij is not None and przerwij.is_set():
+                    raise Przerwano(sciezka)
+                k = f.read(min(BLOK, KAWALEK - n))
+                if not k:
+                    break
+                h.update(k)
+                n += len(k)
+                if licz:
+                    licz(len(k))
+            if not n:
+                return sumy
+            sumy.append(h.hexdigest())
+
+
+def _zapisz_stan(fc, tmp: str, zrodlo: str, st, sumy: list[str]) -> None:
+    """Punkt wznowienia: najpierw dane na dysk, potem opis (zapis atomowy)."""
+    fc.flush()
+    os.fsync(fc.fileno())
+    dane = {"zrodlo": os.path.abspath(zrodlo), "rozmiar": st.st_size, "mtime": st.st_mtime,
+            "kawalek": KAWALEK, "sumy": sumy}
+    with open(tmp + STAN + ".nowy", "w", encoding="utf-8") as f:
+        json.dump(dane, f)
+    os.replace(tmp + STAN + ".nowy", tmp + STAN)
+
+
+def _wczytaj_stan(tmp: str, zrodlo: str, st) -> list[str]:
+    """Sumy kawałków już skopiowanych do tmp — albo [], gdy nie ma czego wznawiać (lub to inny plik)."""
+    try:
+        with open(tmp + STAN, encoding="utf-8") as f:
+            d = json.load(f)
+        sumy = d["sumy"]
+        if (d["zrodlo"] == os.path.abspath(zrodlo) and d["rozmiar"] == st.st_size and d["mtime"] == st.st_mtime
+                and d["kawalek"] == KAWALEK and isinstance(sumy, list)
+                and os.path.getsize(tmp) >= len(sumy) * KAWALEK and len(sumy) * KAWALEK <= st.st_size):
+            return [str(x) for x in sumy]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return []
 
 
 def _wolna(cel: str) -> str:
@@ -139,8 +228,43 @@ def sprawdz(db: sqlite3.Connection) -> dict:
         wolne = shutil.disk_usage(cel).free
     except OSError as e:
         return {"blad": f"Brak dostępu do miejsca docelowego: {e.strerror or e}", "plikow": len(wiersze)}
-    return {"plikow": len(wiersze), "bajtow": sum(w["rozmiar"] for w in wiersze), "potrzeba": potrzeba,
-            "wolne": wolne, "starczy": wolne > potrzeba * 1.02 + 50_000_000, "cel": cel}
+    wynik = {"plikow": len(wiersze), "bajtow": sum(w["rozmiar"] for w in wiersze), "potrzeba": potrzeba,
+             "wolne": wolne, "starczy": wolne > potrzeba * 1.02 + 50_000_000, "cel": cel,
+             "najwiekszy": max((w["rozmiar"] for w in wiersze), default=0)}
+    if system_plikow(cel) in FAT:
+        wynik["za_duze_fat"] = sum(1 for w in wiersze if w["rozmiar"] > MAKS_FAT32)
+    return wynik
+
+
+FAT = {"fat", "fat12", "fat16", "fat32", "vfat", "msdos"}
+MAKS_FAT32 = (4 << 30) - 1  # FAT32 nie zapisze pliku większego niż 4 GB bez 1 bajta
+
+
+def system_plikow(sciezka: str) -> str:
+    """Nazwa systemu plików (małymi literami: ntfs, exfat, fat32, vfat, ext4…) albo "" gdy nieznany."""
+    try:
+        sciezka = os.path.abspath(sciezka)
+        if os.name == "nt":
+            import ctypes
+            korzen = ctypes.create_unicode_buffer(1024)
+            nazwa = ctypes.create_unicode_buffer(64)
+            k32 = ctypes.windll.kernel32
+            if not k32.GetVolumePathNameW(sciezka, korzen, 1024):
+                return ""
+            if not k32.GetVolumeInformationW(korzen, None, 0, None, None, None, nazwa, 64):
+                return ""
+            return nazwa.value.lower()
+        najlepszy, typ = "", ""
+        with open("/proc/mounts", encoding="utf-8") as f:
+            for linia in f:
+                cz = linia.split()
+                if len(cz) >= 3:
+                    punkt = cz[1].replace("\\040", " ")
+                    if (sciezka == punkt or sciezka.startswith(punkt.rstrip("/") + "/")) and len(punkt) >= len(najlepszy):
+                        najlepszy, typ = punkt, cz[2].lower()
+        return typ
+    except (OSError, AttributeError, ValueError):
+        return ""
 
 
 def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool = True) -> dict:
@@ -156,8 +280,12 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
     # granice sprzątania pustych folderów: foldery źródłowe sprzed porządkowania (potem ich wpisy znikają z bazy)
     korzenie = [r[0] for r in db.execute("SELECT DISTINCT korzen FROM pliki")]
     partia = int(time.time() * 1000)
-    bajty = [0]
+    bajty = [0]  # praca: kopia i jej sprawdzenie to dwa odczyty pliku
     razem = spr["bajtow"]
+    praca_razem = max(1, spr["bajtow"] + spr["potrzeba"])
+
+    def jako_bajty(praca: int) -> int:  # pasek i tempo w bajtach plików, ale z czasem sprawdzania kopii
+        return min(razem, round(praca * razem / praca_razem))
     ok = bledy = 0
     przeniesione_foldery: set[str] = set()
     from .stabilnosc import Straznik
@@ -169,7 +297,8 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
         teraz = time.monotonic()
         if postep and (wymus or teraz - biezacy["t"] > 0.5):
             biezacy["t"] = teraz
-            postep("kopiowanie", biezacy["i"], len(wiersze), bajty[0], bajty_razem=razem, plik=biezacy["plik"])
+            postep("kopiowanie", biezacy["i"], len(wiersze), jako_bajty(bajty[0]), bajty_razem=razem,
+                   plik=biezacy["plik"])
 
     def licz(n):  # w trakcie kopiowania — pasek rusza się także przy jednym dużym filmie
         bajty[0] += n
@@ -188,21 +317,24 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
                 ok += 1
                 break
             except Przerwano:
+                _zapamietaj_tmp(db, cel_root, w)
                 db.commit()
                 raise
             except OSError as e:
                 dst = os.path.join(cel_root, *w["cel"].split("/"))
                 if proba < 2 and straznik.utracono(w["sciezka"], dst):
-                    continue  # dysk wrócił — ten sam plik jeszcze raz (gotowa kopia zostanie rozpoznana)
+                    continue  # dysk wrócił — ten sam plik jeszcze raz (kopia ruszy od miejsca przerwania)
+                _zapamietaj_tmp(db, cel_root, w)
                 db.execute("UPDATE plan SET wynik=? WHERE id=?", (f"blad: {e.strerror or e}"[:300], w["id"]))
                 bledy += 1
                 break
         db.commit()  # po każdym pliku: kopiowanie następnego może trwać minuty
+    _sprzatnij_tmp(db, cel_root)
     db.commit()
     usuniete_foldery = _usun_puste(przeniesione_foldery, korzenie) if usun_puste else 0
     if postep:
-        postep("gotowe", len(wiersze), len(wiersze), bajty[0], bajty_razem=razem)
-    return {"zrobione": ok, "bledy": bledy, "bajty": bajty[0], "partia": partia,
+        postep("gotowe", len(wiersze), len(wiersze), jako_bajty(bajty[0]), bajty_razem=razem)
+    return {"zrobione": ok, "bledy": bledy, "bajty": jako_bajty(bajty[0]), "partia": partia,
             "usuniete_foldery": usuniete_foldery}
 
 
@@ -214,6 +346,9 @@ def _wykonaj_plik(db, w, cel_root: str, partia: int, przerwij, licz, przeniesion
     st = os.stat(w["sciezka"])
     if st.st_size != w["rozmiar"]:
         raise OSError("plik zmienił się od skanu — przeskanuj ponownie")
+    if st.st_size > MAKS_FAT32 and (w["tryb"] == "kopiuj" or not ten_sam_wolumin(w["sciezka"], cel_root)) \
+            and system_plikow(cel_root) in FAT:
+        raise OSError("plik większy niż 4 GB, a dysk docelowy ma system FAT32 — sformatuj go jako exFAT lub NTFS")
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     tryb_logu = w["tryb"]
     if _ten_sam_plik(w["sciezka"], dst):
@@ -222,7 +357,7 @@ def _wykonaj_plik(db, w, cel_root: str, partia: int, przerwij, licz, przeniesion
         db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
         return
     if os.path.exists(dst) and os.path.getsize(dst) == w["rozmiar"] and \
-            _hash(dst, przerwij) == _hash(w["sciezka"], przerwij, licz):
+            _hash(dst, przerwij, licz) == _hash(w["sciezka"], przerwij, licz):
         # identyczny plik już jest w bibliotece — nie tworzymy kopii „ (2)”
         usuniete = 0
         if w["tryb"] == "przenies":
@@ -261,6 +396,43 @@ def _wykonaj_plik(db, w, cel_root: str, partia: int, przerwij, licz, przeniesion
                "VALUES (?,?,?,?,?,?,?,?,?)",
                (partia, w["id"], w["sciezka"], dst, tryb_logu, usuniete, w["rozmiar"], st.st_mtime, time.time()))
     db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
+
+
+def _tmp_wiersza(cel_root: str, w) -> str:
+    return _wolna(os.path.join(cel_root, *w["cel"].split("/"))) + TMP
+
+
+def _zapamietaj_tmp(db, cel_root: str, w) -> None:
+    try:
+        tmp = _tmp_wiersza(cel_root, w)
+        if os.path.exists(tmp):
+            db.execute("INSERT OR IGNORE INTO niedokonczone VALUES (?)", (tmp,))
+    except OSError:
+        pass
+
+
+def _sprzatnij_tmp(db, cel_root: str) -> None:
+    """Po przejściu całego planu: usuń przerwane kopie, których żaden czekający plik już nie wznowi."""
+    zapisane = [r[0] for r in db.execute("SELECT tmp FROM niedokonczone")]
+    if not zapisane:
+        return
+    potrzebne = set()
+    for w in db.execute("SELECT cel FROM plan WHERE tryb IN ('kopiuj','przenies') AND pominiety=0 "
+                        "AND stan='nowy' AND wynik LIKE 'blad%'"):
+        try:
+            potrzebne.add(_tmp_wiersza(cel_root, w))
+        except OSError:
+            pass
+    for tmp in zapisane:
+        if tmp in potrzebne and os.path.exists(tmp):
+            continue
+        for sm in (tmp, tmp + STAN):
+            try:
+                if os.path.exists(sm):
+                    os.remove(sm)
+            except OSError:
+                continue
+        db.execute("DELETE FROM niedokonczone WHERE tmp=?", (tmp,))
 
 
 def _ten_sam_plik(a: str, b: str) -> bool:

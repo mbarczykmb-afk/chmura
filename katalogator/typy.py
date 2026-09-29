@@ -44,4 +44,5 @@ def pominac_folder(nazwa: str) -> bool:
 
 def pominac_plik(nazwa: str) -> bool:
     n = nazwa.lower()
-    return n in SMIECI_PLIKI or n.startswith(".") or n.startswith("~$")
+    # .katalogator-tmp(.json): przerwana kopia dużego pliku czekająca na wznowienie
+    return n in SMIECI_PLIKI or n.startswith(".") or n.startswith("~$") or ".katalogator-tmp" in n

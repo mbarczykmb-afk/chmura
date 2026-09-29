@@ -240,6 +240,24 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     - kopia w bibliotece nie trafia do „Podobnych” w parze z oryginałem; decyzje po porządkowaniu znów
       natychmiastowe (podobne liczone od nowa tylko, gdy zmienią się przeanalizowane zdjęcia);
     - testy odtwarzające każdy z przypadków (stara wersja je oblewa)
+26. **Duże kolekcje i ogromne pliki 1.6.2** ✅ (sprawdzone na 200 tys. plików i filmach 400 GB):
+    - **kopia dużego pliku (od 256 MB) wznawiana** po zerwaniu sieci, „Przerwij” lub zamknięciu programu — od
+      ostatniego zapisanego kawałka (64 MB), a nie od zera; obok zostaje `nazwa.katalogator-tmp` + `.json`
+      (źródło, rozmiar, data, sumy kawałków). Sprawdzenie kopii porównuje każdy kawałek z sumą policzoną ze
+      źródła, więc obejmuje też część sprzed przerwy; zmieniony oryginał lub uszkodzona kopia = kopiowanie od nowa.
+      Niedokończone kopie nie trafiają do skanu, a osierocone (plik pominięty w planie) są sprzątane;
+    - **FAT32** w miejscu docelowym: ostrzeżenie przed porządkowaniem i czytelny błąd dla plików > 4 GB (bez
+      wielogodzinnej próby);
+    - **pasek i czas do końca** uwzględniają sprawdzanie kopii (drugi odczyt) — wcześniej czas był zaniżony ok. 2×;
+      przy > 50 GB okno porządkowania podaje szacunek (≈ 20 MB/s efektywnie przy 40 MB/s sieci);
+    - **podobne zdjęcia**: odcisk dzielony na prog+2 pasma, porównywane są odciski ze wspólną *parą* pasm
+      (dwa odciski różniące się o ≤ 8 bitów zawsze mają ≥ 2 identyczne pasma, więc nic nie umyka) — 200 tys.
+      zdjęć: 23 s zamiast 110 s;
+    - **szybkie widoki przy 200 tys. plików**: indeks odcisków i pamiętana lista grup duplikatów (kolejne strony
+      0,14 s zamiast 3,5 s), „Nie z aparatu” bez wczytywania wymiarów wszystkich zdjęć, decyzja 1/2/3 przelicza
+      tylko pliki z decyzją;
+    - pomiar 200 tys. plików (lokalny dysk): skan 148 s, duplikaty 51 s, analiza 512 s, propozycja 24 s,
+      kopiowanie 292 s; pamięć do ok. 1 GB; okno odpowiada przez cały czas (stan < 0,2 s)
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

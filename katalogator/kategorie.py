@@ -103,15 +103,19 @@ def decyzje(db: sqlite3.Connection) -> dict[str, str]:
 def do_sprawdzenia(db: sqlite3.Connection) -> list[dict]:
     """Obrazy „nie z aparatu” (najpierw bez decyzji) z powodem i ewentualną decyzją."""
     przygotuj(db)
-    wym = wymiary(db)
     dec = decyzje(db)
     dok = {r[0]: r[1] for r in db.execute("SELECT sciezka, dokument FROM decyzje_dok")} \
         if db.execute("SELECT 1 FROM sqlite_master WHERE name='decyzje_dok'").fetchone() else {}
     wynik = []
-    for r in db.execute("SELECT rowid id, sciezka, wzgledna, rozmiar, rodzaj, aparat, data, zrodlo_daty "
-                        "FROM pliki WHERE rodzaj='zdjecie' AND aparat IS NULL ORDER BY sciezka"):
+    z_analiza = db.execute("SELECT 1 FROM sqlite_master WHERE name='analiza'").fetchone()
+    kol, zlacz = (", a.szer, a.wys", "LEFT JOIN analiza a ON a.sciezka=p.sciezka AND a.rozmiar=p.rozmiar "
+                  "AND a.mtime=p.mtime") if z_analiza else (", NULL szer, NULL wys", "")
+    for r in db.execute(f"SELECT p.rowid id, p.sciezka, p.wzgledna, p.rozmiar, p.rodzaj, p.aparat, p.data, "
+                        f"p.zrodlo_daty{kol} FROM pliki p {zlacz} WHERE p.rodzaj='zdjecie' AND p.aparat IS NULL "
+                        f"ORDER BY p.sciezka"):
         p = dict(r)
-        w = wym.get(p["sciezka"])
+        w = (p.pop("szer"), p.pop("wys"))
+        w = w if w[0] is not None else None
         if smieci(p, w):
             continue  # oczywiste śmieci nie wymagają pytania (są w Odłożone/Śmieci)
         powod = podejrzane(p, w)
