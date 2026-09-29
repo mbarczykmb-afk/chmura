@@ -1,3 +1,3 @@
 """Katalogator — porządkowanie zdjęć, filmów, muzyki i plików (etap 1: skaner + raport)."""
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"

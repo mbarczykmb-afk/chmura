@@ -156,12 +156,24 @@ class Stan:
             # spowalniało zadanie i okno — wątki zadania zajmują procesor); po zakończeniu zadania wersja
             # danych rośnie i liczymy od nowa.
             # Liczy tylko jeden wątek naraz — pozostałe zapytania dostają poprzedni wynik.
-            if (w_cache != wersja and not dane["biezace"]
-                    and self._licze_podsumowania.acquire(blocking=w_cache < 0)):
-                try:
-                    cache = self._przelicz_podsumowania(wersja)
-                finally:
-                    self._licze_podsumowania.release()
+            if w_cache != wersja and not dane["biezace"] and self._licze_podsumowania.acquire(blocking=False):
+                # Liczymy w osobnym wątku; czekamy najwyżej 1,5 s — przy dużym projekcie okno pokazuje się od razu,
+                # a podsumowania dochodzą przy następnym odświeżeniu.
+                wynik: dict = {}
+
+                def licz():
+                    try:
+                        wynik.update(self._przelicz_podsumowania(wersja))
+                    except Exception:
+                        LOG.exception("Nie udało się policzyć podsumowań")
+                    finally:
+                        self._licze_podsumowania.release()
+                w = threading.Thread(target=licz, daemon=True)
+                w.start()
+                w.join(1.5)
+                if not w.is_alive():
+                    cache = wynik
+            dane["wczytuje"] = self._licze_podsumowania.locked() and w_cache < 0
             dane.update(cache)
         return dane
 

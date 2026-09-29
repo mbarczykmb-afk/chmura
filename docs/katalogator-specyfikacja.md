@@ -165,6 +165,10 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     - wydajność: podsumowania nie są przeliczane w trakcie zadań, okno nie wysyła kolejnego zapytania, zanim
       nie dostanie odpowiedzi; podobne zdjęcia liczone raz (z pamięcią), z ograniczeniem porównań dla długich
       serii niemal identycznych ujęć — analiza 40 tys. zdjęć ~10× szybsza, okno odpowiada w < 0,5 s
+17. **Poprawki 1.3.1** ✅ — Dokumenty: duże karty jak w Podobnych (całe zdjęcie, podgląd 600 px, dwuklik =
+    powiększenie), po 100 na stronie (nieprzejrzane najpierw, zapisywane są decyzje tylko dla wyświetlonych),
+    zaznaczanie bez przerysowania listy; naprawione zgniatanie kart w siatkach przy zamrożonym układzie;
+    podsumowania dużego projektu liczone w tle — okno pokazuje się od razu („Wczytuję wyniki projektu…”)
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

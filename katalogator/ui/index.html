@@ -159,7 +159,7 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 .folder-nagl{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--lin);flex-wrap:wrap}
 .folder-nagl b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .akcje-zazn{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--akc-miekki);flex-wrap:wrap;font-size:13px}
-.siatka{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;padding:12px;overflow:auto;align-content:start;max-height:calc(100vh - 340px)}
+.siatka{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));grid-auto-rows:max-content;gap:10px;padding:12px;overflow:auto;align-content:start;max-height:calc(100vh - 340px)}
 .karta{border:1px solid var(--lin);border-radius:8px;background:var(--bg);overflow:hidden;cursor:pointer;position:relative;font-size:12px}
 .karta.zazn{outline:2px solid var(--akc);outline-offset:-1px}
 .karta.pom{opacity:.45} .karta.ist{opacity:.7}
@@ -172,6 +172,13 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 .karta .zn{position:absolute;top:6px;right:6px;font-size:10px;padding:1px 6px;border-radius:999px;background:var(--panel)}
 .karta .zn.p{background:var(--przen);color:#fff} .karta .zn.k{background:var(--akc);color:var(--akc-fg)}
 .karta .uw{color:var(--akc)} .karta .bl{color:var(--blad)}
+/* duże karty (Dokumenty) — jak w Podobnych: całe zdjęcie, bez przycinania */
+.siatka.duze{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.karta.duza{border-width:2px}
+.karta.duza.zazn{border-color:var(--akc);outline:none}
+.karta.duza .ob{height:auto;aspect-ratio:4/3}
+.karta.duza .ob img{object-fit:contain;cursor:zoom-in}
+.karta.duza input{width:18px;height:18px;top:8px;left:8px}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:13px;z-index:20;max-width:80vw}
 .grupa-pod{border:1px solid var(--lin);border-radius:10px;padding:10px;background:var(--bg)}
 .grupa-pod .gl{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
@@ -466,7 +473,7 @@ textarea{width:100%;min-height:70px;resize:vertical;padding:8px 10px;border:1px 
     </div>
     <div id="widok-dok" class="widok" hidden>
       <div class="filtry">
-        <span class="info" style="margin-left:0;flex:1">Zdjęcia, które wyglądają jak dokumenty (paragony, skany, kartki).
+        <span class="info" style="margin-left:0;flex:1">Zdjęcia, które wyglądają jak dokumenty (paragony, skany, kartki). Dwuklik = powiększenie.
           Zaznaczone trafią do <b>Zdjęcia/Dokumenty</b>.</span>
         <button class="maly" id="dok-wszystkie">Zaznacz wszystkie</button>
         <button class="maly" id="dok-zadne">Odznacz wszystkie</button>

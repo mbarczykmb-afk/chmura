@@ -25,20 +25,27 @@ function rysujAnalizeLewa() {
   $("licz-pod").hidden = !(a && a.podobne_grupy); if (a) $("licz-pod").textContent = a.podobne_grupy;
   if (an.trwala && !z.trwa) { an.dokWczytane = false; an.podWczytane = false; if (przyPokazaniu[zakladka]) przyPokazaniu[zakladka](); }
   an.trwala = !!z.trwa;
+  if (a && !an.bylaAnaliza && (zakladka === "dok" || zakladka === "pod")) {  // wyniki doszły po otwarciu okna
+    an.dokWczytane = false; an.podWczytane = false; przyPokazaniu[zakladka]();
+  }
+  an.bylaAnaliza = !!a;
 }
+const BRAK_ANALIZY = () => stan.wczytuje ? '<div class="pusto">Wczytuję wyniki projektu…</div>'
+  : '<div class="pusto">Najpierw kliknij „Analizuj zdjęcia” w lewej kolumnie.</div>';
 naStan.push(rysujAnalizeLewa);
 
 $("analizuj").onclick = async () => {
   try { stan = await api("/api/analiza/start", {}); rysuj(); } catch (e) { toast(e.message); }
 };
 
-function karta(id, rodzaj, tytul, podpis, zaznaczona, klik) {
+function karta(id, rodzaj, tytul, podpis, zaznaczona, klik, duza = false) {
   const k = document.createElement("div");
-  k.className = "karta" + (zaznaczona ? " zazn" : "");
+  k.className = "karta" + (duza ? " duza" : "") + (zaznaczona ? " zazn" : "");
   k.title = tytul;
-  const ob = document.createElement("div"); ob.className = "ob"; ob.style.height = "140px";
+  const ob = document.createElement("div"); ob.className = "ob"; if (!duza) ob.style.height = "140px";
   const img = new Image(); img.loading = "lazy"; img.alt = "";
-  img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${id}`;
+  img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${id}` + (duza ? "&srednia=1" : "");
+  if (duza) img.ondblclick = e => { e.stopPropagation(); podgladDuzy(id, tytul); };
   img.onerror = () => { ob.textContent = IKONY[rodzaj] || "🖼️"; };
   ob.append(img);
   const op = document.createElement("div"); op.className = "op";
@@ -47,8 +54,10 @@ function karta(id, rodzaj, tytul, podpis, zaznaczona, klik) {
   op.append(n, m);
   const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = zaznaczona;
   cb.onclick = e => e.stopPropagation();
-  cb.onchange = () => klik(cb.checked);
-  k.onclick = () => klik(!zaznaczona);
+  // klik(v) === true: zmiana obsłużona na miejscu (bez przerysowania całej listy)
+  const ustaw = v => { if (klik(v) === true) { k.classList.toggle("zazn", v); cb.checked = v; } };
+  cb.onchange = () => ustaw(cb.checked);
+  k.onclick = () => ustaw(!k.classList.contains("zazn"));
   k.append(ob, op, cb);
   return k;
 }
@@ -57,28 +66,46 @@ function karta(id, rodzaj, tytul, podpis, zaznaczona, klik) {
 przyPokazaniu.dok = async () => {
   if (an.dokWczytane) return;
   const r = await api("/api/dokumenty");
-  an.dok = r.kandydaci; an.dokZazn = new Set(r.kandydaci.filter(k => k.zaznacz).map(k => k.id));
+  // najpierw jeszcze nieprzejrzane, potem już zapisane decyzje
+  an.dok = r.kandydaci.filter(k => k.decyzja == null).concat(r.kandydaci.filter(k => k.decyzja != null));
+  an.dokZazn = new Set(r.kandydaci.filter(k => k.zaznacz).map(k => k.id)); an.dokIle = DOK_NA_STRONE;
   an.dokWczytane = true; rysujDokumenty();
 };
 
+const DOK_NA_STRONE = 100;
+const dokWidoczne = () => an.dok.slice(0, an.dokIle || DOK_NA_STRONE);
+function dokStopka() {
+  const w = dokWidoczne();
+  $("dok-stopka").textContent = !an.dok.length ? "" :
+    `Zaznaczone jako dokumenty: ${w.filter(d => an.dokZazn.has(d.id)).length} z ${w.length}` +
+    (w.length < an.dok.length ? ` wyświetlonych (razem ${an.dok.length}; zapisuję tylko wyświetlone)` : "");
+}
 function rysujDokumenty() {
-  const s = $("dok-siatka"); s.replaceChildren();
-  if (!stan.analiza) s.innerHTML = '<div class="pusto">Najpierw kliknij „Analizuj zdjęcia” w lewej kolumnie.</div>';
+  const s = $("dok-siatka"); s.replaceChildren(); s.classList.add("duze");
+  if (!stan.analiza) s.innerHTML = BRAK_ANALIZY();
   else if (!an.dok.length) s.innerHTML = '<div class="pusto">Nie znaleziono zdjęć przypominających dokumenty. 🎉</div>';
-  for (const d of an.dok) {
+  for (const d of dokWidoczne()) {
     const z = an.dokZazn.has(d.id);
     s.append(karta(d.id, "zdjecie", d.wzgledna, `${(d.data || "").slice(0, 10)} · pewność ${Math.round(d.ocena * 100)}%` +
-                   (d.decyzja === 1 ? " · ✓ zapisane" : ""), z,
-                   v => { v ? an.dokZazn.add(d.id) : an.dokZazn.delete(d.id); rysujDokumenty(); }));
+                   (d.decyzja === 1 ? " · ✓ zapisane" : d.decyzja === 0 ? " · zapisane: nie" : ""), z,
+                   v => { v ? an.dokZazn.add(d.id) : an.dokZazn.delete(d.id); dokStopka(); return true; }, true));
   }
-  $("dok-stopka").textContent = an.dok.length ? `Zaznaczone jako dokumenty: ${an.dokZazn.size} z ${an.dok.length}` : "";
+  const reszta = an.dok.length - dokWidoczne().length;
+  if (reszta > 0) {
+    const b = document.createElement("button"); b.className = "wiecej"; b.style.gridColumn = "1/-1";
+    b.textContent = `Pokaż kolejne ${Math.min(DOK_NA_STRONE, reszta)} (zostało ${reszta})`;
+    b.onclick = () => { an.dokIle = (an.dokIle || DOK_NA_STRONE) + DOK_NA_STRONE; rysujDokumenty(); };
+    s.append(b);
+  }
+  dokStopka();
   $("dok-zapisz").disabled = !an.dok.length;
 }
-$("dok-wszystkie").onclick = () => { an.dok.forEach(d => an.dokZazn.add(d.id)); rysujDokumenty(); };
-$("dok-zadne").onclick = () => { an.dokZazn.clear(); rysujDokumenty(); };
+$("dok-wszystkie").onclick = () => { dokWidoczne().forEach(d => an.dokZazn.add(d.id)); rysujDokumenty(); };
+$("dok-zadne").onclick = () => { dokWidoczne().forEach(d => an.dokZazn.delete(d.id)); rysujDokumenty(); };
 $("dok-zapisz").onclick = async () => {
-  const tak = an.dok.filter(d => an.dokZazn.has(d.id)).map(d => d.id);
-  const nie = an.dok.filter(d => !an.dokZazn.has(d.id)).map(d => d.id);
+  const w = dokWidoczne();  // decydujemy tylko o tym, co było widać
+  const tak = w.filter(d => an.dokZazn.has(d.id)).map(d => d.id);
+  const nie = w.filter(d => !an.dokZazn.has(d.id)).map(d => d.id);
   try {
     const w = await api("/api/dokumenty/zapisz", {tak, nie});
     toast(`Zapisano. Dokumentów: ${w.dokumenty}.` + (w.plan && w.plan.zmienione ? ` Przeniesiono w drzewie: ${w.plan.zmienione}.` : ""));
@@ -113,7 +140,7 @@ function opisZdjecia(w) {
 
 function rysujPodobne() {
   const l = $("pod-lista"); l.replaceChildren();
-  if (!stan.analiza) { l.innerHTML = '<div class="pusto">Najpierw kliknij „Analizuj zdjęcia” w lewej kolumnie.</div>'; }
+  if (!stan.analiza) { l.innerHTML = BRAK_ANALIZY(); }
   else if (an.tryb === "podobne") {
     $("pod-info").textContent = `${an.razem} grup · ★ = najwyższa rozdzielczość i ostrość · kliknij, żeby zostawić więcej · dwuklik na miniaturze = powiększenie`;
     if (!an.grupy.length) l.innerHTML = '<div class="pusto">Nie znaleziono podobnych zdjęć.</div>';
