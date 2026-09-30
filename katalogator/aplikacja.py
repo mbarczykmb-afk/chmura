@@ -1017,6 +1017,11 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/przegladarka/foldery":
                 stan.przegladarka.ustaw_foldery([str(f) for f in dane.get("foldery") or []])
                 return self._wyslij(stan.przegladarka.opis())
+            if u.path == "/api/przegladarka/zestaw":
+                w = stan.przegladarka.zestaw(str(dane.get("akcja", "")), int(dane.get("id") or 0) or None,
+                                             str(dane.get("nazwa", "")))
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if w.get("blad") and "zestawy" not in w
+                                    else HTTPStatus.OK)
             if u.path == "/api/przegladarka/skanuj":
                 blad = stan.przegladarka.skanuj()
                 return self._wyslij({"blad": blad} if blad else stan.przegladarka.opis(),

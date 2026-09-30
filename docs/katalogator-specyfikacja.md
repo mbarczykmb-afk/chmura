@@ -314,6 +314,11 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     „Failed to load Python DLL … python312.dll” (antywirus/sprzątanie Temp usuwały świeżo rozpakowaną bibliotekę);
     start jest szybszy. Aktualizacja usuwa stare `_internal` przed wgraniem nowych. Jednoplikowy `Katalogator.exe`
     zostaje jako wersja przenośna. CI sprawdza start obu wersji i zainstalowanego programu.
+32. **Zestawy dysków w Przeglądarce 1.9.2** ✅: kilka „projektów” Przeglądarki (np. Rodzina, Praca, Stary
+    laptop) — każdy z własną listą dysków/folderów; wybór z listy na pasku (＋ nowy, ✎ nazwa, 🗑 usuń — dyski
+    i zdjęcia zostają); oś czasu, mapa, szukanie i „tego dnia” pokazują aktywny zestaw; jedna wspólna baza (dysk
+    w dwóch zestawach skanuje się raz), ulubione i albumy wspólne; samoczynne odświeżanie obejmuje dyski
+    wszystkich zestawów; dotychczasowa lista przechodzi do zestawu „Moje dyski”
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

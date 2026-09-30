@@ -84,9 +84,9 @@ main{flex:1;min-height:0;position:relative}
 .wykres{flex:none;position:relative;border-bottom:1px solid var(--lin);padding:10px 14px 0;background:linear-gradient(180deg,color-mix(in srgb,var(--akc) 5%,transparent),transparent)}
 #wykres:not([hidden]) ~ #lata{display:none}  /* lata są podpisane pod wykresem */
 .w-tor{display:flex;gap:10px;overflow-x:auto;scrollbar-width:thin;padding-bottom:2px}
-.w-rok{flex:1 0 auto;min-width:84px;display:flex;flex-direction:column}
+.w-rok{flex:0 1 auto;min-width:84px;width:calc(12 * 36px);display:flex;flex-direction:column}
 .w-slupki{height:88px;display:flex;align-items:flex-end;gap:2px;border-bottom:1px solid color-mix(in srgb,var(--mut) 45%,transparent)}
-.w-s{flex:1 1 0;min-width:5px;height:100%;padding:0;border:0;border-radius:0;background:none;display:flex;align-items:flex-end;cursor:pointer}
+.w-s{flex:1 1 0;min-width:5px;max-width:34px;height:100%;padding:0;border:0;border-radius:0;background:none;display:flex;align-items:flex-end;cursor:pointer}
 .w-s:disabled{cursor:default}
 .w-s i{display:block;width:100%;border-radius:3px 3px 0 0;background:color-mix(in srgb,var(--akc) 45%,transparent);transition:background .15s,height .35s ease}
 .w-rok.akt .w-s i{background:var(--akc)}
@@ -140,6 +140,10 @@ main{flex:1;min-height:0;position:relative}
 .menu-alb button:hover{background:var(--akc-miekki)}
 .prz label{font-size:12.5px;color:var(--mut);display:inline-flex;gap:5px;align-items:center}
 @media (max-width:600px){#szukaj{order:5;width:100%}}
+.zestaw{display:inline-flex;align-items:center;gap:0;border:1px solid var(--lin);border-radius:10px;overflow:hidden;background:var(--bg)}
+.zestaw select{border:0;border-radius:0;font-weight:700;max-width:220px;background:none}
+.zestaw button{border:0;border-left:1px solid var(--lin);border-radius:0;padding:6px 9px;background:none}
+.zestaw button:hover{background:var(--akc-miekki)}
 </style>
 </head>
 <body>
@@ -161,6 +165,12 @@ main{flex:1;min-height:0;position:relative}
   <button id="zamknij" hidden title="Wróć do porządkowania">✕</button>
 </header>
 <div class="prz" id="prz" hidden>
+  <span class="zestaw" title="Zestaw dysków — np. „Rodzina”, „Praca”: każdy ma swoją listę dysków i folderów">
+    <select id="prz-zestaw" aria-label="Zestaw dysków"></select>
+    <button id="prz-z-nowy" title="Nowy zestaw dysków">＋</button>
+    <button id="prz-z-nazwa" title="Zmień nazwę zestawu">✎</button>
+    <button id="prz-z-usun" title="Usuń zestaw (dyski i zdjęcia zostają)">🗑</button>
+  </span>
   <span id="prz-foldery" style="display:contents"></span>
   <button id="prz-dodaj" title="Dodaj dysk lub folder do przeglądania">＋ Dysk lub folder</button>
   <button id="prz-skanuj" class="akt" title="Tylko czyta: nic nie jest zmieniane ani przenoszone">⟳ Skanuj</button>

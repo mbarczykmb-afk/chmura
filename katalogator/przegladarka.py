@@ -35,23 +35,74 @@ class Przegladarka:
         self.galeria = galeria.Galeria(self.baza, lambda: self.foldery(), pamiec_min=self.katalog / "miniatury",
                                        tylko_zdjecia_ludzi=True)
 
-    # --- wybrane foldery -----------------------------------------------------------------
+    # --- zestawy dysków („projekty” Przeglądarki): każdy ma własną listę dysków/folderów -------------------
+    # Jedna baza na wszystkie zestawy — ten sam dysk w dwóch zestawach skanuje się raz; ulubione i albumy wspólne.
     def _plik(self) -> Path:
-        return self.katalog / "foldery.json"
+        return self.katalog / "zestawy.json"
+
+    def _zestawy(self) -> dict:
+        try:
+            d = json.loads(self._plik().read_text(encoding="utf-8"))
+            if isinstance(d, dict) and d.get("zestawy"):
+                return d
+        except (OSError, ValueError):
+            pass
+        stare = []  # do 1.9.1 jedna lista w foldery.json
+        try:
+            stare = [str(f) for f in json.loads((self.katalog / "foldery.json").read_text(encoding="utf-8"))]
+        except (OSError, ValueError, TypeError):
+            pass
+        return {"aktywny": 1, "zestawy": [{"id": 1, "nazwa": "Moje dyski", "foldery": stare}]}
+
+    def _zapisz_zestawy(self, d: dict) -> None:
+        tmp = self._plik().with_suffix(".nowy")
+        tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+        os.replace(tmp, self._plik())
+
+    def _aktywny(self, d: dict) -> dict:
+        return next((z for z in d["zestawy"] if z["id"] == d.get("aktywny")), d["zestawy"][0])
 
     def foldery(self) -> list[str]:
-        try:
-            return [str(f) for f in json.loads(self._plik().read_text(encoding="utf-8"))]
-        except (OSError, ValueError, TypeError):
-            return []
+        """Dyski/foldery aktywnego zestawu."""
+        return list(self._aktywny(self._zestawy())["foldery"])
+
+    def wszystkie_foldery(self) -> list[str]:
+        """Wszystkie dyski ze wszystkich zestawów (samoczynne odświeżanie)."""
+        wybor = dyski.normalizuj_wybor([{"sciezka": f, "tryb": "kopiuj"}
+                                        for z in self._zestawy()["zestawy"] for f in z["foldery"]])
+        return [w["sciezka"] for w in wybor]
 
     def ustaw_foldery(self, foldery: list[str]) -> list[str]:
         wybor = dyski.normalizuj_wybor([{"sciezka": str(f), "tryb": "kopiuj"} for f in foldery if str(f).strip()])
         lista = [w["sciezka"] for w in wybor]
-        tmp = self._plik().with_suffix(".nowy")
-        tmp.write_text(json.dumps(lista, ensure_ascii=False, indent=1), encoding="utf-8")
-        os.replace(tmp, self._plik())
+        d = self._zestawy()
+        self._aktywny(d)["foldery"] = lista
+        self._zapisz_zestawy(d)
         return lista
+
+    def zestaw(self, akcja: str, id_: int | None = None, nazwa: str = "") -> dict:
+        """akcja: nowy (i od razu aktywny) | wybierz | nazwa | usun."""
+        d = self._zestawy()
+        nazwa = " ".join(str(nazwa or "").split())[:60]
+        z = next((x for x in d["zestawy"] if x["id"] == id_), None)
+        if akcja == "nowy":
+            nowy = {"id": max(x["id"] for x in d["zestawy"]) + 1, "nazwa": nazwa or "Nowy zestaw", "foldery": []}
+            d["zestawy"].append(nowy)
+            d["aktywny"] = nowy["id"]
+        elif akcja == "wybierz" and z:
+            d["aktywny"] = z["id"]
+        elif akcja == "nazwa" and z and nazwa:
+            z["nazwa"] = nazwa
+        elif akcja == "usun" and z:
+            if len(d["zestawy"]) == 1:
+                return {"blad": "To jedyny zestaw — można go wyczyścić, ale nie usunąć."}
+            d["zestawy"].remove(z)  # zdjęcia na dyskach zostają; znika tylko zestaw
+            if d.get("aktywny") == z["id"]:
+                d["aktywny"] = d["zestawy"][0]["id"]
+        else:
+            return {"blad": "Nieznany zestaw."}
+        self._zapisz_zestawy(d)
+        return self.opis()
 
     # --- samoczynne odświeżanie: przy starcie programu i co kilka godzin (tylko nowe/zmienione pliki) ---------
     def _ust(self) -> dict:
@@ -80,7 +131,7 @@ class Przegladarka:
 
     def do_odswiezenia(self, teraz: float | None = None) -> bool:
         u = self._ust()
-        if not u.get("auto", True) or not self.foldery():
+        if not u.get("auto", True) or not self.wszystkie_foldery():
             return False
         return (teraz or time.time()) - float(u.get("ostatni_skan", 0)) >= float(u.get("co_godzin", 6)) * 3600
 
@@ -106,7 +157,10 @@ class Przegladarka:
     def opis(self) -> dict:
         with self.blokada:
             s = dict(self.stan)
-        s["foldery"] = self.foldery()
+        d = self._zestawy()
+        s["foldery"] = list(self._aktywny(d)["foldery"])
+        s["zestawy"] = [{"id": z["id"], "nazwa": z["nazwa"], "n": len(z["foldery"])} for z in d["zestawy"]]
+        s["aktywny"] = self._aktywny(d)["id"]
         u = self._ust()
         s["auto"], s["co_godzin"], s["ostatni_skan"] = u.get("auto", True), u.get("co_godzin", 6), u.get("ostatni_skan")
         if s["trwa"]:
@@ -114,7 +168,7 @@ class Przegladarka:
         return s
 
     def skanuj(self, auto: bool = False) -> str | None:
-        foldery = self.foldery()
+        foldery = self.wszystkie_foldery() if auto else self.foldery()
         if not foldery:
             return "Najpierw dodaj dysk albo folder."
         with self.blokada:

@@ -663,6 +663,14 @@ function ustawZakres() {
 }
 function rysujPrz(s) {
   prz.foldery = s.foldery; prz.trwa = s.trwa;
+  const sel = $("prz-zestaw"); sel.replaceChildren();
+  for (const z of s.zestawy || []) {
+    const o = document.createElement("option"); o.value = z.id;
+    o.textContent = `📂 ${z.nazwa}` + (z.n ? ` (${z.n})` : ""); sel.append(o);
+  }
+  sel.value = s.aktywny; prz.aktywny = s.aktywny;
+  prz.nazwa = ((s.zestawy || []).find(z => z.id === s.aktywny) || {}).nazwa || "";
+  $("prz-z-usun").disabled = (s.zestawy || []).length < 2;
   const f = $("prz-foldery"); f.replaceChildren();
   for (const sc of s.foldery) {
     const c = document.createElement("span"); c.className = "prz-f"; c.title = sc;
@@ -701,6 +709,26 @@ $("prz-skanuj").onclick = async () => {
   try { rysujPrz(await post("/api/przegladarka/skanuj")); odswiezPrz(); } catch (e) { $("prz-stan").textContent = e.message; }
 };
 $("prz-przerwij").onclick = () => post("/api/przegladarka/przerwij").catch(() => {});
+async function zestaw(akcja, dane = {}) {  // przełączenie zestawu = nowa oś czasu, mapa i wyszukiwanie
+  try { rysujPrz(await post("/api/przegladarka/zestaw", {akcja, ...dane})); }
+  catch (e) { alert(e.message); return; }
+  if (akcja === "nazwa") return;
+  g.punkty = null; g.rok = null; g.obszar = null; g.zrodlo = {typ: "os"}; $("szukaj").value = "";
+  if (g.widok === "kolekcje") g.widok = "os";
+  start();
+  if (akcja === "nowy") { $("wybierz").hidden = false; pokazWybor(null); }  // od razu dodaj pierwszy dysk
+}
+$("prz-zestaw").onchange = () => zestaw("wybierz", {id: +$("prz-zestaw").value});
+$("prz-z-nowy").onclick = () => {
+  const n = prompt("Nazwa nowego zestawu dysków (np. Rodzina, Praca, Stary laptop):"); if (n) zestaw("nowy", {nazwa: n});
+};
+$("prz-z-nazwa").onclick = () => {
+  const n = prompt("Nowa nazwa zestawu:", prz.nazwa); if (n) zestaw("nazwa", {id: prz.aktywny, nazwa: n});
+};
+$("prz-z-usun").onclick = () => {
+  if (confirm(`Usunąć zestaw „${prz.nazwa}”?\n\nDyski i zdjęcia zostają — znika tylko ta lista w Przeglądarce.`))
+    zestaw("usun", {id: prz.aktywny});
+};
 $("prz-auto").onchange = () => post("/api/przegladarka/auto", {auto: $("prz-auto").checked}).then(rysujPrz).catch(() => {});
 // wybór dysku / folderu
 const wyb = {sciezka: null};

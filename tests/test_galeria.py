@@ -224,3 +224,36 @@ def test_przegladarka_samo_odswieza(tmp_path):
     assert not p.do_odswiezenia() and p.do_odswiezenia(time.time() + 7 * 3600)
     p.ustaw_auto(False)
     assert not p.do_odswiezenia(time.time() + 99 * 3600) and p.opis()["auto"] is False
+
+
+def test_przegladarka_zestawy_dyskow(tmp_path):
+    """Kilka zestawów dysków („projektów” Przeglądarki): każdy ma swoje foldery, oś czasu pokazuje aktywny."""
+    import json, time
+    from katalogator import przegladarka
+    a, b = tmp_path / "rodzina", tmp_path / "praca"
+    a.mkdir(); b.mkdir()
+    _jpg_z_exif(a / "IMG_1.jpg", data="2021:05:01 10:00:00", gps=HEL)
+    _jpg_z_exif(b / "IMG_2.jpg", data="2019:02:01 10:00:00", gps=None)
+    dane = tmp_path / "dane"
+    (dane / "przegladarka").mkdir(parents=True)
+    (dane / "przegladarka" / "foldery.json").write_text(json.dumps([str(a)]), encoding="utf-8")  # zapis z 1.9.0
+    p = przegladarka.Przegladarka(dane)
+    s = p.opis()
+    assert s["zestawy"] == [{"id": 1, "nazwa": "Moje dyski", "n": 1}] and s["foldery"] == [str(a)]  # przeniesione
+    s = p.zestaw("nowy", nazwa="  Praca  ")
+    assert s["aktywny"] == 2 and s["foldery"] == [] and [z["nazwa"] for z in s["zestawy"]] == ["Moje dyski", "Praca"]
+    p.ustaw_foldery([str(b)])
+
+    def skan(auto=False):
+        p.skanuj(auto=auto)
+        for _ in range(200):
+            if not p.opis()["trwa"]:
+                return
+            time.sleep(0.05)
+    skan(auto=True)  # samoczynne odświeżanie skanuje dyski wszystkich zestawów
+    assert [x["rok"] for x in p.galeria.lata()["lata"]] == ["2019"]   # aktywny: Praca
+    p.zestaw("wybierz", 1)
+    assert [x["rok"] for x in p.galeria.lata()["lata"]] == ["2021"]   # Moje dyski
+    assert p.zestaw("nazwa", 1, "Rodzina")["zestawy"][0]["nazwa"] == "Rodzina"
+    assert p.zestaw("usun", 1)["aktywny"] == 2 and p.zestaw("usun", 2)["blad"]
+    assert (a / "IMG_1.jpg").exists()

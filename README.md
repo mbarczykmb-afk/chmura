@@ -156,6 +156,7 @@ folderu („2004 Zakopane”), a na końcu „w domu”.
     **🔍 Szukaj**: „Hel”, „Włochy 2022”, „lipiec 2019”, fragment nazwy. **⭐ Kolekcje**: ulubione (☆ albo F w podglądzie)
     i albumy; **▶ Pokaz** slajdów; **📅 Oś czasu tego obszaru** na mapie; „Tego dnia lata temu”. W podglądzie kółko
     myszy powiększa. Nowe zdjęcia z dysków dopisują się same (przy starcie i co 6 h).
+    **Zestawy dysków** (lista 📂 na pasku, ＋ nowy): np. „Rodzina” i „Praca” — każdy z własnymi dyskami.
 
 Projekty (ustawienia, bazy, dziennik): `%LOCALAPPDATA%\Katalogator\projekty\`. Program działa lokalnie
 (127.0.0.1); do internetu łączy się tylko mapa (kafelki map OpenStreetMap — bez żadnych danych o zdjęciach)
