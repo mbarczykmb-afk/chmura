@@ -107,3 +107,26 @@ def test_baza_nie_blokuje_sie_przy_dlugim_zapisie(tmp_path):
     okno.commit()
     assert koniec.wait(5)
     assert okno.execute("SELECT COUNT(*) FROM skany").fetchone()[0] == 2
+
+
+def test_zablokowany_instalator_czytelny_komunikat(tmp_path):
+    wywolania = []
+
+    def popen(args, **kw):
+        wywolania.append(args)
+        if args[0] != "explorer":
+            e = OSError("Zasady kontroli aplikacji zablokowały ten plik")
+            e.winerror = 4551
+            raise e
+    plik = tmp_path / "Katalogator-Setup-9.9.9.exe"
+    with pytest.raises(OSError, match="Inteligentna kontrola aplikacji") as e:
+        aktualizacje.uruchom_instalator(plik, popen=popen)
+    assert str(plik) in str(e.value)
+    assert wywolania[-1] == ["explorer", "/select,", str(plik)]  # od razu widać pobrany plik
+
+
+def test_inny_blad_instalatora_bez_zmian(tmp_path):
+    def popen(args, **kw):
+        raise FileNotFoundError(2, "brak pliku")
+    with pytest.raises(FileNotFoundError):
+        aktualizacje.uruchom_instalator(tmp_path / "x.exe", popen=popen)

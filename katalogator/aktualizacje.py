@@ -105,6 +105,30 @@ def pobierz_i_uruchom(url: str, postep=None, przerwij=None) -> Path:
             if postep:
                 postep("pobieranie instalatora", pobrane, razem, pobrane)
     if sys.platform == "win32":
-        subprocess.Popen([str(cel)], close_fds=True)
+        uruchom_instalator(cel)
     LOG.info("Uruchomiono instalator %s", cel)
     return cel
+
+
+# Windows odmówił uruchomienia: 4551 — Inteligentna kontrola aplikacji (Smart App Control) / App Control,
+# 1260 — zasady grupy, 225 — program antywirusowy
+ZABLOKOWANE = {4551, 1260, 225}
+
+
+def uruchom_instalator(cel: Path, popen=subprocess.Popen) -> None:
+    try:
+        popen([str(cel)], close_fds=True)
+    except OSError as e:
+        if getattr(e, "winerror", None) not in ZABLOKOWANE:
+            raise
+        LOG.warning("Windows zablokował instalator %s: %s", cel, e)
+        try:  # pokaż pobrany plik — po zmianie ustawień wystarczy go uruchomić
+            popen(["explorer", "/select,", str(cel)], close_fds=True)
+        except OSError:
+            pass
+        raise OSError(
+            "Windows zablokował instalator, bo nie ma on podpisu cyfrowego (Inteligentna kontrola aplikacji / "
+            "Smart App Control). Nowa wersja jest już pobrana: " + str(cel) + ". Aby ją zainstalować: Ustawienia → "
+            "Prywatność i zabezpieczenia → Zabezpieczenia Windows → Kontrola aplikacji i przeglądarki → "
+            "Ustawienia Inteligentnej kontroli aplikacji → Wyłączone, a potem uruchom ten plik (folder właśnie się "
+            "otworzył). Uwaga: przy włączonej kontroli Windows blokuje też sam Katalogator.") from e

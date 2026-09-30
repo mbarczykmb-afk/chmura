@@ -98,6 +98,10 @@ Nazwy miejscowości: © GeoNames, CC BY 4.0.
    w menu Start (i opcjonalnie na pulpicie); program trafia do `%LOCALAPPDATA%\Programs\Katalogator`.
    Wersja przenośna bez instalacji: `Katalogator.exe` z tej samej strony.
    Program sam powiadomi o nowej wersji (*? → Sprawdź aktualizacje*) i zainstaluje ją jednym kliknięciem.
+   Jeśli Windows 11 pokaże *„Zasady kontroli aplikacji zablokowały ten plik”* (WinError 4551), to działa
+   **Inteligentna kontrola aplikacji** (Smart App Control): blokuje programy bez podpisu cyfrowego, a Katalogator
+   go nie ma. Wyłącz ją: *Ustawienia → Prywatność i zabezpieczenia → Zabezpieczenia Windows → Kontrola aplikacji
+   i przeglądarki → Ustawienia Inteligentnej kontroli aplikacji → Wyłączone* i uruchom instalator ponownie.
 
 **Praca krok po kroku:**
 1. *Co porządkujemy?* — rozwiń dysk (sieciowe mają ikonę 🌐) i przy folderach zaznacz **K** (kopiuj — oryginały
