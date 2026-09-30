@@ -497,7 +497,9 @@ class Stan:
                                f"({raport.rozmiar_txt(w['bajty'])})." if w["nadmiar"]
                                else "Nie znaleziono duplikatów."), ""
         except skaner.Przerwano:
-            komunikat, blad = "Przerwano. Sprawdzone pliki są zapamiętane.", ""
+            komunikat, blad = ("Przerwano. Sprawdzone pliki są zapamiętane — wznowienie zacznie od miejsca przerwania. "
+                               "Największe pliki (filmy, archiwa) są sprawdzane na końcu, więc dalsza część "
+                               "idzie wolniej w liczbie plików; przerwany duży plik sprawdzany jest od początku."), ""
         except Exception as e:
             LOG.exception("Wyszukiwanie duplikatów nie powiodło się")
             komunikat, blad = "Wyszukiwanie nie powiodło się.", f"{type(e).__name__}: {e}"

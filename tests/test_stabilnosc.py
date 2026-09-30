@@ -298,3 +298,32 @@ def test_pamiec_miniatur_przycinana(tmp_path):
     g._przytnij_pamiec()
     zostaly = sorted(p.name for p in (tmp_path / "min").rglob("*.jpg"))
     assert len(zostaly) == 4 and "9.jpg" in zostaly and "0.jpg" not in zostaly  # najdawniej używane poszły
+
+
+def test_duze_pliki_liczone_po_jednym(tmp_path, monkeypatch):
+    """Pełny odcisk dużych plików — po jednym naraz (dysk sieciowy z talerzem), małe nadal równolegle."""
+    import threading as th
+    import time as t
+    from katalogator import duplikaty, skaner
+    k = tmp_path / "d"
+    k.mkdir()
+    for i in range(6):  # 3 pary identycznych „dużych” plików
+        (k / f"duzy{i}.bin").write_bytes(bytes([i // 2]) * (3 << 20))  # > 2 MB: potrzebny pełny odcisk
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    monkeypatch.setattr(duplikaty, "DUZY_PLIK", 1 << 20)
+    teraz, maks, blok = [0], [0], th.Lock()
+    oryg = duplikaty._odcisk
+
+    def wolny(sciezka, rozmiar, pelny, *a, **kw):
+        if pelny:
+            with blok:
+                teraz[0] += 1
+                maks[0] = max(maks[0], teraz[0])
+            t.sleep(0.05)
+            with blok:
+                teraz[0] -= 1
+        return oryg(sciezka, rozmiar, pelny, *a, **kw)
+    monkeypatch.setattr(duplikaty, "_odcisk", wolny)
+    w = duplikaty.szukaj(db)
+    assert w["grupy"] == 3 and maks[0] == 1

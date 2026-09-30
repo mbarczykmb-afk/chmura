@@ -14,6 +14,7 @@ import json
 import os
 import re
 import sqlite3
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -21,6 +22,9 @@ from . import indeks
 from .skaner import Przerwano, Zatwierdzanie
 
 BLOK = 1 << 20
+# Pełny odcisk dużych plików liczymy po jednym naraz: kilka równoległych długich odczytów z jednego dysku
+# (zwłaszcza sieciowego z talerzem, np. WD My Cloud) to skakanie głowicy i wielokrotnie wolniejszy odczyt.
+DUZY_PLIK = 64 * BLOK
 FOLDER_ODLOZONE = "Odłożone"   # <korzeń>/Odłożone/{Duplikaty,Podobne,Nieostre}/<ścieżka>
 PODFOLDERY = {"duplikat": "Duplikaty", "podobne": "Podobne", "nieostre": "Nieostre", "smieci": "Śmieci"}
 FOLDER_DUPLIKATOW = "_Duplikaty_Katalogator"  # do wersji 1.3 — nadal pomijany przy skanie
@@ -91,19 +95,23 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
                         getattr(postep, "czeka", None))
     bajty = [0]
     razem = [0]
-    biezacy = {"etap": "", "zrobione": 0, "wszystkie": 0, "t": 0.0}
+    biezacy = {"etap": "", "zrobione": 0, "wszystkie": 0, "t": 0.0, "plik": ""}
+    jeden_duzy = threading.Lock()
+
+    def dod():
+        return {"bajty_razem": razem[0], **({"plik": biezacy["plik"]} if biezacy["plik"] else {})}
 
     def licz(n):  # wołane w trakcie czytania — pasek rusza się także przy jednym wielkim pliku
         bajty[0] += n
         teraz = time.monotonic()
         if postep is not None and teraz - biezacy["t"] > 0.5:
             biezacy["t"] = teraz
-            postep(biezacy["etap"], biezacy["zrobione"], biezacy["wszystkie"], bajty[0], bajty_razem=razem[0])
+            postep(biezacy["etap"], biezacy["zrobione"], biezacy["wszystkie"], bajty[0], **dod())
 
     def zglos(etap, zrobione, wszystkie):
         biezacy.update(etap=etap, zrobione=zrobione, wszystkie=wszystkie)
         if postep is not None:
-            postep(etap, zrobione, wszystkie, bajty[0], bajty_razem=razem[0])
+            postep(etap, zrobione, wszystkie, bajty[0], **dod())
 
     def policz(etap: str, wiersze: list, pelny: bool) -> None:
         kol = "pelny" if pelny else "szybki"
@@ -121,6 +129,16 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
             if w["sciezka"] in gotowe:
                 return w, gotowe[w["sciezka"]]
             try:
+                if pelny and w["rozmiar"] >= DUZY_PLIK:
+                    with jeden_duzy:  # duże pliki po kolei — odczyt ciągły zamiast skakania po dysku
+                        if przerwij is not None and przerwij.is_set():
+                            raise Przerwano(w["sciezka"])
+                        biezacy["plik"] = w["sciezka"]
+                        try:
+                            return w, straznik.wykonaj(_odcisk, w["sciezka"], w["sciezka"], w["rozmiar"], True,
+                                                       przerwij, licz)
+                        finally:
+                            biezacy["plik"] = ""
                 return w, straznik.wykonaj(_odcisk, w["sciezka"], w["sciezka"], w["rozmiar"], pelny, przerwij, licz)
             except Przerwano:
                 raise
