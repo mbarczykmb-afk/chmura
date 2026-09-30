@@ -41,8 +41,11 @@ def plik_ui(sciezka_url: str) -> tuple[bytes, str] | None:
 class Galeria:
     """Dane dla osi czasu i mapy z bazy skanu. korzenie() -> lista folderów (None = wszystko w bazie)."""
 
-    def __init__(self, baza, korzenie=None, pamiec_min: Path | None = None):
+    def __init__(self, baza, korzenie=None, pamiec_min: Path | None = None, tylko_zdjecia_ludzi: bool = False):
         self.baza = baza
+        # Przeglądarka całych dysków: pomijamy drobne obrazki bez daty z aparatu/nazwy (ikony, grafiki programów)
+        self.filtr = (" AND (zrodlo_daty IN ('exif','film','nazwa') OR rozmiar >= 150000 OR rodzaj = 'film')"
+                      if tylko_zdjecia_ludzi else "")
         self.korzenie = korzenie or (lambda: None)
         self.pamiec_min = pamiec_min  # katalog na miniatury (serwer 24/7) — w oknie tylko pamięć RAM
         self._min: OrderedDict = OrderedDict()
@@ -54,7 +57,7 @@ class Galeria:
     def _warunek(self) -> tuple[str, list]:
         k = self.korzenie()
         if k is None:  # wszystko w bazie
-            return "", []
+            return self.filtr, []
         if not k:  # zakres pusty (np. biblioteka, gdy nie wybrano miejsca docelowego)
             return " AND 0", []
         czesci, arg = [], []
@@ -63,7 +66,7 @@ class Galeria:
             pref = r.rstrip("\\/") + os.sep
             czesci.append("(korzen = ? OR substr(sciezka, 1, ?) = ?)")
             arg += [r, len(pref), pref]
-        return " AND (" + " OR ".join(czesci) + ")", arg
+        return " AND (" + " OR ".join(czesci) + ")" + self.filtr, arg
 
     def lata(self) -> dict:
         w, arg = self._warunek()
@@ -152,12 +155,18 @@ class Galeria:
             if klucz in self._min:
                 self._min.move_to_end(klucz)
                 return self._min[klucz]
-        plik_cache = self.pamiec_min / f"{id_}{'s' if srednia else ''}.jpg" if self.pamiec_min else None
         sc = self.sciezka(id_, "zdjecie")
         if not sc:
             return None
+        plik_cache = None
+        if self.pamiec_min and not srednia:  # na dysku tylko małe miniatury siatki (średnie są duże)
+            try:
+                st = os.stat(sc)  # w nazwie data i rozmiar pliku — zmieniony plik = nowa miniatura
+                plik_cache = self.pamiec_min / f"{id_ % 100:02d}" / f"{id_}-{int(st.st_mtime)}-{st.st_size}.jpg"
+            except OSError:
+                return None
         dane = None
-        if plik_cache and plik_cache.exists() and plik_cache.stat().st_mtime >= os.path.getmtime(sc):
+        if plik_cache and plik_cache.exists():
             dane = plik_cache.read_bytes()
         if dane is None:
             try:

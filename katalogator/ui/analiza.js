@@ -285,8 +285,30 @@ function doOdlozenia() {
 function podgladDuzy(id, nazwa) {
   const n = document.createElement("div"); n.className = "nakladka"; n.dataset.podglad = "1";
   const img = new Image(); img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${id}&duza=1`; img.alt = nazwa;
-  img.style.cssText = "max-width:90vw;max-height:85vh;border-radius:8px;background:#000";
-  n.append(img); n.onclick = () => n.remove(); document.body.append(n);
+  img.style.cssText = "max-width:90vw;max-height:85vh;border-radius:8px;background:#000;transform-origin:0 0";
+  img.title = "Kółko myszy = powiększenie · przeciągnij, żeby przesunąć · kliknij obok, żeby zamknąć";
+  n.append(img); document.body.append(n);
+  // powiększanie kółkiem (do kursora) i przesuwanie — jak w Bibliotece
+  const z = {s: 1, x: 0, y: 0, ciagnie: null, ruszyl: false};
+  const rysuj = () => { img.style.transform = z.s === 1 ? "" : `translate(${z.x}px,${z.y}px) scale(${z.s})`;
+                        img.style.cursor = z.s > 1 ? "grab" : "zoom-in"; };
+  const ustaw = (s, px, py) => {
+    s = Math.min(8, Math.max(1, s)); const r = img.getBoundingClientRect();
+    const cx = px - r.left, cy = py - r.top;
+    z.x += cx - cx * s / z.s; z.y += cy - cy * s / z.s; z.s = s; if (s === 1) { z.x = 0; z.y = 0; }
+    rysuj();
+  };
+  n.addEventListener("wheel", e => { e.preventDefault(); ustaw(z.s * Math.exp(-e.deltaY * 0.0022), e.clientX, e.clientY); },
+                     {passive: false});
+  img.ondblclick = e => { e.stopPropagation(); ustaw(z.s > 1 ? 1 : 2.5, e.clientX, e.clientY); };
+  img.onpointerdown = e => { e.preventDefault(); z.ciagnie = {x: e.clientX, y: e.clientY}; z.ruszyl = false; img.setPointerCapture(e.pointerId); };
+  img.onpointermove = e => {
+    if (!z.ciagnie || z.s === 1) return;
+    z.x += e.clientX - z.ciagnie.x; z.y += e.clientY - z.ciagnie.y; z.ciagnie = {x: e.clientX, y: e.clientY};
+    z.ruszyl = true; rysuj();
+  };
+  img.onpointerup = () => { z.ciagnie = null; };
+  n.onclick = e => { if (e.target === img && (z.ruszyl || z.s > 1)) return; n.remove(); };
 }
 $("pod-filtry").onclick = e => {
   const b = e.target.closest(".filtr"); if (!b) return;

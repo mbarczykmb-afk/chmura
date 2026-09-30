@@ -290,6 +290,10 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
       skanowane — nic nie jest zmieniane — do osobnej bazy (`%LOCALAPPDATA%\Katalogator\przegladarka\`),
       niezależnej od projektów; oś czasu z wykresem, mapa, podgląd, „Na telefon”; postęp i czas do końca,
       *Przerwij*, zdjęcia pojawiają się już w trakcie skanu; usunięcie folderu z listy chowa jego zdjęcia
+    - 1.8.1: **powiększanie w podglądzie** — kółko myszy (do kursora, do 800%), dwuklik = 250%, szczypanie na
+      telefonie, przeciąganie powiększonego, + / − / 0, Esc = 100%; to samo w podglądzie Dokumentów i Podobnych;
+      Przeglądarka całych dysków pomija foldery systemu i programów (Windows, Program Files, AppData…) i drobne
+      obrazki bez daty z aparatu (ikony); małe miniatury siatki zapamiętywane na dysku (szybkie przewijanie przez sieć)
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

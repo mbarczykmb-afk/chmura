@@ -156,7 +156,7 @@ function rysujSiatke() {
     const k = document.createElement("div"); k.className = "k"; k.title = p.nazwa;
     const ob = document.createElement("div"); ob.className = "ob";
     if (p.rodzaj === "zdjecie") {
-      const im = new Image(); im.loading = "lazy"; im.alt = ""; im.src = miniatura(p.id);
+      const im = new Image(); im.loading = "lazy"; im.alt = ""; im.src = miniatura(p.id, false);  // mała: szybka, zapamiętywana na dysku
       im.onerror = () => { ob.textContent = "🖼️"; }; ob.append(im);
     } else ob.textContent = "🎬";
     const op = document.createElement("div"); op.className = "op";
@@ -178,7 +178,7 @@ function rysujSiatke() {
 // ---------- podgląd na cały ekran ----------
 async function pokazPelny(lista, poz) {
   g.lista = lista; g.poz = poz;
-  $("pelny").hidden = false;
+  $("pelny").hidden = false; zoomReset();
   const p = lista[poz], t = $("pelny-tresc"); t.replaceChildren();
   if (p.rodzaj === "film") {
     const v = document.createElement("video"); v.controls = true; v.autoplay = true; v.src = url("/api/g/film", {id: p.id});
@@ -186,9 +186,10 @@ async function pokazPelny(lista, poz) {
   } else {
     const mini = new Image(); mini.src = miniatura(p.id); t.append(mini);  // najpierw szybka miniatura
     const im = new Image(); im.src = url("/api/g/podglad", {id: p.id});
-    im.onload = () => { if (g.lista[g.poz] === p) t.replaceChildren(im); };
+    im.onload = () => { if (g.lista[g.poz] === p) { t.replaceChildren(im); zoomRysuj(); } };
   }
   $("pelny-opis").textContent = `${p.nazwa} · ${dataTxt(p.data)}`;
+  $("pelny-opis").title = "Kółko myszy / szczypanie = powiększenie · dwuklik = 250% · przeciągnij, żeby przesunąć · 0 = całe";
   if (p.miejsce === undefined) {
     try { const d = await api("/api/g/plik", {id: p.id}); p.miejsce = d.miejsce; } catch (e) { p.miejsce = null; }
   }
@@ -196,7 +197,61 @@ async function pokazPelny(lista, poz) {
   $("pelny").querySelector(".pop").hidden = poz <= 0;
   $("pelny").querySelector(".nast").hidden = poz >= lista.length - 1;
 }
-function zamknijPelny() { $("pelny").hidden = true; $("pelny-tresc").replaceChildren(); }
+function zamknijPelny() { $("pelny").hidden = true; $("pelny-tresc").replaceChildren(); zoomReset(); }
+
+// ---------- powiększanie: kółko myszy (do kursora), dwuklik, szczypanie na telefonie, przeciąganie ----------
+const zoom = {s: 1, x: 0, y: 0, palce: new Map(), start: null, zegar: null};
+const obrazPelny = () => $("pelny-tresc").querySelector("img");
+function zoomUstaw(s, px, py) {  // s — nowa skala; (px, py) — punkt ekranu, który ma zostać pod kursorem
+  const im = obrazPelny(); if (!im) return;
+  s = Math.min(8, Math.max(1, s));
+  const r = im.getBoundingClientRect();
+  const cx = (px ?? r.left + r.width / 2) - r.left, cy = (py ?? r.top + r.height / 2) - r.top;
+  zoom.x += cx - cx * s / zoom.s; zoom.y += cy - cy * s / zoom.s; zoom.s = s;
+  if (s === 1) { zoom.x = 0; zoom.y = 0; }
+  zoomRysuj();
+  const e = $("pelny-skala"); e.textContent = Math.round(s * 100) + "%"; e.style.opacity = s > 1 ? 1 : 0;
+  clearTimeout(zoom.zegar); zoom.zegar = setTimeout(() => { e.style.opacity = 0; }, 1200);
+}
+function zoomRysuj() {
+  const im = obrazPelny(); if (!im) return;
+  im.style.transform = zoom.s === 1 ? "" : `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.s})`;
+  im.classList.toggle("zoom", zoom.s > 1);
+}
+function zoomReset() { zoom.s = 1; zoom.x = 0; zoom.y = 0; zoom.palce.clear(); zoomRysuj(); $("pelny-skala").style.opacity = 0; }
+$("pelny-tresc").addEventListener("wheel", e => {
+  if (!obrazPelny()) return;
+  e.preventDefault();
+  zoomUstaw(zoom.s * Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0022)), e.clientX, e.clientY);
+}, {passive: false});
+$("pelny-tresc").addEventListener("dblclick", e => {
+  if (e.target.tagName !== "IMG") return;
+  e.preventDefault(); zoomUstaw(zoom.s > 1 ? 1 : 2.5, e.clientX, e.clientY);
+});
+$("pelny-tresc").addEventListener("pointerdown", e => {
+  if (e.target.tagName !== "IMG") return;
+  zoom.palce.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  e.target.setPointerCapture(e.pointerId);
+  if (zoom.palce.size === 2) {
+    const [a, b] = [...zoom.palce.values()];
+    zoom.start = {d: Math.hypot(a.x - b.x, a.y - b.y), s: zoom.s};
+  }
+  e.target.classList.add("ciagnie");
+});
+$("pelny-tresc").addEventListener("pointermove", e => {
+  const p = zoom.palce.get(e.pointerId); if (!p) return;
+  if (zoom.palce.size === 2 && zoom.start) {  // szczypanie
+    p.x = e.clientX; p.y = e.clientY;
+    const [a, b] = [...zoom.palce.values()];
+    zoomUstaw(zoom.start.s * Math.hypot(a.x - b.x, a.y - b.y) / zoom.start.d, (a.x + b.x) / 2, (a.y + b.y) / 2);
+  } else if (zoom.s > 1) {  // przesuwanie powiększonego zdjęcia
+    zoom.x += e.clientX - p.x; zoom.y += e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; zoomRysuj();
+  }
+});
+for (const t of ["pointerup", "pointercancel"]) $("pelny-tresc").addEventListener(t, e => {
+  zoom.palce.delete(e.pointerId); if (zoom.palce.size < 2) zoom.start = null;
+  const im = obrazPelny(); if (im && !zoom.palce.size) im.classList.remove("ciagnie");
+});
 function krok(d) { const n = g.poz + d; if (n >= 0 && n < g.lista.length) pokazPelny(g.lista, n); }
 $("pelny").querySelector(".zam").onclick = zamknijPelny;
 $("pelny").querySelector(".pop").onclick = e => { e.stopPropagation(); krok(-1); };
@@ -204,14 +259,17 @@ $("pelny").querySelector(".nast").onclick = e => { e.stopPropagation(); krok(1);
 $("pelny").onclick = e => { if (e.target.id === "pelny" || e.target.id === "pelny-tresc") zamknijPelny(); };
 document.addEventListener("keydown", e => {
   if ($("pelny").hidden) return;
-  if (e.key === "Escape") zamknijPelny();
-  if (e.key === "ArrowLeft") krok(-1);
-  if (e.key === "ArrowRight") krok(1);
+  if (e.key === "Escape") { if (zoom.s > 1) zoomReset(); else zamknijPelny(); }
+  if (e.key === "ArrowLeft" && zoom.s === 1) krok(-1);
+  if (e.key === "ArrowRight" && zoom.s === 1) krok(1);
+  if (e.key === "+" || e.key === "=") zoomUstaw(zoom.s * 1.4);
+  if (e.key === "-") zoomUstaw(zoom.s / 1.4);
+  if (e.key === "0") zoomUstaw(1);
 });
 let dotyk = null;  // przesuwanie palcem na telefonie
-$("pelny").addEventListener("touchstart", e => { dotyk = e.touches[0].clientX; }, {passive: true});
+$("pelny").addEventListener("touchstart", e => { dotyk = e.touches.length === 1 ? e.touches[0].clientX : null; }, {passive: true});
 $("pelny").addEventListener("touchend", e => {
-  if (dotyk === null) return;
+  if (dotyk === null || zoom.s > 1 || zoom.palce.size) { dotyk = null; return; }  // powiększone: palec przesuwa
   const d = e.changedTouches[0].clientX - dotyk; dotyk = null;
   if (Math.abs(d) > 50) krok(d < 0 ? 1 : -1);
 });

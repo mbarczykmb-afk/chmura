@@ -119,6 +119,10 @@ def test_przegladarka_dyskow(tmp_path):
     a.mkdir(); b.mkdir()
     _jpg_z_exif(a / "IMG_1.jpg", data="2021:05:01 10:00:00", gps=HEL)
     _jpg_z_exif(b / "IMG_2.jpg", data="2019:02:01 10:00:00", gps=None)
+    from PIL import Image
+    (a / "Windows" / "Web").mkdir(parents=True)
+    _jpg_z_exif(a / "Windows" / "Web" / "tapeta.jpg", data="2020:01:01 10:00:00", gps=None)  # folder systemu: pomijany
+    Image.new("RGBA", (32, 32), (0, 90, 200, 255)).save(a / "ikona.png")  # drobna grafika bez daty: nie na osi czasu
     przed = {p: p.stat().st_mtime for p in tmp_path.rglob("*.jpg")}
     p = przegladarka.Przegladarka(tmp_path / "dane")
     assert p.skanuj() == "Najpierw dodaj dysk albo folder."

@@ -13,6 +13,13 @@ from . import dyski, galeria, skaner, stabilnosc
 from .logi import LOG
 
 
+# Całe dyski (np. C:) — foldery systemu i programów są pełne ikon i grafik, nie zdjęć
+FOLDERY_SYSTEMOWE = frozenset({"windows", "program files", "program files (x86)", "programdata", "appdata",
+                               "$windows.~bt", "$windows.~ws", "windows.old", "msocache", "intel", "amd", "nvidia",
+                               "node_modules", "site-packages", "__pycache__", "application data",
+                               "local settings", "perflogs", "recovery", "boot"})
+
+
 class Przegladarka:
     def __init__(self, katalog: Path):
         self.katalog = Path(katalog) / "przegladarka"
@@ -24,7 +31,8 @@ class Przegladarka:
                      "blad": "", "czeka": ""}
         self.tempo = stabilnosc.Tempo()
         # galeria widzi tylko aktualnie wybrane foldery (usunięty z listy znika od razu, bez kasowania bazy)
-        self.galeria = galeria.Galeria(self.baza, lambda: self.foldery())
+        self.galeria = galeria.Galeria(self.baza, lambda: self.foldery(), pamiec_min=self.katalog / "miniatury",
+                                       tylko_zdjecia_ludzi=True)
 
     # --- wybrane foldery -----------------------------------------------------------------
     def _plik(self) -> Path:
@@ -89,7 +97,7 @@ class Przegladarka:
                             if wszystkie:
                                 self.tempo.dodaj(min(1.0, n / wszystkie), n, 0)
                     w = skaner.skanuj(folder, db, postep=postep, przerwij=self.przerwij, straznik=straznik,
-                                      wypisz=lambda *_: None)
+                                      wypisz=lambda *_: None, pomijaj=FOLDERY_SYSTEMOWE)
                     plikow += w.get("wszystkie", 0)
             k = f"Gotowe — przejrzano {plikow:,} plików w {time.time() - t0:.0f} s.".replace(",", " ")
             if pominiete:

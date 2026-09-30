@@ -84,8 +84,8 @@ class Zatwierdzanie:
             self.ostatnio = time.monotonic()
 
 
-def _przejdz(korzen: str, licz: dict, straznik=None, nieczytelne: list | None = None):
-    """Rekurencyjnie zwraca (ścieżka, nazwa, stat) z pominięciem śmieci."""
+def _przejdz(korzen: str, licz: dict, straznik=None, nieczytelne: list | None = None, pomijaj=frozenset()):
+    """Rekurencyjnie zwraca (ścieżka, nazwa, stat) z pominięciem śmieci (i folderów z `pomijaj`, małymi literami)."""
     stos = [korzen]
     while stos:
         folder = stos.pop()
@@ -99,7 +99,7 @@ def _przejdz(korzen: str, licz: dict, straznik=None, nieczytelne: list | None = 
         for w in wpisy:
             try:
                 if w.is_dir(follow_symlinks=False):
-                    if typy.pominac_folder(w.name):
+                    if typy.pominac_folder(w.name) or w.name.lower() in pomijaj:
                         licz["pominiete_foldery"] += 1
                     else:
                         stos.append(w.path)
@@ -117,7 +117,7 @@ class Przerwano(Exception):
 
 
 def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
-           postep=None, przerwij=None, straznik=None) -> dict:
+           postep=None, przerwij=None, straznik=None, pomijaj=frozenset()) -> dict:
     """Dwa etapy: 1) lista plików (szybko, daje liczbę do paska postępu), 2) odczyt metadanych
     nowych i zmienionych plików. postep(liczba_plikow, folder, wszystkie=…, etap=…) — co ok. 0,5 s;
     przerwij — threading.Event; straznik — stabilnosc.Straznik (czekanie na dysk sieciowy)."""
@@ -159,7 +159,7 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
 
     # 1) lista plików (przy okazji: pliki towarzyszące .json/.xmp — źródło GPS i daty)
     boczne: dict[str, str] = {}
-    for el in _przejdz(korzen, licz, straznik, nieczytelne):
+    for el in _przejdz(korzen, licz, straznik, nieczytelne, pomijaj):
         stat["wszystkie"] += 1
         sciezka, nazwa_el, st = el
         if nazwa_el.lower().endswith((".json", ".xmp")):
