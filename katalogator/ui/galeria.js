@@ -417,18 +417,21 @@ function telSterowanie() {
   if (c) return c.checked;
   try { return localStorage.getItem("katalogator_tel_ster") !== "0"; } catch (e) { return true; }
 }
-async function telefon(wlacz) {
+async function telefon(wlacz, pin) {
   $("telefon").hidden = false; $("tel-tresc").textContent = wlacz ? "Uruchamiam…" : "Wyłączam…";
   try {
     const r = await fetch(url("/api/telefon"), {method: "POST", headers: {"Content-Type": "application/json", "X-Token": TOKEN},
-                                                 body: JSON.stringify({wlacz, zakres: g.zakres, sterowanie: telSterowanie()})});
+                                                 body: JSON.stringify({wlacz, zakres: g.zakres, sterowanie: telSterowanie(),
+                                                                       ...(pin !== undefined ? {pin} : {})})});
     const j = await r.json();
     if (!r.ok || j.blad) throw new Error(j.blad || r.statusText);
     if (!j.wlaczone) { $("telefon").hidden = true; return; }
     const adr = j.adresy[0] || "";
     const qr = qrcode(0, "M"); qr.addData(adr); qr.make();
     $("tel-tresc").innerHTML = `<div class="qr"><div>${qr.createSvgTag({cellSize: 5, margin: 2})}</div>
-      <div><div class="info">PIN</div><div class="pin"></div></div></div>
+      <div><div class="info">PIN</div><div class="pin"></div>
+        <button id="tel-pin" class="tel-pin" title="Własny PIN — zapamiętany na stałe (np. łatwy do zapamiętania w domowej sieci)">✎ Ustaw swój PIN</button>
+        <div class="info" id="tel-pin-info"></div></div></div>
       <div>Zeskanuj kod aparatem telefonu albo wpisz w przeglądarce telefonu: <code id="tel-adr"></code></div>
       <ul><li>Telefon musi być w tej samej sieci Wi-Fi — albo mieć włączony <b>Tailscale</b> (wtedy działa z każdego miejsca;
       adres zaczyna się od 100.): <span id="tel-inne"></span></li>
@@ -437,6 +440,12 @@ async function telefon(wlacz) {
       <li>Na telefonie zobaczysz, co robi program, i uruchomisz kolejne kroki projektu; zdjęcia — tylko do oglądania.</li></ul>
       <label class="tel-ster"><input type="checkbox" id="tel-ster"> Pozwól sterować z telefonu (uruchamianie kroków, przerywanie)</label>`;
     $("tel-ster").checked = j.sterowanie !== false;
+    $("tel-pin-info").textContent = j.wlasny_pin ? "Twój PIN — stały" : "losowy przy każdym włączeniu";
+    $("tel-pin").onclick = () => {
+      const n = prompt("Twój PIN na telefon (4–12 cyfr) — zostanie zapamiętany.\nZostaw puste, żeby wrócić do losowego PIN-u.",
+                       j.wlasny_pin ? j.pin : "");
+      if (n !== null) telefon(true, n.trim());
+    };
     $("tel-ster").onchange = () => {
       try { localStorage.setItem("katalogator_tel_ster", $("tel-ster").checked ? "1" : "0"); } catch (e) { /* bez pamięci */ }
       telefon(true);
@@ -444,7 +453,10 @@ async function telefon(wlacz) {
     $("tel-tresc").querySelector(".pin").textContent = j.pin;
     $("tel-adr").textContent = adr;
     $("tel-inne").textContent = j.adresy.slice(1).join(", ") || "—";
-  } catch (e) { $("tel-tresc").textContent = e.message; }
+  } catch (e) {
+    if (pin !== undefined) { alert(e.message); return telefon(true); }  // zły PIN — wracamy do bieżącego
+    $("tel-tresc").textContent = e.message;
+  }
 }
 
 // ---------- pasek nad siatką: szukanie, obszar z mapy, kolekcja, tego dnia ----------

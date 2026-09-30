@@ -152,7 +152,8 @@ folderu („2004 Zakopane”), a na końcu „w domu”.
      kroki projektu z przyciskiem *Uruchom* (skan, duplikaty, analiza, propozycja, porządkowanie; w Sprzątaniu —
      usuwanie odłożonych, z potwierdzeniem), przełączanie projektów oraz przeglądanie: Biblioteka, cały projekt,
      Przeglądarka dysków. Projekt zakłada się i ustawia na komputerze; *Pozwól sterować z telefonu* można odznaczyć —
-     wtedy telefon tylko ogląda. Działa, dopóki Katalogator jest otwarty.
+     wtedy telefon tylko ogląda. *✎ Ustaw swój PIN* — stały PIN (4–12 cyfr), a telefon zostaje zalogowany
+     także po ponownym uruchomieniu programu. Działa, dopóki Katalogator jest otwarty.
 
 11. **🧹 Sprzątanie** (przełącznik trybów u góry: 🗂 Porządkowanie | 🧹 Sprzątanie | 🔭 Przeglądarka) — porządki
     **na miejscu**, bez kopiowania i bez nowego drzewa: zaznacz foldery → *Skanuj* → *Szukaj duplikatów* →

@@ -686,6 +686,10 @@ def adresy_ip() -> list[str]:
     return sorted(wynik, key=lambda a: (not a.startswith(("192.168.", "10.", "172.")), not a.startswith("100.")))
 
 
+def losowy_pin() -> str:
+    return f"{secrets.randbelow(10**6):06d}"
+
+
 class SerwerGalerii:
     """HTTP na wszystkich interfejsach; dostęp po PIN-ie (token w przeglądarce telefonu). Galeria tylko do odczytu;
     z `pilot` (program na komputerze) telefon widzi też stan pracy i może uruchamiać kolejne kroki."""
@@ -693,12 +697,13 @@ class SerwerGalerii:
     ZAKRESY = ("biblioteka", "wszystko", "przegladarka")
 
     def __init__(self, galeria: Galeria, port: int = 8765, pin: str | None = None, host: str = "0.0.0.0",
-                 pilot=None, galerie=None):
+                 pilot=None, galerie=None, staly_token: str | None = None):
         self.galeria = galeria
         self.pilot = pilot        # pilot.Pilot — stan i sterowanie programem
         self.galerie = galerie    # zakres -> Galeria (telefon wybiera: biblioteka / wszystko / przeglądarka)
-        self.pin = pin or f"{secrets.randbelow(10**6):06d}"
+        self.pin = pin or losowy_pin()
         self.tokeny: set[str] = set()
+        self.staly_token = staly_token  # przy własnym PIN-ie: telefon zostaje zalogowany po restarcie programu
         self.nieudane: dict[str, list[float]] = {}
         self.serwer = ThreadingHTTPServer((host, port), self._handler())
         self.serwer.daemon_threads = True
@@ -739,7 +744,7 @@ class SerwerGalerii:
 
             def _ok(self, q) -> bool:
                 t = self.headers.get("X-Token") or q.get("t", [""])[0]
-                return bool(t) and t in s.tokeny
+                return bool(t) and (t in s.tokeny or bool(s.staly_token) and secrets.compare_digest(t, s.staly_token))
 
             def do_GET(self):
                 u = urlparse(self.path)
@@ -800,7 +805,7 @@ class SerwerGalerii:
                 except (ValueError, AttributeError):
                     pin = ""
                 if pin and secrets.compare_digest(pin, s.pin):
-                    t = secrets.token_urlsafe(24)
+                    t = s.staly_token or secrets.token_urlsafe(24)
                     s.tokeny.add(t)
                     return self._wyslij({"t": t})
                 time.sleep(1)

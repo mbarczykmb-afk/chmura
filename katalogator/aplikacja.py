@@ -6,6 +6,8 @@ ani komputery w sieci nie mają do niego dostępu.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -66,13 +68,33 @@ class Stan:
             g = self._galerie[klucz] = galeria.Galeria(self.baza, korzenie)
         return g
 
-    def telefon(self, wlacz: bool, zakres: str = "biblioteka", sterowanie: bool = True) -> dict:
-        """Telefon (PIN; sieć domowa albo Tailscale): stan pracy, kolejne kroki (gdy `sterowanie`) i galeria."""
+    def telefon(self, wlacz: bool, zakres: str = "biblioteka", sterowanie: bool = True,
+                pin: str | None = None) -> dict:
+        """Telefon (PIN; sieć domowa albo Tailscale): stan pracy, kolejne kroki (gdy `sterowanie`) i galeria.
+        `pin`: własny PIN (4–12 cyfr, zapamiętany na stałe), "" = losowy przy każdym włączeniu, None = bez zmian."""
+        if pin is not None:
+            pin = pin.strip()
+            if pin and not (pin.isdigit() and 4 <= len(pin) <= 12):
+                return {"blad": "PIN to 4–12 cyfr."}
+            aktualizacje.zapisz_ustawienia(self.katalog, pin_telefonu=pin)
+        ust = aktualizacje._ustawienia(self.katalog)
+        wlasny = ust.get("pin_telefonu") or None
+        staly = None
+        if wlasny:  # token zależny od PIN-u: zmiana PIN-u wylogowuje telefony, restart programu — nie
+            sekret = ust.get("sekret_telefonu")
+            if not sekret:
+                sekret = secrets.token_hex(16)
+                aktualizacje.zapisz_ustawienia(self.katalog, sekret_telefonu=sekret)
+            staly = hmac.new(sekret.encode(), wlasny.encode(), hashlib.sha256).hexdigest()
         with self.blokada:
-            if self.serwer_tel is not None and wlacz:  # już działa — ten sam PIN, zmieniamy tylko sterowanie
-                self.serwer_tel.pilot.sterowanie = sterowanie
+            if self.serwer_tel is not None and wlacz:  # już działa — zmieniamy tylko sterowanie (i PIN)
                 s = self.serwer_tel
-                return {"wlaczone": True, "pin": s.pin, "adresy": s.adresy(), "port": s.port, "sterowanie": sterowanie}
+                s.pilot.sterowanie = sterowanie
+                if pin is not None:
+                    s.pin = wlasny or galeria.losowy_pin()
+                    s.staly_token = staly
+                    s.tokeny.clear()  # nowy PIN — telefony logują się od nowa
+                return self._tel_info(s, sterowanie, wlasny)
             if self.serwer_tel is not None:
                 self.serwer_tel.stop()
                 self.serwer_tel = None
@@ -80,7 +102,7 @@ class Stan:
                 return {"wlaczone": False}
             for port in (8765, 8766, 8767, 0):
                 try:
-                    self.serwer_tel = galeria.SerwerGalerii(self.galeria(zakres), port=port,
+                    self.serwer_tel = galeria.SerwerGalerii(self.galeria(zakres), port=port, pin=wlasny, staly_token=staly,
                                                             pilot=pilot.Pilot(self, sterowanie),
                                                             galerie=self.galeria).start()
                     break
@@ -88,7 +110,12 @@ class Stan:
                     continue
             s = self.serwer_tel
         LOG.info("Udostępnianie na telefon: %s", s.adresy())
-        return {"wlaczone": True, "pin": s.pin, "adresy": s.adresy(), "port": s.port, "sterowanie": sterowanie}
+        return self._tel_info(s, sterowanie, wlasny)
+
+    @staticmethod
+    def _tel_info(s, sterowanie: bool, wlasny) -> dict:
+        return {"wlaczone": True, "pin": s.pin, "wlasny_pin": bool(wlasny), "adresy": s.adresy(), "port": s.port,
+                "sterowanie": sterowanie}
 
     def _otworz(self, pid: str) -> None:
         self.projekt = self.projekty.wczytaj(pid)
@@ -953,7 +980,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/telefon":
                 return self._wyslij(stan.telefon(bool(dane.get("wlacz")), str(dane.get("zakres") or "biblioteka"),
-                                                bool(dane.get("sterowanie", True))))
+                                                bool(dane.get("sterowanie", True)),
+                                                str(dane["pin"]) if "pin" in dane else None))
             if u.path == "/api/skanuj":
                 blad = stan.rozpocznij_skan()
                 return self._wyslij({"blad": blad} if blad else stan.stan(),

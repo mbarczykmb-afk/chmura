@@ -69,10 +69,11 @@ main{flex:1;min-height:0;position:relative}
 #telefon .okno{background:var(--bg);border-radius:14px;padding:20px;max-width:520px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.3)}
 #telefon h2{margin:0 0 8px;font-size:18px}
 #telefon .qr{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:12px 0}
-#telefon .qr div:first-child{background:#fff;padding:8px;border-radius:8px}
-#telefon .pin{font-size:30px;font-weight:700;letter-spacing:4px}
+#telefon .qr>div:first-child{background:#fff;padding:8px;border-radius:8px}
+#telefon .pin{font-size:30px;font-weight:700;letter-spacing:4px;color:var(--fg)}
 #telefon code{background:var(--panel);padding:2px 6px;border-radius:5px;word-break:break-all}
 #telefon .tel-ster{display:flex;gap:8px;align-items:center;font-size:13.5px;margin-top:6px;color:var(--fg)}
+#telefon .tel-pin{margin-top:6px;font-size:12.5px;padding:4px 10px}
 #telefon ul{padding-left:18px;margin:8px 0;color:var(--mut);font-size:13px}
 .pusto{grid-column:1/-1;color:var(--mut);padding:30px;text-align:center}
 @media (max-width:600px){

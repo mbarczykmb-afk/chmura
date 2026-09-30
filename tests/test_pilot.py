@@ -91,3 +91,31 @@ def test_pilot_potwierdzenie_i_sprzatanie(tmp_path):
     # przełączenie projektu z telefonu
     porz = next(x["id"] for x in p.status()["projekty"] if x["typ"] == "porzadkowanie")
     assert p.akcja("projekt", {"id": porz}) is None and stan.pid == porz
+
+
+def test_wlasny_pin(tmp_path):
+    stan = aplikacja.Stan(tmp_path / "dane")
+    try:
+        assert "blad" in stan.telefon(True, pin="12a")
+        w = stan.telefon(True)
+        assert len(w["pin"]) == 6 and not w["wlasny_pin"]
+        w = stan.telefon(True, pin="2580")  # działający serwer: nowy PIN od razu
+        assert w["pin"] == "2580" and w["wlasny_pin"] and stan.serwer_tel.pin == "2580"
+        q = _klient(stan.serwer_tel)
+        t = q("/api/g/zaloguj", {"pin": "2580"})["t"]
+        # restart programu: ten sam PIN i telefon dalej zalogowany (ten sam token)
+        stan.telefon(False)
+        stan2 = aplikacja.Stan(tmp_path / "dane")
+        w = stan2.telefon(True)
+        stan = stan2
+        assert w["pin"] == "2580" and w["wlasny_pin"]
+        q = _klient(stan.serwer_tel)
+        assert q("/api/pilot", token=t)["projekt"]["nazwa"]
+        # zmiana PIN-u wylogowuje; puste = z powrotem losowy
+        stan.telefon(True, pin="1111")
+        with pytest.raises(urllib.error.HTTPError):
+            q("/api/pilot", token=t)
+        w = stan.telefon(True, pin="")
+        assert w["pin"] != "1111" and not w["wlasny_pin"]
+    finally:
+        stan.telefon(False)
