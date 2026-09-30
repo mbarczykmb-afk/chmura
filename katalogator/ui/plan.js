@@ -72,7 +72,11 @@ async function otworzWykonanie() {
   if (s.blad) { opis.innerHTML = ""; opis.textContent = s.blad; $("wyk-start").disabled = true; }
   else {
     opis.innerHTML = `Miejsce docelowe: <b></b><br>
-      Skopiuję <b>${p.kopiuj}</b> plików (${rozmiar(p.kopiuj_b)}), przeniosę <b>${p.przenies}</b> (${rozmiar(p.przenies_b)}).<br>
+      Skopiuję <b>${p.kopiuj}</b> plików (${rozmiar(p.kopiuj_b)}), przeniosę <b>${p.przenies}</b> (${rozmiar(p.przenies_b)}).<br>` +
+      (s.oryginaly ? `<label class="oryg"><input type="checkbox" id="wyk-oryginaly" checked> Usuń <b>${s.oryginaly}</b>
+        ${plikow(s.oryginaly, ["oryginał", "oryginały", "oryginałów"]).replace(/^\d+ /, "")} (${rozmiar(s.oryginaly_b)}),
+        które już są w bibliotece (np. skopiowane wcześniej) — każdy dopiero po sprawdzeniu, że kopia jest
+        identyczna; można cofnąć</label>` : "") + `
       Potrzebne miejsce: <b>${rozmiar(s.potrzeba)}</b> · wolne: <b>${rozmiar(s.wolne)}</b>` +
       (s.starczy ? "" : `<br><span style="color:var(--blad)">Za mało miejsca — zwolnij miejsce albo wyklucz część plików.</span>`) +
       (s.za_duze_fat ? `<br><span style="color:var(--blad)">Dysk docelowy ma system FAT32, który nie mieści plików
@@ -89,7 +93,8 @@ async function otworzWykonanie() {
 $("wyk-anuluj").onclick = () => { $("okno-wyk").hidden = true; };
 $("wyk-start").onclick = async () => {
   $("okno-wyk").hidden = true;
-  try { stan = await api("/api/wykonaj", {usun_puste: $("wyk-puste").checked}); rysuj(); }
+  const oryg = $("wyk-oryginaly");
+  try { stan = await api("/api/wykonaj", {usun_puste: $("wyk-puste").checked, usun_oryginaly: oryg ? oryg.checked : true}); rysuj(); }
   catch (e) { toast(e.message); }
 };
 $("plan-wykonaj").onclick = otworzWykonanie;

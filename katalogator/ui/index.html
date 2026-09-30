@@ -402,6 +402,8 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
 :is(.karta:has(>.wybor[data-decyzja="dokument"]) .ob,.plik.zdj:has(>.wybor[data-decyzja="dokument"]),.grupa:not(.pod):has(.wybor[data-decyzja="dokument"]) .mini)::after{content:"✓ 📄 Dokument"}
 :is(.karta:has(>.wybor[data-decyzja="smieci"]) .ob,.plik.zdj:has(>.wybor[data-decyzja="smieci"]),.grupa:not(.pod):has(.wybor[data-decyzja="smieci"]) .mini)::after{content:"✓ 🗑 Śmieci";background:var(--blad)}
 .toast{font-size:14px;padding:12px 18px;border-left:4px solid var(--ok)}
+.oryg{display:flex;gap:8px;align-items:flex-start;margin:8px 0;padding:8px 10px;border-radius:10px;background:var(--akc-miekki);font-size:13px}
+.oryg input{margin-top:3px}
 </style>
 </head>
 <body>
@@ -939,7 +941,19 @@ async function odswiez() {
 }
 
 async function zapisz(ust) {
-  try { stan = await api("/api/ustawienia", ust); rysuj(); }
+  try {
+    stan = await api("/api/ustawienia", ust); rysuj();
+    const z = stan.zmiana_trybu;
+    if (z && (z.zmienione || z.juz_skopiowane)) {
+      if (typeof plan !== "undefined") plan.wczytany = false;
+      const t = [];
+      if (z.zmienione) t.push(`Zmieniono w propozycji: ${plikow(z.zmienione)} (Drzewo bez zmian).`);
+      if (z.juz_skopiowane) t.push(`${plikow(z.juz_skopiowane)} z tego folderu jest już skopiowanych — żeby usunąć ` +
+        `ich oryginały, kliknij „Utwórz propozycję”, a potem „Uporządkuj pliki…” (każdy oryginał znika dopiero po ` +
+        `sprawdzeniu, że kopia w bibliotece jest identyczna).`);
+      toast(t.join(" "));
+    }
+  }
   catch (e) { alert(e.message); }
 }
 

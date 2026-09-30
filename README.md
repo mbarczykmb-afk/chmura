@@ -119,6 +119,9 @@ Nazwy miejscowości: © GeoNames, CC BY 4.0.
    Śmieci (ikony, pliki tymczasowe, puste, skróty) program sam odkłada do `Odłożone\Śmieci`.
 5. **Uporządkuj pliki…** — kopiowanie/przenoszenie z weryfikacją każdej kopii; *Cofnij porządkowanie* przywraca stan.
    Pasek u góry pokazuje postęp, prędkość i czas do końca; gdy dysk sieciowy zniknie, program czeka i ponawia.
+   **Najpierw skopiowałeś, a teraz chcesz przenieść?** Przełącz folder z **K** na **P**, kliknij *Utwórz propozycję*
+   i *Uporządkuj pliki…* — program usunie oryginały, które już są w bibliotece (każdy po porównaniu z kopią;
+   nic nie kopiuje drugi raz; *Cofnij porządkowanie* je przywraca).
    Duże pliki (filmy po kilkadziesiąt–kilkaset GB): przerwana kopia rusza dalej od miejsca przerwania, nie od
    zera. Dysk docelowy sformatowany jako FAT32 nie mieści plików > 4 GB — program ostrzeże przed startem.
    Orientacyjnie: każdy plik jest kopiowany i sprawdzany, więc przez sieć z WD My Cloud (~40 MB/s)

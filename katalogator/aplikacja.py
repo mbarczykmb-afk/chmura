@@ -547,9 +547,10 @@ class Stan:
             return f"Propozycja gotowa: {w['kopiuj'] + w['przenies']} plików do uporządkowania."
         return self.uruchom("plan", f)
 
-    def wykonaj(self, usun_puste: bool) -> str | None:
+    def wykonaj(self, usun_puste: bool, usun_oryginaly: bool = True) -> str | None:
         def f(db, postep, przerwij):
-            w = wykonawca.wykonaj(db, postep=postep, przerwij=przerwij, usun_puste=usun_puste)
+            w = wykonawca.wykonaj(db, postep=postep, przerwij=przerwij, usun_puste=usun_puste,
+                                  usun_oryginaly=usun_oryginaly)
             k = f"Gotowe: {w['zrobione']} plików ({raport.rozmiar_txt(w['bajty'])})."
             if w["bledy"]:
                 k += f" Błędy: {w['bledy']} — szczegóły w drzewie (czerwone)."
@@ -877,7 +878,16 @@ def _handler(stan: Stan, token: str, zamknij):
             stan.zmiana()
             if u.path == "/api/ustawienia":
                 stan.zapisz_ustawienia(dane)
-                return self._wyslij(stan.stan())
+                zmiana = None
+                if stan.ma_wyniki() and not stan.zajety():  # Kopiuj ↔ Przenieś: od razu w istniejącej propozycji
+                    zmiana = stan.z_db(planista.zmien_tryb, stan.ustawienia["zrodla"])
+                    if zmiana["zmienione"]:
+                        with stan.blokada:
+                            stan.wersja_danych += 1
+                w = stan.stan()
+                if zmiana:
+                    w["zmiana_trybu"] = zmiana
+                return self._wyslij(w)
             if u.path == "/api/nowy-folder":
                 w = dyski.nowy_folder(str(dane.get("w", "")), str(dane.get("nazwa", "")))
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
@@ -900,7 +910,8 @@ def _handler(stan: Stan, token: str, zamknij):
             proste = {
                 "/api/analiza/start": lambda: stan.analizuj(),
                 "/api/plan/generuj": lambda: stan.generuj_plan(),
-                "/api/wykonaj": lambda: stan.wykonaj(bool(dane.get("usun_puste", True))),
+                "/api/wykonaj": lambda: stan.wykonaj(bool(dane.get("usun_puste", True)),
+                                                     bool(dane.get("usun_oryginaly", True))),
                 "/api/wykonanie/cofnij": lambda: stan.cofnij_wykonanie(),
             }
             if u.path in proste:

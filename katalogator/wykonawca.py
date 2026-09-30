@@ -210,19 +210,22 @@ def _wolna(cel: str) -> str:
     return f"{baza} ({i}){ext}"
 
 
-def do_zrobienia(db: sqlite3.Connection) -> list[sqlite3.Row]:
+def do_zrobienia(db: sqlite3.Connection, oryginaly: bool = True) -> list[sqlite3.Row]:
+    """Pliki do skopiowania/przeniesienia; oryginaly=True — także „przenieś” plików, które już są w miejscu
+    docelowym (np. po wcześniejszym kopiowaniu): oryginał znika po sprawdzeniu, że kopia jest identyczna."""
     przygotuj(db)
     return db.execute(
-        "SELECT * FROM plan WHERE tryb IN ('kopiuj','przenies') AND pominiety=0 AND stan='nowy' "
-        "AND (wynik IS NULL OR wynik LIKE 'blad%') ORDER BY id").fetchall()
+        "SELECT * FROM plan WHERE tryb IN ('kopiuj','przenies') AND (wynik IS NULL OR wynik LIKE 'blad%') AND "
+        "((pominiety=0 AND stan='nowy') OR (? AND stan='juz_jest' AND tryb='przenies' AND jest IS NOT NULL)) "
+        "ORDER BY id", (int(oryginaly),)).fetchall()
 
 
-def sprawdz(db: sqlite3.Connection) -> dict:
+def sprawdz(db: sqlite3.Connection, oryginaly: bool = True) -> dict:
     """Ile trzeba skopiować i czy starczy miejsca."""
-    wiersze = do_zrobienia(db)
+    wiersze = do_zrobienia(db, oryginaly)
     cel = planista.meta(db).get("cel", "")
-    potrzeba = sum(w["rozmiar"] for w in wiersze
-                   if w["tryb"] == "kopiuj" or not ten_sam_wolumin(w["sciezka"], cel))
+    potrzeba = sum(w["rozmiar"] for w in wiersze if w["stan"] == "nowy"
+                   and (w["tryb"] == "kopiuj" or not ten_sam_wolumin(w["sciezka"], cel)))
     try:
         os.makedirs(cel, exist_ok=True)
         wolne = shutil.disk_usage(cel).free
@@ -230,9 +233,11 @@ def sprawdz(db: sqlite3.Connection) -> dict:
         return {"blad": f"Brak dostępu do miejsca docelowego: {e.strerror or e}", "plikow": len(wiersze)}
     wynik = {"plikow": len(wiersze), "bajtow": sum(w["rozmiar"] for w in wiersze), "potrzeba": potrzeba,
              "wolne": wolne, "starczy": wolne > potrzeba * 1.02 + 50_000_000, "cel": cel,
-             "najwiekszy": max((w["rozmiar"] for w in wiersze), default=0)}
+             "najwiekszy": max((w["rozmiar"] for w in wiersze), default=0),
+             "oryginaly": sum(1 for w in wiersze if w["stan"] == "juz_jest"),
+             "oryginaly_b": sum(w["rozmiar"] for w in wiersze if w["stan"] == "juz_jest")}
     if system_plikow(cel) in FAT:
-        wynik["za_duze_fat"] = sum(1 for w in wiersze if w["rozmiar"] > MAKS_FAT32)
+        wynik["za_duze_fat"] = sum(1 for w in wiersze if w["rozmiar"] > MAKS_FAT32 and w["stan"] == "nowy")
     return wynik
 
 
@@ -267,22 +272,23 @@ def system_plikow(sciezka: str) -> str:
         return ""
 
 
-def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool = True) -> dict:
+def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool = True,
+            usun_oryginaly: bool = True) -> dict:
     przygotuj(db)
-    spr = sprawdz(db)
+    spr = sprawdz(db, usun_oryginaly)
     if spr.get("blad"):
         raise OSError(spr["blad"])
     if not spr["starczy"]:
         raise OSError(f"Za mało miejsca w miejscu docelowym: potrzeba {spr['potrzeba'] / 1e9:.1f} GB, "
                       f"wolne {spr['wolne'] / 1e9:.1f} GB.")
     cel_root = spr["cel"]
-    wiersze = do_zrobienia(db)
+    wiersze = do_zrobienia(db, usun_oryginaly)
     # granice sprzątania pustych folderów: foldery źródłowe sprzed porządkowania (potem ich wpisy znikają z bazy)
     korzenie = [r[0] for r in db.execute("SELECT DISTINCT korzen FROM pliki")]
     partia = int(time.time() * 1000)
     bajty = [0]  # praca: kopia i jej sprawdzenie to dwa odczyty pliku
     razem = spr["bajtow"]
-    praca_razem = max(1, spr["bajtow"] + spr["potrzeba"])
+    praca_razem = max(1, spr["bajtow"] + spr["potrzeba"] + spr["oryginaly_b"])  # „już jest”: dwa odczyty
 
     def jako_bajty(praca: int) -> int:  # pasek i tempo w bajtach plików, ale z czasem sprawdzania kopii
         return min(razem, round(praca * razem / praca_razem))
@@ -340,14 +346,15 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
 
 def _wykonaj_plik(db, w, cel_root: str, partia: int, przerwij, licz, przeniesione_foldery: set) -> None:
     """Jeden plik planu: kopia/przeniesienie + wpis w dzienniku. OSError = nie udało się."""
-    dst = os.path.join(cel_root, *w["cel"].split("/"))
+    juz_jest = w["stan"] == "juz_jest"  # przenieś pliku, który już leży w miejscu docelowym: tylko usuń oryginał
+    dst = os.path.join(cel_root, *(w["jest"] if juz_jest else w["cel"]).split("/"))
     zrodlowy = db.execute("SELECT * FROM pliki WHERE rowid=?", (w["plik_id"],)).fetchone() \
         if w["plik_id"] is not None else None
     st = os.stat(w["sciezka"])
     if st.st_size != w["rozmiar"]:
         raise OSError("plik zmienił się od skanu — przeskanuj ponownie")
-    if st.st_size > MAKS_FAT32 and (w["tryb"] == "kopiuj" or not ten_sam_wolumin(w["sciezka"], cel_root)) \
-            and system_plikow(cel_root) in FAT:
+    if not juz_jest and st.st_size > MAKS_FAT32 \
+            and (w["tryb"] == "kopiuj" or not ten_sam_wolumin(w["sciezka"], cel_root)) and system_plikow(cel_root) in FAT:
         raise OSError("plik większy niż 4 GB, a dysk docelowy ma system FAT32 — sformatuj go jako exFAT lub NTFS")
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     tryb_logu = w["tryb"]
@@ -373,6 +380,9 @@ def _wykonaj_plik(db, w, cel_root: str, partia: int, przerwij, licz, przeniesion
                     time.time()))
         db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
         return
+    if juz_jest:  # kopii w bibliotece nie ma albo jest inna — nic nie usuwamy
+        raise OSError("kopia w miejscu docelowym zniknęła albo się zmieniła — oryginał zostaje; utwórz propozycję "
+                      "ponownie")
     dst = _wolna(dst)
     usuniete = 0
     if w["tryb"] == "przenies" and ten_sam_wolumin(w["sciezka"], os.path.dirname(dst)):

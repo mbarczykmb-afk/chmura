@@ -203,3 +203,60 @@ def test_ustaw_miejsce_i_date(swiat):
     assert db.execute("SELECT data FROM plan WHERE id=?", hel).fetchone()[0].startswith("2019-08-03")
     assert "blad" in planista.ustaw_date(db, hel, "03.08.2019")
     assert "blad" in planista.ustaw_miejsce(db, hel, " ")
+
+
+def test_najpierw_kopiuj_potem_przenies(swiat):
+    """Skopiowane wcześniej, teraz „przenieś”: oryginały znikają (po sprawdzeniu kopii), bez kopii „ (2)”."""
+    k, cel, db = swiat
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
+    assert wykonawca.wykonaj(db)["zrobione"] == 17
+    przed = sorted(p.relative_to(cel) for p in cel.rglob("*") if p.is_file())
+    # przełączenie na „przenieś”: istniejąca propozycja jest już wykonana — trzeba nowej
+    z = planista.zmien_tryb(db, [{"sciezka": str(k), "tryb": "przenies"}])
+    assert z == {"zmienione": 1, "juz_skopiowane": 17}  # 1 = zdjęcie z Rzymu, które już było w celu
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "przenies"}], str(cel))
+    p = planista.podsumowanie(db)
+    assert p["oryginaly"] == 18 and p["kopiuj"] == p["przenies"] == 0  # 17 + zdjęcie z Rzymu, które już było
+    s = wykonawca.sprawdz(db)
+    assert s["oryginaly"] == 18 and s["potrzeba"] == 0
+    w = wykonawca.wykonaj(db)
+    assert w["zrobione"] == 18 and w["bledy"] == 0
+    assert not [x for x in k.rglob("*") if x.is_file()]           # oryginały usunięte
+    assert sorted(p.relative_to(cel) for p in cel.rglob("*") if p.is_file()) == przed  # biblioteka bez zmian
+    c = wykonawca.cofnij(db)                                        # cofnięcie przywraca oryginały z kopii
+    assert c["cofniete"] == 18 and not c["bledy"]
+    assert (k / "Telefon" / "paragon.jpg").exists() and (k / "Telefon" / "IMG_rzym.jpg").exists()
+    assert sorted(p.relative_to(cel) for p in cel.rglob("*") if p.is_file()) == przed
+
+
+def test_bez_usuwania_oryginalow(swiat):
+    k, cel, db = swiat
+    planista.generuj(db, [{"sciezka": str(k / "Praca"), "tryb": "kopiuj"}], str(cel))
+    wykonawca.wykonaj(db)
+    planista.generuj(db, [{"sciezka": str(k / "Praca"), "tryb": "przenies"}], str(cel))
+    assert wykonawca.wykonaj(db, usun_oryginaly=False)["zrobione"] == 0
+    assert (k / "Praca" / "umowa.pdf").exists()
+
+
+def test_zmieniona_kopia_chroni_oryginal(swiat):
+    k, cel, db = swiat
+    planista.generuj(db, [{"sciezka": str(k / "Praca"), "tryb": "kopiuj"}], str(cel))
+    wykonawca.wykonaj(db)
+    planista.generuj(db, [{"sciezka": str(k / "Praca"), "tryb": "przenies"}], str(cel))
+    kopia = next(cel.rglob("umowa.pdf"))
+    kopia.write_bytes(b"%PDF" * 49 + b"XXXX")  # ten sam rozmiar, inna treść
+    w = wykonawca.wykonaj(db)
+    assert w["zrobione"] == 0 and w["bledy"] == 1
+    assert (k / "Praca" / "umowa.pdf").read_bytes() == b"%PDF" * 50  # oryginał został
+    assert "oryginał zostaje" in db.execute("SELECT wynik FROM plan WHERE stan='juz_jest'").fetchone()[0]
+
+
+def test_zmiana_trybu_w_istniejacej_propozycji(swiat):
+    k, cel, db = swiat
+    planista.generuj(db, [{"sciezka": str(k / "Praca"), "tryb": "kopiuj"},
+                          {"sciezka": str(k / "Telefon"), "tryb": "kopiuj"}], str(cel))
+    z = planista.zmien_tryb(db, [{"sciezka": str(k / "Praca"), "tryb": "przenies"},
+                                 {"sciezka": str(k / "Telefon"), "tryb": "kopiuj"}])
+    assert z["zmienione"] == 1 and planista.podsumowanie(db)["przenies"] == 1
+    w = wykonawca.wykonaj(db)
+    assert w["bledy"] == 0 and not (k / "Praca" / "umowa.pdf").exists() and (k / "Telefon" / "paragon.jpg").exists()

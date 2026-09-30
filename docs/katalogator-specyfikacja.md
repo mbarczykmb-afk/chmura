@@ -270,6 +270,13 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
       „✓ 🗑 Śmieci”; propozycja programu ma przerywaną ramkę (to jeszcze nie decyzja); u dołu „Przejrzane: X z Y
       · zostało Z”; komunikat mówi, gdzie plik trafi, z przyciskiem *Cofnij*; przyciski zbiorcze działają tylko
       na zdjęcia jeszcze bez decyzji
+28. **Kopiuj → Przenieś po fakcie 1.7.1** ✅:
+    - przełączenie K/P przy folderze od razu zmienia tryb w istniejącej propozycji (poprawki w Drzewie zostają);
+    - pliki już skopiowane: nowa propozycja rozpoznaje je w bibliotece (stan „już jest”, kolumna `plan.jest`),
+      a porządkowanie w trybie „przenieś” usuwa ich oryginały — każdy dopiero po porównaniu zawartości z kopią;
+      kopia zmieniona/usunięta = oryginał zostaje (błąd przy pliku); okno porządkowania ma pole „Usuń N
+      oryginałów, które już są w bibliotece”; *Cofnij porządkowanie* przywraca oryginały;
+    - Biblioteka: kafelki osi czasu nie są już spłaszczane do pasków (rzędy siatki o wysokości treści)
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

@@ -77,6 +77,8 @@ def przygotuj(db: sqlite3.Connection) -> None:
     if "alt" not in kol:  # od 1.4: miejsce „jako zwykłe zdjęcie” i kategoria (śmieci / nie z aparatu)
         db.execute("ALTER TABLE plan ADD COLUMN alt TEXT")
         db.execute("ALTER TABLE plan ADD COLUMN kat TEXT")
+    if "jest" not in kol:  # od 1.7.1: gdzie w miejscu docelowym leży już identyczny plik (stan „juz_jest”)
+        db.execute("ALTER TABLE plan ADD COLUMN jest TEXT")
     duplikaty.przygotuj(db)
     analiza.przygotuj(db)
     kategorie.przygotuj(db)
@@ -221,27 +223,27 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
     for p in sorted(zrodlowe, key=lambda p: duplikaty._ocena(
             {"wzgledna": p["wzgledna"], "korzen": p["korzen"], "mtime": p["mtime"]}, cele_zrodel)):
         h = hash_pliku.get(p["sciezka"])
-        stan, uw = "nowy", uwagi.get(p["id"])
+        stan, uw, jest = "nowy", uwagi.get(p["id"]), None
         if h and h in w_celu:
-            stan, uw = "juz_jest", f"już jest: {w_celu[h]}"
+            stan, uw, jest = "juz_jest", f"już jest: {w_celu[h]}", w_celu[h]
         elif h and h in widziane:
             stan, uw = "duplikat", f"kopia pliku {widziane[h]['wzgledna']}"
         elif h:
             widziane[h] = p
         nazwa = czysta_nazwa(os.path.basename(p["sciezka"]))
         wpisy.append({"p": p, "cel": folder[p["id"]] + "/" + nazwa, "alt": alt.get(p["id"], folder[p["id"]]) + "/" + nazwa,
-                      "kat": kat.get(p["id"]), "tryb": p["tryb"], "stan": stan, "uwaga": uw})
+                      "kat": kat.get(p["id"]), "tryb": p["tryb"], "stan": stan, "uwaga": uw, "jest": jest})
 
     _rozwiaz_kolizje(wpisy)
     db.execute("DELETE FROM plan")
     db.execute("DELETE FROM plan_ops")
     db.execute("DELETE FROM plan_zmiany")
     db.executemany(
-        "INSERT INTO plan(plik_id, sciezka, rodzaj, rozmiar, data, cel, tryb, stan, pominiety, uwaga, alt, kat) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO plan(plik_id, sciezka, rodzaj, rozmiar, data, cel, tryb, stan, pominiety, uwaga, alt, kat, jest) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [(w["p"]["id"], w["p"]["sciezka"], w["p"]["rodzaj"], w["p"]["rozmiar"], w["p"]["data"], w["cel"], w["tryb"],
-          w["stan"], 1 if w["stan"] in ("juz_jest", "duplikat") else 0, w["uwaga"], w.get("alt"), w.get("kat"))
-         for w in wpisy])
+          w["stan"], 1 if w["stan"] in ("juz_jest", "duplikat") else 0, w["uwaga"], w.get("alt"), w.get("kat"),
+          w.get("jest")) for w in wpisy])
     db.execute("DELETE FROM plan_meta")
     db.executemany("INSERT INTO plan_meta VALUES (?,?)",
                    [("cel", cel), ("utworzono", str(time.time())), ("dom", dom or "")])
@@ -397,7 +399,10 @@ def podsumowanie(db: sqlite3.Connection) -> dict:
              SUM(CASE WHEN tryb='przenies' AND pominiety=0 AND stan='nowy' AND wynik IS NULL THEN rozmiar END) przenies_b,
              SUM(tryb='istniejacy') istniejace, SUM(pominiety=1 AND tryb!='istniejacy') pominiete,
              SUM(uwaga IS NOT NULL AND tryb!='istniejacy' AND pominiety=0) uwagi,
-             SUM(wynik='ok') zrobione, SUM(wynik LIKE 'blad%') bledy
+             SUM(wynik='ok') zrobione, SUM(wynik LIKE 'blad%') bledy,
+             SUM(stan='juz_jest' AND tryb='przenies' AND (wynik IS NULL OR wynik LIKE 'blad%')) oryginaly,
+             SUM(CASE WHEN stan='juz_jest' AND tryb='przenies' AND (wynik IS NULL OR wynik LIKE 'blad%')
+                 THEN rozmiar END) oryginaly_b
            FROM plan""").fetchone()
     d = {k: (r[k] or 0) for k in r.keys()}
     m = meta(db)
@@ -406,6 +411,27 @@ def podsumowanie(db: sqlite3.Connection) -> dict:
     d["cofnij"] = _ostatnia_op(db, 0)
     d["ponow"] = _ostatnia_op(db, 1)
     return d
+
+
+def zmien_tryb(db: sqlite3.Connection, zrodla: list[dict]) -> dict:
+    """Po przełączeniu Kopiuj / Przenieś przy folderze: zmienia tryb w istniejącej propozycji (poprawki w Drzewie
+    zostają). Pliki już skopiowane mają wynik „ok” — ich oryginały usunie dopiero nowa propozycja
+    (stan „już jest” + przenieś)."""
+    if not istnieje(db):
+        return {"zmienione": 0, "juz_skopiowane": 0}
+    zrodla = dyski.normalizuj_wybor(zrodla)
+    zmiany, skopiowane = [], 0
+    for w in db.execute("SELECT id, sciezka, tryb, wynik FROM plan WHERE tryb IN ('kopiuj','przenies')"):
+        z = next((z for z in zrodla if dyski.zawiera(z["sciezka"], w["sciezka"])), None)
+        if not z or z["tryb"] == w["tryb"] or z["tryb"] not in ("kopiuj", "przenies"):
+            continue
+        if w["wynik"] == "ok":
+            skopiowane += w["tryb"] == "kopiuj"
+            continue
+        zmiany.append((z["tryb"], w["id"]))
+    db.executemany("UPDATE plan SET tryb=? WHERE id=?", zmiany)
+    db.commit()
+    return {"zmienione": len(zmiany), "juz_skopiowane": skopiowane}
 
 
 def drzewo(db: sqlite3.Connection) -> list[dict]:
