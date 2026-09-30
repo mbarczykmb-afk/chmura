@@ -23,9 +23,11 @@ function rysujPlanLewa() {
   const box = $("podsum-plan");
   box.hidden = !p;
   if (p) {
-    const doZrobienia = p.kopiuj + p.przenies;
+    const doZrobienia = ileDoZrobienia(p);
     box.innerHTML = `<div>Do skopiowania: <b>${p.kopiuj}</b> (${rozmiar(p.kopiuj_b)}) · do przeniesienia:
-      <b>${p.przenies}</b> (${rozmiar(p.przenies_b)})</div>
+      <b>${p.przenies}</b> (${rozmiar(p.przenies_b)})</div>` + (p.oryginaly ? `<div class="oryg" style="display:block">
+      Oryginały do usunięcia: <b>${p.oryginaly}</b> (${rozmiar(p.oryginaly_b)}) — już są w bibliotece; usunę je przy
+      „Uporządkuj pliki…”, każdy po sprawdzeniu kopii</div>` : "") + `
       <div style="color:var(--mut);margin-top:4px">Już w miejscu docelowym: ${p.istniejace} · pominięte: ${p.pominiete}
       · do sprawdzenia: ${p.uwagi}${p.zrobione ? ` · uporządkowane: ${p.zrobione}` : ""}${p.bledy ? ` · <span style="color:var(--blad)">błędy: ${p.bledy}</span>` : ""}</div>
       <div class="wiersz" style="margin-top:8px"><button class="maly" id="plan-edytuj">Edytuj drzewo →</button>
@@ -38,7 +40,7 @@ function rysujPlanLewa() {
   $("cofnij-wyk-box").hidden = !w || zajety();
   if (w) $("cofnij-wyk-opis").textContent = `Ostatnio uporządkowano ${w.n} plików.`;
   $("licz-drzewo").hidden = !p;
-  if (p) $("licz-drzewo").textContent = p.kopiuj + p.przenies;
+  if (p) $("licz-drzewo").textContent = ileDoZrobienia(p);
   $("k3").className = "krok klik " + (p ? "gotowy" : (stan.ma_wyniki ? "akt" : ""));
   $("k4").className = "krok klik " + (w ? "gotowy" : (p ? "akt" : ""));
   // po zakończeniu zadania planu/wykonania odśwież edytor
@@ -62,6 +64,9 @@ $("cofnij-wyk").onclick = async () => {
   if (!confirm("Cofnąć ostatnie porządkowanie?\n\nKopie zostaną usunięte, a przeniesione pliki wrócą na swoje miejsca.")) return;
   try { stan = await api("/api/wykonanie/cofnij", {}); rysuj(); } catch (e) { toast(e.message); }
 };
+
+// pliki do skopiowania/przeniesienia + oryginały już skopiowanych plików (przenieś po wcześniejszym kopiowaniu)
+function ileDoZrobienia(p) { return (p.kopiuj || 0) + (p.przenies || 0) + (p.oryginaly || 0); }
 
 // ---------- wykonanie ----------
 async function otworzWykonanie() {
@@ -210,8 +215,9 @@ function rysujPasek() {
   $("plan-cofnij").disabled = !p.cofnij; $("plan-ponow").disabled = !p.ponow;
   $("plan-opis-op").textContent = p.cofnij ? "Ostatnio: " + p.cofnij.opis : "";
   $("plan-stopka").textContent = stan.plan ? `Do skopiowania ${stan.plan.kopiuj} · do przeniesienia ${stan.plan.przenies}` +
-    ` · ${rozmiar((stan.plan.kopiuj_b || 0) + (stan.plan.przenies_b || 0))}` : "";
-  $("plan-wykonaj").disabled = !stan.plan || !(stan.plan.kopiuj + stan.plan.przenies) || zajety();
+    ` · ${rozmiar((stan.plan.kopiuj_b || 0) + (stan.plan.przenies_b || 0))}` +
+    (stan.plan.oryginaly ? ` · oryginały do usunięcia: ${stan.plan.oryginaly}` : "") : "";
+  $("plan-wykonaj").disabled = !stan.plan || !ileDoZrobienia(stan.plan) || zajety();
 }
 naStan.push(() => { if (zakladka === "drzewo") rysujPasek(); });
 

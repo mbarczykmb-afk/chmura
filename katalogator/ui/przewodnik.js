@@ -56,8 +56,9 @@ function streszczenia() {
     ? `✓ ${liczba(s.analiza.przeanalizowane)} zdjęć · dokumenty: ${s.analiza.dokumenty} · podobne: ${s.analiza.podobne_grupy}`
     : "Nie analizowano (opcjonalnie)";
   const p = s.plan;
-  o.plan = p ? (p.zrobione ? `✓ Uporządkowano ${liczba(p.zrobione)} plików` + (p.kopiuj + p.przenies ? ` · zostało ${liczba(p.kopiuj + p.przenies)}` : "")
-                           : `✓ Propozycja: ${liczba(p.kopiuj + p.przenies)} plików do uporządkowania`)
+  const zostalo = p ? p.kopiuj + p.przenies + (p.oryginaly || 0) : 0;
+  o.plan = p ? (p.zrobione ? `✓ Uporządkowano ${liczba(p.zrobione)} plików` + (zostalo ? ` · zostało ${liczba(zostalo)}` : "")
+                           : `✓ Propozycja: ${liczba(zostalo)} plików do uporządkowania`)
              : "Propozycja jeszcze nie utworzona";
   const pr = (s.projekt && s.projekt.przychodzace) || [];
   o.przych = pr.length ? `${pr.length} folder(y) przychodzące` + (s.projekt.harmonogram ? " · codziennie automatycznie" : "")

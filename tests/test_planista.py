@@ -211,9 +211,7 @@ def test_najpierw_kopiuj_potem_przenies(swiat):
     planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
     assert wykonawca.wykonaj(db)["zrobione"] == 17
     przed = sorted(p.relative_to(cel) for p in cel.rglob("*") if p.is_file())
-    # przełączenie na „przenieś”: istniejąca propozycja jest już wykonana — trzeba nowej
-    z = planista.zmien_tryb(db, [{"sciezka": str(k), "tryb": "przenies"}])
-    assert z == {"zmienione": 1, "juz_skopiowane": 17}  # 1 = zdjęcie z Rzymu, które już było w celu
+    # nowa propozycja rozpoznaje skopiowane pliki w bibliotece po zawartości
     planista.generuj(db, [{"sciezka": str(k), "tryb": "przenies"}], str(cel))
     p = planista.podsumowanie(db)
     assert p["oryginaly"] == 18 and p["kopiuj"] == p["przenies"] == 0  # 17 + zdjęcie z Rzymu, które już było
@@ -260,3 +258,21 @@ def test_zmiana_trybu_w_istniejacej_propozycji(swiat):
     assert z["zmienione"] == 1 and planista.podsumowanie(db)["przenies"] == 1
     w = wykonawca.wykonaj(db)
     assert w["bledy"] == 0 and not (k / "Praca" / "umowa.pdf").exists() and (k / "Telefon" / "paragon.jpg").exists()
+
+
+def test_przelaczenie_na_przenies_po_kopiowaniu_bez_nowej_propozycji(swiat):
+    """Samo przełączenie K → P w projekcie po kopiowaniu: „Uporządkuj” od razu usuwa oryginały (Drzewo zostaje)."""
+    k, cel, db = swiat
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
+    wykonawca.wykonaj(db)
+    przed = sorted(p.relative_to(cel) for p in cel.rglob("*") if p.is_file())
+    z = planista.zmien_tryb(db, [{"sciezka": str(k), "tryb": "przenies"}])
+    assert z == {"zmienione": 1, "juz_skopiowane": 17}  # 1 = zdjęcie z Rzymu, które już było w celu
+    p = planista.podsumowanie(db)
+    assert p["oryginaly"] == 18 and p["kopiuj"] == p["przenies"] == 0
+    w = wykonawca.wykonaj(db)
+    assert w["zrobione"] == 18 and w["bledy"] == 0
+    assert not [x for x in k.rglob("*") if x.is_file()]
+    assert sorted(p.relative_to(cel) for p in cel.rglob("*") if p.is_file()) == przed
+    wykonawca.cofnij(db)
+    assert (k / "Telefon" / "paragon.jpg").exists()

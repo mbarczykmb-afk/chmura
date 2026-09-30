@@ -420,18 +420,28 @@ def zmien_tryb(db: sqlite3.Connection, zrodla: list[dict]) -> dict:
     if not istnieje(db):
         return {"zmienione": 0, "juz_skopiowane": 0}
     zrodla = dyski.normalizuj_wybor(zrodla)
-    zmiany, skopiowane = [], 0
+    cel_root = meta(db).get("cel", "")
+    # gdzie trafiła kopia każdego już skopiowanego pliku (ostatnie, niecofnięte kopiowanie)
+    kopie = {r[0]: r[1] for r in db.execute(
+        "SELECT plan_id, cel FROM wykonanie WHERE tryb='kopiuj' AND cofniete=0 ORDER BY id")} \
+        if db.execute("SELECT 1 FROM sqlite_master WHERE name='wykonanie'").fetchone() else {}
+    zmiany, skopiowane = [], []
     for w in db.execute("SELECT id, sciezka, tryb, wynik FROM plan WHERE tryb IN ('kopiuj','przenies')"):
         z = next((z for z in zrodla if dyski.zawiera(z["sciezka"], w["sciezka"])), None)
         if not z or z["tryb"] == w["tryb"] or z["tryb"] not in ("kopiuj", "przenies"):
             continue
         if w["wynik"] == "ok":
-            skopiowane += w["tryb"] == "kopiuj"
+            if w["tryb"] == "kopiuj" and z["tryb"] == "przenies" and w["id"] in kopie and cel_root:
+                wzgl = os.path.relpath(kopie[w["id"]], cel_root)
+                if not wzgl.startswith(".."):  # kopia jest w bibliotece — do usunięcia zostaje oryginał
+                    skopiowane.append((wzgl.replace(os.sep, "/"), w["id"]))
             continue
         zmiany.append((z["tryb"], w["id"]))
     db.executemany("UPDATE plan SET tryb=? WHERE id=?", zmiany)
+    # już skopiowane → „przenieś pliku, który już jest”: porządkowanie usunie oryginał po sprawdzeniu kopii
+    db.executemany("UPDATE plan SET tryb='przenies', stan='juz_jest', jest=?, wynik=NULL WHERE id=?", skopiowane)
     db.commit()
-    return {"zmienione": len(zmiany), "juz_skopiowane": skopiowane}
+    return {"zmienione": len(zmiany), "juz_skopiowane": len(skopiowane)}
 
 
 def drzewo(db: sqlite3.Connection) -> list[dict]:

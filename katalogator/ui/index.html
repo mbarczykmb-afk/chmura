@@ -948,9 +948,9 @@ async function zapisz(ust) {
       if (typeof plan !== "undefined") plan.wczytany = false;
       const t = [];
       if (z.zmienione) t.push(`Zmieniono w propozycji: ${plikow(z.zmienione)} (Drzewo bez zmian).`);
-      if (z.juz_skopiowane) t.push(`${plikow(z.juz_skopiowane)} z tego folderu jest już skopiowanych — żeby usunąć ` +
-        `ich oryginały, kliknij „Utwórz propozycję”, a potem „Uporządkuj pliki…” (każdy oryginał znika dopiero po ` +
-        `sprawdzeniu, że kopia w bibliotece jest identyczna).`);
+      if (z.juz_skopiowane) t.push(`${plikow(z.juz_skopiowane)} z tego folderu jest już w bibliotece — kliknij ` +
+        `„Uporządkuj pliki…”, a usunę ich oryginały (każdy dopiero po sprawdzeniu, że kopia jest identyczna; ` +
+        `można cofnąć).`);
       toast(t.join(" "));
     }
   }
@@ -1185,7 +1185,7 @@ function toast(tekst, cofnij) {
     b.onclick = async () => { t.remove(); try { await cofnij(); } catch (e) { toast(e.message); } };
     t.append(b);
   }
-  document.body.append(t); setTimeout(() => t.remove(), cofnij ? 9000 : 3500);
+  document.body.append(t); setTimeout(() => t.remove(), Math.max(cofnij ? 9000 : 3500, tekst.length * 70));  // dłuższy tekst = dłużej
 }
 // Wspólny wygląd postępu dla zadań w tle (analiza, plan, wykonanie)
 function rysujZadanie(nazwa, kontener) {

@@ -277,6 +277,10 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
       kopia zmieniona/usunięta = oryginał zostaje (błąd przy pliku); okno porządkowania ma pole „Usuń N
       oryginałów, które już są w bibliotece”; *Cofnij porządkowanie* przywraca oryginały;
     - Biblioteka: kafelki osi czasu nie są już spłaszczane do pasków (rzędy siatki o wysokości treści)
+    - 1.7.2: samo przełączenie K → P po kopiowaniu wystarcza (bez nowej propozycji) — skopiowane pliki dostają
+      stan „już jest” z miejscem kopii z dziennika wykonania; „Uporządkuj pliki…” jest aktywne także, gdy zostały
+      tylko oryginały do usunięcia (wcześniej przycisk był wyłączony — „nic się nie działo”); podsumowanie
+      propozycji pokazuje „Oryginały do usunięcia”; kafelki galerii na starszych telefonach (bez aspect-ratio)
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.
