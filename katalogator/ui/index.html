@@ -297,7 +297,8 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 55%,var(--lin));
 .pw-dol{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .pw-dol label{font-size:13px;color:var(--mut);display:flex;gap:6px;align-items:center}
 .pw-dol .glowny{width:auto;padding:10px 22px}
-#galeria-nakladka{position:fixed;inset:0;z-index:1500;background:var(--bg)}
+#galeria-nakladka{position:fixed;inset:0;top:var(--nag,0px);z-index:1500;background:var(--bg)}
+body.galeria-otwarta header{z-index:1600}
 #galeria-nakladka iframe{border:0;width:100%;height:100%;display:block}
 #biblioteka-btn{font-weight:600}
 /* --- pasek bieżącego zadania (zawsze widoczny u góry) --- */
@@ -970,7 +971,17 @@ window.addEventListener("focus", () => { gotoweWTle = false; if (!stan.biezace) 
 $("pz-przerwij").onclick = () => api("/api/przerwij", {});
 
 // ---------- przeglądarka biblioteki (oś czasu + mapa) ----------
+// Biblioteka / Przeglądarka otwiera się pod nagłówkiem — przełącznik trybów zostaje widoczny
+function wysokoscNaglowka() {
+  document.documentElement.style.setProperty("--nag", document.querySelector("header").getBoundingClientRect().bottom + "px");
+}
+window.addEventListener("resize", wysokoscNaglowka);
+function zamknijGalerie() {
+  $("galeria-nakladka").hidden = true; $("galeria-ramka").src = "about:blank";
+  document.body.classList.remove("galeria-otwarta");
+}
 function otworzGalerie(z) {
+  window.scrollTo(0, 0); wysokoscNaglowka(); document.body.classList.add("galeria-otwarta");
   $("galeria-ramka").src = `/galeria?t=${encodeURIComponent(TOKEN)}&app=1&z=${z}`;
   $("galeria-nakladka").hidden = false;
 }
@@ -978,7 +989,7 @@ function otworzGalerie(z) {
 $("biblioteka-btn").onclick = () => otworzGalerie(stan.wykonanie ? "biblioteka" : "wszystko");
 $("przegladarka-btn").onclick = () => otworzGalerie("przegladarka");
 window.addEventListener("message", e => {
-  if (e.data === "zamknij-galerie") { $("galeria-nakladka").hidden = true; $("galeria-ramka").src = "about:blank"; }
+  if (e.data === "zamknij-galerie") zamknijGalerie();
 });
 
 let odswiezaTrwa = false;

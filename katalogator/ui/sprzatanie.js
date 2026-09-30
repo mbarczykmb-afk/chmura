@@ -20,7 +20,7 @@ document.querySelectorAll(".tryby button").forEach(b => {
   b.onclick = async () => {
     const t = b.dataset.tryb;
     if (t === "przegladarka") { otworzGalerie("przegladarka"); trybGalerii = true; oznaczTryby(); return; }
-    if (trybGalerii) { $("galeria-nakladka").hidden = true; $("galeria-ramka").src = "about:blank"; trybGalerii = false; }
+    if (!$("galeria-nakladka").hidden) { zamknijGalerie(); trybGalerii = false; }
     if ((t === "sprzatanie") === sprzatanie()) { oznaczTryby(); return; }
     try {
       stan = await api("/api/tryb", {tryb: t});
