@@ -258,6 +258,18 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
       tylko pliki z decyzją;
     - pomiar 200 tys. plików (lokalny dysk): skan 148 s, duplikaty 51 s, analiza 512 s, propozycja 24 s,
       kopiowanie 292 s; pamięć do ok. 1 GB; okno odpowiada przez cały czas (stan < 0,2 s)
+27. **Nowy wygląd i motywy 1.7** ✅:
+    - **przełącznik motywu** jasny / ciemny w nagłówku (☀/☾), zapamiętywany; *? → Motyw jak w systemie Windows*;
+      domyślnie ciemny; raport i biblioteka w ramkach przejmują motyw;
+    - wygląd w stylu grafiki startowej: granat z niebieską i fioletową poświatą, szklany nagłówek i pasek zadania,
+      gradientowe przyciski główne, zaokrąglone karty, wyraźne stany najechania i fokusu, cienkie paski przewijania;
+    - **ekran startowy** z grafiką Katalogatora (znika po wczytaniu danych, kliknięcie = pomiń) i ta sama grafika
+      w oknie powitalnym;
+    - **decyzje widać od razu**: 📷/📄/🗑 w Dokumentach i „Nie z aparatu” zapisują się po kliknięciu (jak w
+      Duplikatach i Podobnych); zdjęcie z decyzją szarzeje i dostaje plakietkę „✓ 📄 Dokument” / „✓ 📷 Zdjęcie” /
+      „✓ 🗑 Śmieci”; propozycja programu ma przerywaną ramkę (to jeszcze nie decyzja); u dołu „Przejrzane: X z Y
+      · zostało Z”; komunikat mówi, gdzie plik trafi, z przyciskiem *Cofnij*; przyciski zbiorcze działają tylko
+      na zdjęcia jeszcze bez decyzji
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

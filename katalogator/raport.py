@@ -193,7 +193,8 @@ def html_raport(d: dict) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Raport katalogatora</title>
 <style>
 :root{{--bg:#f7f7f5;--fg:#1d1d1f;--mut:#6b6b70;--kar:#fff;--lin:#e3e3e0;--akc:#2f6fdb;--gps:#1f9d6b}}
-@media (prefers-color-scheme:dark){{:root{{--bg:#16171a;--fg:#ececef;--mut:#9a9aa2;--kar:#1f2024;--lin:#2e2f35;--akc:#6d9df0;--gps:#3cc28c}}}}
+@media (prefers-color-scheme:dark){{:root:not([data-theme]){{--bg:#060a15;--fg:#e7ecf7;--mut:#8a97b4;--kar:#0d1426;--lin:#1c2742;--akc:#5b8cff;--gps:#34d399}}}}
+:root[data-theme="dark"]{{--bg:#060a15;--fg:#e7ecf7;--mut:#8a97b4;--kar:#0d1426;--lin:#1c2742;--akc:#5b8cff;--gps:#34d399}}
 body{{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,Segoe UI,sans-serif}}
 main{{max-width:900px;margin:0 auto;padding:24px 16px 64px}}
 h1{{font-size:24px;margin:0 0 4px}} h2{{margin-top:36px;font-size:19px}} h3{{font-size:15px;color:var(--mut)}}

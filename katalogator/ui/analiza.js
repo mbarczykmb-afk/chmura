@@ -44,10 +44,18 @@ const KAT_OPCJE = [["zdjecie", "📷 Zdjęcie"], ["dokument", "📄 Dokument"], 
 const KAT_NAZWY = {zdjecie: "zdjęcie", dokument: "dokument", smieci: "śmieci"};
 
 // Trzy przyciski; wybierz(k) -> Promise|undefined; ponowny klik aktywnego = cofnięcie wyboru (k = "").
-function przyciskiWyboru(obecna, wybierz, pozwolCofniecie = true) {
+// sugestia: propozycja programu (przerywana ramka) — to jeszcze nie decyzja.
+// Zapisana decyzja trafia do data-decyzja: karta szarzeje i dostaje plakietkę „✓ Dokument” (CSS).
+function przyciskiWyboru(obecna, wybierz, pozwolCofniecie = true, sugestia = "") {
   const wyb = document.createElement("div"); wyb.className = "wybor";
   let akt = obecna || "";
-  const pokaz = () => wyb.querySelectorAll("button").forEach(b => b.classList.toggle("akt", b.dataset.k === akt));
+  const pokaz = () => {
+    wyb.querySelectorAll("button").forEach(b => {
+      b.classList.toggle("akt", b.dataset.k === akt);
+      b.classList.toggle("prop", !akt && b.dataset.k === sugestia);
+    });
+    if (akt) wyb.dataset.decyzja = akt; else delete wyb.dataset.decyzja;
+  };
   for (const [k, opis] of KAT_OPCJE) {
     const b = document.createElement("button"); b.className = "maly" + (k === "smieci" ? " s" : "");
     b.dataset.k = k; b.textContent = opis;
@@ -64,13 +72,16 @@ function przyciskiWyboru(obecna, wybierz, pozwolCofniecie = true) {
 }
 
 // Wariant zapisywany od razu (Duplikaty, Podobne): decyzja dla wskazanych plików + przełożenie w drzewie.
-function przyciskiKategorii(ids, obecna, poZmianie) {
+const KAT_GDZIE = {dokument: "trafi do Dokumenty › Dokumenty z <rok>", zdjecie: "zostaje wśród zdjęć",
+                   smieci: "trafi do Odłożone › Śmieci"};
+function przyciskiKategorii(ids, obecna, poZmianie, sugestia = "") {
   let poprzednia = obecna || "";
   const wyb = przyciskiWyboru(obecna, async nowa => {
     const w = await api("/api/kategoria", {ids, kat: nowa});
     const bylo = poprzednia; poprzednia = nowa;
-    toast(nowa ? `Zapisano: ${KAT_NAZWY[nowa]}` + (w.plan && w.plan.zmienione ? " — przełożono w drzewie." : ".")
-               : "Usunięto decyzję.", async () => {
+    const ile = ids.length > 1 ? ` (${plikow(ids.length)})` : "";
+    toast(nowa ? `✓ Zapisano: ${KAT_NAZWY[nowa]}${ile} — ${KAT_GDZIE[nowa]}.`
+               : `Usunięto decyzję${ile} — wraca propozycja programu.`, async () => {
       await api("/api/kategoria", {ids, kat: bylo}); poprzednia = bylo; wyb.ustaw(bylo);
       if (poZmianie) poZmianie(bylo);
       toast("Cofnięto."); if (typeof plan !== "undefined") plan.wczytany = false;
@@ -79,7 +90,7 @@ function przyciskiKategorii(ids, obecna, poZmianie) {
     if (typeof inne !== "undefined") inne.wczytane = false;
     an.dokWczytane = false;
     if (poZmianie) poZmianie(nowa);
-  });
+  }, true, sugestia);
   return wyb;
 }
 
@@ -108,14 +119,14 @@ function karta(id, rodzaj, tytul, podpis, zaznaczona, klik, duza = false) {
 }
 
 // ---------- dokumenty ----------
+// Każde kliknięcie 📷/📄/🗑 zapisuje się od razu (jak w Duplikatach i Podobnych); zdjęcie z decyzją szarzeje.
+const dokZapisana = d => d.kat || (d.decyzja === 1 ? "dokument" : d.decyzja === 0 ? "zdjecie" : "");
+const dokSugestia = d => d.zaznacz ? "dokument" : "zdjecie";
 przyPokazaniu.dok = async () => {
   if (an.dokWczytane) return;
   const r = await api("/api/dokumenty");
   // najpierw jeszcze nieprzejrzane, potem już zapisane decyzje
-  an.dok = r.kandydaci.filter(k => k.decyzja == null).concat(r.kandydaci.filter(k => k.decyzja != null));
-  // wybór na start: zapisana decyzja, a gdy jej brak — propozycja programu (pewne -> dokument, reszta -> zdjęcie)
-  an.dokWybor = new Map(r.kandydaci.map(k => [k.id, k.kat || (k.decyzja === 1 ? "dokument" : k.decyzja === 0 ? "zdjecie"
-                                                             : (k.zaznacz ? "dokument" : "zdjecie"))]));
+  an.dok = r.kandydaci.filter(k => !dokZapisana(k)).concat(r.kandydaci.filter(k => dokZapisana(k)));
   an.dokIle = DOK_NA_STRONE;
   an.dokWczytane = true; rysujDokumenty();
 };
@@ -123,20 +134,23 @@ przyPokazaniu.dok = async () => {
 const DOK_NA_STRONE = 100;
 const dokWidoczne = () => an.dok.slice(0, an.dokIle || DOK_NA_STRONE);
 function dokStopka() {
-  const w = dokWidoczne(), licz = k => w.filter(d => an.dokWybor.get(d.id) === k).length;
-  $("dok-stopka").textContent = !an.dok.length ? "" :
-    `Dokumenty: ${licz("dokument")} · zdjęcia: ${licz("zdjecie")} · śmieci: ${licz("smieci")} — z ${w.length}` +
-    (w.length < an.dok.length ? ` wyświetlonych (razem ${an.dok.length}; zapisuję tylko wyświetlone)` : "");
+  const zrobione = an.dok.filter(dokZapisana).length, bez = dokWidoczne().filter(d => !dokZapisana(d));
+  $("dok-stopka").innerHTML = !an.dok.length ? "" :
+    `<b>Przejrzane: ${zrobione} z ${an.dok.length}</b>` +
+    (zrobione === an.dok.length ? " · ✓ wszystko zdecydowane" : ` · zostało ${an.dok.length - zrobione}`) +
+    " · decyzja zapisuje się od razu po kliknięciu";
+  $("dok-zapisz").disabled = !bez.length;
+  $("dok-zapisz").textContent = bez.length ? `Zatwierdź propozycje dla pozostałych (${bez.length})` : "Wszystko zdecydowane ✓";
 }
 function rysujDokumenty() {
   const s = $("dok-siatka"); s.replaceChildren(); s.classList.add("duze");
   if (!stan.analiza) s.innerHTML = BRAK_ANALIZY();
   else if (!an.dok.length) s.innerHTML = '<div class="pusto">Nie znaleziono zdjęć przypominających dokumenty. 🎉</div>';
   for (const d of dokWidoczne()) {
-    const k = karta(d.id, "zdjecie", d.wzgledna, `${(d.data || "").slice(0, 10)} · pewność ${Math.round(d.ocena * 100)}%` +
-                    (d.decyzja != null || d.kat ? " · ✓ zapisane" : ""), false, () => undefined, true);
+    const k = karta(d.id, "zdjecie", d.wzgledna, `${(d.data || "").slice(0, 10)} · pewność ${Math.round(d.ocena * 100)}%`,
+                    false, () => undefined, true);
     k.querySelector("input").remove(); k.onclick = null; k.style.cursor = "default";
-    k.append(przyciskiWyboru(an.dokWybor.get(d.id), kat => { an.dokWybor.set(d.id, kat); dokStopka(); }, false));
+    k.append(przyciskiKategorii([d.id], dokZapisana(d), v => { d.kat = v; d.decyzja = null; dokStopka(); }, dokSugestia(d)));
     s.append(k);
   }
   const reszta = an.dok.length - dokWidoczne().length;
@@ -147,26 +161,27 @@ function rysujDokumenty() {
     s.append(b);
   }
   dokStopka();
-  $("dok-zapisz").disabled = !an.dok.length;
 }
-$("dok-wszystkie").onclick = () => { dokWidoczne().forEach(d => an.dokWybor.set(d.id, "dokument")); rysujDokumenty(); };
-$("dok-zadne").onclick = () => { dokWidoczne().forEach(d => an.dokWybor.set(d.id, "zdjecie")); rysujDokumenty(); };
-$("dok-zapisz").onclick = async () => {
-  const wybor = {}, bylo = {};  // decydujemy tylko o tym, co było widać
-  for (const d of dokWidoczne()) {
-    wybor[d.id] = an.dokWybor.get(d.id) || "zdjecie";
-    bylo[d.id] = d.kat || (d.decyzja === 1 ? "dokument" : d.decyzja === 0 ? "zdjecie" : "");
-  }
+// zbiorczo — tylko zdjęcia jeszcze bez decyzji (wyświetlone); zapis od razu, z „Cofnij”
+async function dokZbiorczo(kat) {
+  const bez = dokWidoczne().filter(d => !dokZapisana(d));
+  if (!bez.length) { toast("Wszystkie wyświetlone zdjęcia mają już decyzję."); return; }
+  const wybor = {}, bylo = {};
+  for (const d of bez) { wybor[d.id] = kat || dokSugestia(d); bylo[d.id] = ""; }
   try {
     const w = await api("/api/nie-z-aparatu/zapisz", {wybor});
     const n = Object.values(wybor).filter(k => k === "dokument").length;
-    toast(`Zapisano: ${plikow(w.zapisane, ["decyzja", "decyzje", "decyzji"])} (dokumentów: ${n}).` +
+    toast(`✓ Zapisano ${plikow(w.zapisane, ["decyzję", "decyzje", "decyzji"])}: dokumenty ${n}, zdjęcia ${bez.length - n}.` +
           (w.plan && w.plan.zmienione ? ` Przełożono w drzewie: ${plikow(w.plan.zmienione)}.` : ""), () => cofnijZapis(bylo));
     if (typeof inne !== "undefined") inne.wczytane = false;
-    an.dokWczytane = false; plan.wczytany = false;
-    stan = await api("/api/stan"); rysuj(); przyPokazaniu.dok();
+    for (const d of bez) { d.kat = wybor[d.id]; d.decyzja = null; }
+    plan.wczytany = false; rysujDokumenty();
+    stan = await api("/api/stan"); rysuj();
   } catch (e) { toast(e.message); }
-};
+}
+$("dok-wszystkie").onclick = () => dokZbiorczo("dokument");
+$("dok-zadne").onclick = () => dokZbiorczo("zdjecie");
+$("dok-zapisz").onclick = () => dokZbiorczo("");
 
 // ---------- podobne / nieostre ----------
 przyPokazaniu.pod = async () => { if (!an.podWczytane) await wczytajPodobne(); };
@@ -303,10 +318,10 @@ przyPokazaniu.inne = async () => {
 };
 const inneWidoczne = () => inne.lista.slice(0, inne.ile);
 function inneStopka() {
-  const w = inneWidoczne(), n = w.filter(p => inne.wybor.has(p.id)).length;
-  $("inne-stopka").textContent = !inne.lista.length ? "" :
-    `Zdecydowano: ${n} z ${w.length}` + (w.length < inne.lista.length ? ` wyświetlonych (razem ${inne.lista.length})` : "") +
-    " · bez decyzji zostają w drzewie jako zdjęcia „do sprawdzenia”";
+  const n = inne.lista.filter(p => inne.wybor.has(p.id)).length;
+  $("inne-stopka").innerHTML = !inne.lista.length ? "" :
+    `<b>Przejrzane: ${n} z ${inne.lista.length}</b>` + (n === inne.lista.length ? " · ✓ wszystko zdecydowane" : ` · zostało ${inne.lista.length - n}`) +
+    " · decyzja zapisuje się od razu; bez decyzji zostają w drzewie jako zdjęcia „do sprawdzenia”";
 }
 function kartaInne(p) {
   const k = karta(p.id, "zdjecie", p.wzgledna, (p.data || "").slice(0, 10) + (p.szer ? ` · ${p.szer}×${p.wys}` : "") +
@@ -314,8 +329,8 @@ function kartaInne(p) {
   k.querySelector("input").remove(); k.onclick = null; k.style.cursor = "default";
   const pw = document.createElement("div"); pw.className = "m powod"; pw.textContent = "❔ " + p.powod;
   k.querySelector(".op").append(pw);
-  k.append(przyciskiWyboru(inne.wybor.get(p.id), kat => {
-    kat ? inne.wybor.set(p.id, kat) : inne.wybor.delete(p.id); inneStopka();
+  k.append(przyciskiKategorii([p.id], inne.wybor.get(p.id), kat => {
+    kat ? inne.wybor.set(p.id, kat) : inne.wybor.delete(p.id); p.decyzja = kat || null; inneStopka();
   }));
   return k;
 }
@@ -331,22 +346,23 @@ function rysujInne() {
     s.append(b);
   }
   inneStopka();
-  $("inne-zapisz").disabled = !inne.lista.length;
 }
-$("inne-wsz-zdj").onclick = () => { inneWidoczne().forEach(p => inne.wybor.set(p.id, "zdjecie")); rysujInne(); };
-$("inne-wsz-smieci").onclick = () => { inneWidoczne().forEach(p => inne.wybor.set(p.id, "smieci")); rysujInne(); };
-$("inne-zapisz").onclick = async () => {
+async function inneZbiorczo(kat) {
+  const bez = inneWidoczne().filter(p => !inne.wybor.has(p.id));
+  if (!bez.length) { toast("Wszystkie wyświetlone obrazy mają już decyzję."); return; }
   const wybor = {}, bylo = {};
-  for (const p of inneWidoczne()) if (inne.wybor.has(p.id)) { wybor[p.id] = inne.wybor.get(p.id); bylo[p.id] = p.decyzja || ""; }
-  if (!Object.keys(wybor).length) { toast("Najpierw wybierz coś przy obrazach."); return; }
+  for (const p of bez) { wybor[p.id] = kat; bylo[p.id] = ""; }
   try {
     const w = await api("/api/nie-z-aparatu/zapisz", {wybor});
-    toast(`Zapisano: ${plikow(w.zapisane, ["decyzja", "decyzje", "decyzji"])}.` + (w.plan && w.plan.zmienione ? ` Przełożono w drzewie: ${plikow(w.plan.zmienione)}.` : ""),
-          () => cofnijZapis(bylo));
-    inne.wczytane = false; an.dokWczytane = false; plan.wczytany = false;
-    stan = await api("/api/stan"); rysuj(); przyPokazaniu.inne();
+    toast(`✓ Zapisano ${plikow(w.zapisane, ["decyzję", "decyzje", "decyzji"])}: ${KAT_NAZWY[kat]}.` +
+          (w.plan && w.plan.zmienione ? ` Przełożono w drzewie: ${plikow(w.plan.zmienione)}.` : ""), () => cofnijZapis(bylo));
+    for (const p of bez) { inne.wybor.set(p.id, kat); p.decyzja = kat; }
+    an.dokWczytane = false; plan.wczytany = false; rysujInne();
+    stan = await api("/api/stan"); rysuj();
   } catch (e) { toast(e.message); }
-};
+}
+$("inne-wsz-zdj").onclick = () => inneZbiorczo("zdjecie");
+$("inne-wsz-smieci").onclick = () => inneZbiorczo("smieci");
 naStan.push(() => {
   const n = stan.nie_z_aparatu;
   $("licz-inne").hidden = !n; if (n) $("licz-inne").textContent = n;

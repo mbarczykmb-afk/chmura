@@ -195,6 +195,7 @@ function pokazPowitanie() {
   const n = document.createElement("div"); n.className = "powitanie"; n.setAttribute("role", "dialog");
   n.setAttribute("aria-label", "Jak zacząć");
   n.innerHTML = `<div class="pw-okno">
+    <div class="pw-hero" aria-hidden="true"></div>
     <h2>👋 Witaj w Katalogatorze</h2>
     <p class="opis">Uporządkuję zdjęcia, filmy, muzykę i pliki. <b>Nic nie przeniosę bez Twojej zgody</b> — najpierw pokażę propozycję.</p>
     <div class="pw-kroki">

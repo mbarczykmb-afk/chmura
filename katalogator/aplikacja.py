@@ -179,7 +179,9 @@ class Stan:
                 "dup": dup, "zad": zad, "ma_wyniki": ma, "duplikaty": None, "do_cofniecia": None,
                 "analiza": None, "plan": None, "wykonanie": None, "przychodzace": None}
         dane["biezace"] = self._biezace(skan, dup, zad)
-        dane["powitanie_widziane"] = bool(aktualizacje._ustawienia(self.katalog).get("powitanie_widziane"))
+        ust = aktualizacje._ustawienia(self.katalog)
+        dane["powitanie_widziane"] = bool(ust.get("powitanie_widziane"))
+        dane["motyw"] = ust.get("motyw", "dark")
         if ma:
             with self.blokada:
                 wersja, (w_cache, cache) = self.wersja_danych, self._podsumowania
@@ -771,7 +773,11 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path in ("/", "/index.html"):
                 if not self._ok_token(q):
                     return self._wyslij("Brak dostępu", "text/plain; charset=utf-8", HTTPStatus.FORBIDDEN)
-                return self._wyslij((UI / "index.html").read_bytes(), "text/html; charset=utf-8")
+                html = (UI / "index.html").read_bytes()
+                motyw = aktualizacje._ustawienia(stan.katalog).get("motyw", "dark")
+                if motyw in ("dark", "light"):  # od razu właściwy motyw — bez mignięcia przy starcie
+                    html = html.replace(b'<html lang="pl">', f'<html lang="pl" data-theme="{motyw}">'.encode(), 1)
+                return self._wyslij(html, "text/html; charset=utf-8")
             if not u.path.startswith("/ui/") and not self._ok_token(q):
                 return self._wyslij({"blad": "brak dostępu"}, kod=HTTPStatus.FORBIDDEN)
             if not u.path.startswith("/ui/"):
@@ -937,6 +943,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij({"ok": True})
             if u.path == "/api/program/ustawienia":
                 zmiany = {k: bool(dane[k]) for k in ("sprawdzaj_aktualizacje", "powitanie_widziane") if k in dane}
+                if dane.get("motyw") in ("dark", "light", "auto"):
+                    zmiany["motyw"] = dane["motyw"]
                 return self._wyslij(aktualizacje.zapisz_ustawienia(stan.katalog, **zmiany))
             if u.path == "/api/aktualizacja/instaluj":
                 blad = stan.zainstaluj_aktualizacje(str(dane.get("url", "")), zamknij)

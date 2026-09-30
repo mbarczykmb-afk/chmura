@@ -25,7 +25,8 @@ from . import analiza, miejsca, skaner
 
 UI = Path(__file__).parent / "ui"
 _TYPY = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".png": "image/png",
-         ".ico": "image/x-icon", ".html": "text/html; charset=utf-8", ".svg": "image/svg+xml"}
+         ".ico": "image/x-icon", ".html": "text/html; charset=utf-8", ".svg": "image/svg+xml",
+         ".webp": "image/webp", ".jpg": "image/jpeg"}
 
 
 def plik_ui(sciezka_url: str) -> tuple[bytes, str] | None:

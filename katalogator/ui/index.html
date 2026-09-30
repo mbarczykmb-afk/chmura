@@ -7,14 +7,41 @@
 <link rel="icon" type="image/png" href="/ui/ikona.png">
 <style>
 :root{
-  --bg:#f4f4f2; --panel:#ffffff; --fg:#1c1c1e; --mut:#6c6c72; --lin:#e2e2de;
-  --akc:#2f6fdb; --akc-fg:#fff; --akc-miekki:#e8f0fd; --ok:#1f9d6b; --blad:#c8372d; --blad-miekki:#fdecea;
-  --cien:0 1px 2px rgba(0,0,0,.05),0 2px 8px rgba(0,0,0,.04); --przen:#d9730d;
+  --bg:#f3f6fb; --panel:#ffffff; --fg:#0f172a; --mut:#5b6b86; --lin:#e1e7f0;
+  --akc:#2563eb; --akc-fg:#fff; --akc-miekki:#e9f0ff; --ok:#059669; --blad:#dc2626; --blad-miekki:#fdecec;
+  --cien:0 1px 2px rgba(15,23,42,.04),0 8px 24px rgba(15,23,42,.06); --przen:#d97706;
+  --grad:linear-gradient(135deg,#2563eb 0%,#4f46e5 55%,#9333ea 100%); --poswiata:0 4px 14px rgba(37,99,235,.28);
+  --karta:#ffffff; --szklo:rgba(255,255,255,.78); --hover:#f1f5ff;
+  --tlo:radial-gradient(1100px 600px at 8% -15%,rgba(59,130,246,.10),transparent 60%),
+        radial-gradient(900px 520px at 105% 110%,rgba(147,51,234,.07),transparent 60%);
+  --tytul:linear-gradient(90deg,#0f172a 0%,#1e3a8a 70%,#4f46e5 100%);
+  color-scheme:light;
 }
-@media (prefers-color-scheme:dark){:root{
-  --bg:#141518; --panel:#1d1e22; --fg:#ececef; --mut:#9a9aa3; --lin:#2e3036;
-  --akc:#6d9df0; --akc-fg:#0e1420; --akc-miekki:#1f2a3d; --ok:#3cc28c; --blad:#f07a70; --blad-miekki:#3a1f1d;
-  --cien:none; --przen:#f0a04b;
+:root[data-theme="dark"]{
+  --bg:#060a15; --panel:#0d1426; --fg:#e7ecf7; --mut:#8a97b4; --lin:#1c2742;
+  --akc:#5b8cff; --akc-fg:#fff; --akc-miekki:rgba(91,140,255,.14); --ok:#34d399; --blad:#f87171; --blad-miekki:rgba(248,113,113,.14);
+  --cien:0 1px 0 rgba(255,255,255,.03) inset,0 12px 32px rgba(0,0,0,.35); --przen:#fbbf24;
+  --grad:linear-gradient(135deg,#3b82f6 0%,#6366f1 55%,#a855f7 100%); --poswiata:0 0 0 1px rgba(99,132,255,.35),0 6px 22px rgba(79,110,255,.35);
+  --karta:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,0) 120px),#0d1426;
+  --szklo:rgba(10,16,32,.72); --hover:rgba(91,140,255,.08);
+  --tlo:radial-gradient(1100px 620px at 8% -12%,rgba(59,130,246,.20),transparent 62%),
+        radial-gradient(900px 560px at 105% 112%,rgba(168,85,247,.16),transparent 60%),
+        radial-gradient(700px 400px at 70% 10%,rgba(34,211,238,.06),transparent 60%);
+  --tytul:linear-gradient(90deg,#fff 0%,#c7d6ff 60%,#9fb6ff 100%);
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme]){
+  --bg:#060a15; --panel:#0d1426; --fg:#e7ecf7; --mut:#8a97b4; --lin:#1c2742;
+  --akc:#5b8cff; --akc-fg:#fff; --akc-miekki:rgba(91,140,255,.14); --ok:#34d399; --blad:#f87171; --blad-miekki:rgba(248,113,113,.14);
+  --cien:0 1px 0 rgba(255,255,255,.03) inset,0 12px 32px rgba(0,0,0,.35); --przen:#fbbf24;
+  --grad:linear-gradient(135deg,#3b82f6 0%,#6366f1 55%,#a855f7 100%); --poswiata:0 0 0 1px rgba(99,132,255,.35),0 6px 22px rgba(79,110,255,.35);
+  --karta:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,0) 120px),#0d1426;
+  --szklo:rgba(10,16,32,.72); --hover:rgba(91,140,255,.08);
+  --tlo:radial-gradient(1100px 620px at 8% -12%,rgba(59,130,246,.20),transparent 62%),
+        radial-gradient(900px 560px at 105% 112%,rgba(168,85,247,.16),transparent 60%),
+        radial-gradient(700px 400px at 70% 10%,rgba(34,211,238,.06),transparent 60%);
+  --tytul:linear-gradient(90deg,#fff 0%,#c7d6ff 60%,#9fb6ff 100%);
+  color-scheme:dark;
 }}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -289,14 +316,103 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 55%,var(--lin));
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pz .pz-czeka{background:#3d3210;color:#f3d36b}}
 :root[data-theme="dark"] .pz .pz-czeka{background:#3d3210;color:#f3d36b}
 @media (max-width:900px){.pz{margin:0 12px 10px}}
+
+/* ===== Wygląd 1.7: motyw jasny / ciemny w stylu grafiki startowej ===== */
+body{font-family:"Segoe UI Variable Text","Segoe UI",Inter,system-ui,sans-serif;background:var(--tlo),var(--bg);background-attachment:fixed;-webkit-font-smoothing:antialiased}
+::selection{background:color-mix(in srgb,var(--akc) 35%,transparent)}
+header{background:var(--szklo);backdrop-filter:blur(18px) saturate(1.4);border-bottom:1px solid var(--lin);padding:12px 24px;position:relative;z-index:5}
+header h1{font-size:19px;font-weight:700;letter-spacing:-.02em}
+header h1 img{width:30px;height:30px;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--akc) 55%,transparent))}
+.logo-tekst{background:var(--tytul);-webkit-background-clip:text;background-clip:text;color:transparent}
+header .wersja{padding:2px 8px;border:1px solid var(--lin);border-radius:999px;font-size:11px}
+section{border-radius:16px;background:var(--karta);box-shadow:var(--cien)}
+h2{font-size:15.5px;letter-spacing:-.01em}
+button{border-radius:10px;transition:background .15s,border-color .15s,box-shadow .15s,filter .15s,transform .15s}
+button:hover:not(:disabled){border-color:color-mix(in srgb,var(--akc) 70%,var(--lin));background:var(--hover)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,.zakladka:focus-visible{outline:2px solid var(--akc);outline-offset:2px}
+button.glowny,.glowny-maly,.filtr.akt,.wybor button.akt:not(.s),.pw-kroki span,.krok.akt b,.tryb button.akt.k{background:var(--grad);border-color:transparent;color:#fff;box-shadow:var(--poswiata)}
+button.glowny:hover:not(:disabled),.glowny-maly:hover:not(:disabled){background:var(--grad);filter:brightness(1.1) saturate(1.1);transform:translateY(-1px)}
+button.glowny{border-radius:12px;letter-spacing:.01em}
+input[type=text],textarea,select{border-radius:10px;transition:border-color .15s,box-shadow .15s}
+input[type=text]:focus,textarea:focus{outline:none;border-color:var(--akc);box-shadow:0 0 0 3px color-mix(in srgb,var(--akc) 22%,transparent)}
+.kroki{padding:14px 24px 2px}
+.krok{border:1px solid transparent;transition:background .15s}
+.krok.akt{background:var(--akc-miekki);border-color:color-mix(in srgb,var(--akc) 35%,transparent);color:var(--fg);font-weight:600}
+.krok.gotowy b{background:var(--ok)}
+.zakladki{gap:4px}
+.zakladka{border-radius:10px;padding:7px 11px;transition:background .15s,color .15s}
+.zakladka:hover{color:var(--fg);background:var(--hover)}
+.zakladka.akt{background:var(--akc-miekki);color:var(--fg);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--akc) 35%,transparent)}
+.zakladka .licz{background:var(--grad)}
+.zakladka.glowna{border-radius:10px}
+.pz{border-radius:14px;background:var(--szklo);backdrop-filter:blur(14px);border:1px solid color-mix(in srgb,var(--akc) 35%,var(--lin));box-shadow:var(--cien)}
+.pz .pz-proc{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.pz .pz-pasek,.pasek,.postep-proj{background:color-mix(in srgb,var(--lin) 80%,transparent)}
+.pz .pz-pasek i,.pasek i{background:var(--grad);box-shadow:0 0 14px color-mix(in srgb,var(--akc) 70%,transparent)}
+.postep{background:var(--akc-miekki);border:1px solid color-mix(in srgb,var(--akc) 25%,transparent);border-radius:12px}
+.folder,.grupa,.grupa-pod,.karta,.proj,.podsum,.pw-kroki div{border-radius:12px}
+.karta,.plik.zdj,.grupa,.grupa-pod{transition:border-color .15s,box-shadow .15s,transform .15s}
+.karta:hover,.plik.zdj:hover{border-color:color-mix(in srgb,var(--akc) 55%,var(--lin));box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.karta .ob,.grupa .mini,.plik.zdj img{border-radius:8px}
+.karta{background:var(--panel)}
+.drzewo,.lista-dup{scrollbar-width:thin}
+.menu{border-radius:14px;background:var(--panel);box-shadow:0 18px 50px rgba(0,0,0,.35);padding:6px}
+.menu button{border-radius:8px}
+.nakladka,.powitanie{background:rgba(3,6,15,.55);backdrop-filter:blur(6px)}
+.okno,.pw-okno{border-radius:18px;border:1px solid var(--lin);box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.toast{background:var(--szklo);color:var(--fg);border:1px solid color-mix(in srgb,var(--akc) 35%,var(--lin));backdrop-filter:blur(16px);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.toast-cofnij{color:var(--akc);border-color:color-mix(in srgb,var(--akc) 50%,transparent)}
+.baner{background:var(--akc-miekki)}
+.projekt-btn{background:var(--hover);border-color:var(--lin)}
+.raport .zachęta strong{font-size:17px}
+section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));box-shadow:0 0 0 1px color-mix(in srgb,var(--akc) 25%,transparent),0 10px 34px color-mix(in srgb,var(--akc) 18%,transparent)}
+*{scrollbar-color:color-mix(in srgb,var(--mut) 45%,transparent) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--mut) 40%,transparent);border-radius:10px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background-color:color-mix(in srgb,var(--mut) 65%,transparent)}
+/* przełącznik motywu */
+#motyw-btn{width:40px;height:36px;padding:0;display:inline-grid;place-items:center;color:var(--fg)}
+#motyw-btn svg{width:18px;height:18px}
+/* ekran startowy */
+.start{position:fixed;inset:0;z-index:5000;background:#050814;display:grid;place-items:center;overflow:hidden;transition:opacity .6s ease,visibility .6s;cursor:pointer}
+.start::before{content:"";position:absolute;inset:-40px;background:url(/ui/start.webp) center/cover;filter:blur(38px) brightness(.55);transform:scale(1.1)}
+.start img{position:relative;max-width:100%;max-height:100%;object-fit:contain;animation:start-wej 1.2s ease both}
+.start .start-dol{position:absolute;left:50%;bottom:5vh;transform:translateX(-50%);width:min(360px,70vw);text-align:center;color:#c9d6f5;font-size:13px;letter-spacing:.08em}
+.start .start-pasek{height:4px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden;margin-bottom:10px}
+.start .start-pasek i{display:block;height:100%;width:35%;background:linear-gradient(90deg,#3b82f6,#a855f7);box-shadow:0 0 14px #5b8cff;animation:jedz 1.2s ease-in-out infinite}
+.start.znika{opacity:0;visibility:hidden}
+@keyframes start-wej{from{opacity:0;transform:scale(1.03)}to{opacity:1;transform:none}}
+.pw-hero{margin:-24px -26px 18px;height:190px;background:url(/ui/start.webp) center 38%/cover;border-radius:18px 18px 0 0;position:relative}
+.pw-hero::after{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(180deg,transparent 45%,var(--panel))}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* decyzja podjęta: karta szarzeje i mówi, co się stało (przyciski zostają aktywne — można zmienić) */
+.wybor button.prop{border-style:dashed;border-color:color-mix(in srgb,var(--akc) 65%,transparent);color:var(--akc)}
+.karta:has(>.wybor[data-decyzja]),.plik.zdj:has(>.wybor[data-decyzja]),.grupa:not(.pod):has(.wybor[data-decyzja]){
+  border-color:color-mix(in srgb,var(--ok) 45%,var(--lin));background:color-mix(in srgb,var(--ok) 5%,var(--panel))}
+.karta:has(>.wybor[data-decyzja]) .ob img,.plik.zdj:has(>.wybor[data-decyzja])>img,.grupa:not(.pod):has(.wybor[data-decyzja]) .mini img{
+  filter:grayscale(1);opacity:.4;transition:filter .25s,opacity .25s}
+.karta:has(>.wybor[data-decyzja]) .op,.plik.zdj:has(>.wybor[data-decyzja]) :is(.sc,.zn2,.gora),.grupa:not(.pod):has(.wybor[data-decyzja]) .plik{opacity:.55}
+.karta:has(>.wybor[data-decyzja]) .ob::after,.plik.zdj:has(>.wybor[data-decyzja])::after,.grupa:not(.pod):has(.wybor[data-decyzja]) .mini::after{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:6px 12px;border-radius:999px;white-space:nowrap;
+  background:var(--ok);color:#fff;font-weight:600;font-size:13px;line-height:1.2;box-shadow:0 4px 16px rgba(0,0,0,.3);pointer-events:none;z-index:1}
+.plik.zdj{position:relative}.plik.zdj:has(>.wybor[data-decyzja])::after{top:42%}
+.grupa .mini{position:relative}.grupa:not(.pod):has(.wybor[data-decyzja]) .mini::after{font-size:11px;padding:3px 8px}
+:is(.karta:has(>.wybor[data-decyzja="zdjecie"]) .ob,.plik.zdj:has(>.wybor[data-decyzja="zdjecie"]),.grupa:not(.pod):has(.wybor[data-decyzja="zdjecie"]) .mini)::after{content:"✓ 📷 Zdjęcie"}
+:is(.karta:has(>.wybor[data-decyzja="dokument"]) .ob,.plik.zdj:has(>.wybor[data-decyzja="dokument"]),.grupa:not(.pod):has(.wybor[data-decyzja="dokument"]) .mini)::after{content:"✓ 📄 Dokument"}
+:is(.karta:has(>.wybor[data-decyzja="smieci"]) .ob,.plik.zdj:has(>.wybor[data-decyzja="smieci"]),.grupa:not(.pod):has(.wybor[data-decyzja="smieci"]) .mini)::after{content:"✓ 🗑 Śmieci";background:var(--blad)}
+.toast{font-size:14px;padding:12px 18px;border-left:4px solid var(--ok)}
 </style>
 </head>
 <body>
+<div class="start" id="start" title="Kliknij, aby pominąć"><img src="/ui/start.webp" alt="Katalogator — Twoje pliki. W końcu na swoim miejscu.">
+  <div class="start-dol"><div class="start-pasek"><i></i></div>Uruchamianie…</div></div>
 <header>
-  <h1><img src="/ui/ikona.png" alt="">Katalogator</h1><span class="wersja" id="wersja"></span>
+  <h1><img src="/ui/ikona.png" alt=""><span class="logo-tekst">Katalogator</span></h1><span class="wersja" id="wersja"></span>
   <button class="projekt-btn" id="projekt-btn" title="Zmień projekt">📁 <span id="projekt-nazwa">…</span> ▾</button>
   <span class="odstep"></span>
   <button id="biblioteka-btn" title="Przeglądaj bibliotekę: oś czasu i mapa miejsc; także na telefonie">📚 Biblioteka</button>
+  <button id="motyw-btn" title="Motyw: jasny / ciemny" aria-label="Przełącz motyw jasny / ciemny"></button>
   <div style="position:relative">
     <button id="pomoc-btn" title="Pomoc, zgłaszanie problemów, aktualizacje">?</button>
     <div class="menu" id="pomoc-menu" hidden>
@@ -304,6 +420,7 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 55%,var(--lin));
       <button id="m-zglos">🐞 Zgłoś problem / wyślij raport…</button>
       <button id="m-aktualizacje">⟳ Sprawdź aktualizacje</button>
       <button id="m-o">ℹ O programie</button>
+      <button id="m-motyw-auto">🖥 Motyw jak w systemie Windows</button>
     </div>
   </div>
   <button id="zamknij" title="Zamyka program">Zamknij</button>
@@ -531,22 +648,22 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 55%,var(--lin));
       <div class="filtry">
         <span class="info" style="margin-left:0;flex:1">Zdjęcia, które wyglądają jak dokumenty (paragony, skany, kartki). Dwuklik = powiększenie.
           📄 dokument → <b>Dokumenty / Dokumenty z &lt;rok&gt;</b>, 📷 zdjęcie → zostaje zdjęciem, 🗑 śmieci → <b>Odłożone/Śmieci</b>.</span>
-        <button class="maly" id="dok-wszystkie">Wszystkie: dokumenty</button>
-        <button class="maly" id="dok-zadne">Wszystkie: zdjęcia</button>
+        <button class="maly" id="dok-wszystkie" title="Tylko zdjęcia jeszcze bez decyzji">Pozostałe: dokumenty</button>
+        <button class="maly" id="dok-zadne" title="Tylko zdjęcia jeszcze bez decyzji">Pozostałe: zdjęcia</button>
       </div>
       <div class="siatka" id="dok-siatka"></div>
-      <div class="stopka"><span id="dok-stopka"></span><button class="glowny" id="dok-zapisz" title="Zapisuje wybory dla wyświetlonych zdjęć i przekłada je w Drzewie (można cofnąć)">Zapisz decyzje</button></div>
+      <div class="stopka"><span id="dok-stopka"></span><button class="glowny" id="dok-zapisz" title="Zapisuje propozycję programu (przerywana ramka) dla zdjęć jeszcze bez decyzji (można cofnąć)">Zatwierdź propozycje</button></div>
     </div>
     <div id="widok-inne" class="widok" hidden>
       <div class="filtry">
         <span class="info" style="margin-left:0;flex:1">Obrazy, które chyba <b>nie są zdjęciami z aparatu</b> (grafiki, zrzuty ekranu,
           pobrane z internetu, małe obrazki bez danych aparatu). Zdecyduj: 📷 zdjęcie, 📄 dokument albo 🗑 śmieci
           (→ <b>Odłożone/Śmieci</b>). Dwuklik = powiększenie.</span>
-        <button class="maly" id="inne-wsz-zdj">Wszystkie: zdjęcia</button>
-        <button class="maly" id="inne-wsz-smieci">Wszystkie: śmieci</button>
+        <button class="maly" id="inne-wsz-zdj" title="Tylko obrazy jeszcze bez decyzji">Pozostałe: zdjęcia</button>
+        <button class="maly" id="inne-wsz-smieci" title="Tylko obrazy jeszcze bez decyzji">Pozostałe: śmieci</button>
       </div>
       <div class="siatka duze" id="inne-siatka"></div>
-      <div class="stopka"><span id="inne-stopka"></span><button class="glowny" id="inne-zapisz" title="Zapisuje wybory i przekłada pliki w Drzewie (można cofnąć)">Zapisz decyzje</button></div>
+      <div class="stopka"><span id="inne-stopka"></span></div>
     </div>
     <div id="widok-pod" class="widok" hidden>
       <div class="filtry" id="pod-filtry">
@@ -1222,6 +1339,7 @@ function rysujDup() {
   setInterval(odswiez, 1000);
 })();
 </script>
+<script src="/ui/motyw.js"></script>
 <script src="/ui/plan.js"></script>
 <script src="/ui/analiza.js"></script>
 <script src="/ui/projekt.js"></script>

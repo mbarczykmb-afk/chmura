@@ -127,6 +127,8 @@ Nazwy miejscowości: © GeoNames, CC BY 4.0.
    foldery „✓ Przejrzany” i przechodź dalej przyciskiem *Następny →*.
 7. **Nowe pliki** — folder przychodzący (np. zrzuty z telefonu), *Mieszkam w*, *Sprawdź nowe pliki* →
    *Przenieś do biblioteki*; opcjonalnie codziennie o wybranej godzinie (Harmonogram zadań Windows).
+**Wygląd:** przycisk ☀/☾ w nagłówku przełącza motyw jasny / ciemny (zapamiętany; *? → Motyw jak w systemie*).
+Po kliknięciu 📷/📄/🗑 decyzja zapisuje się od razu — zdjęcie szarzeje i pokazuje „✓ Dokument” itp.
 **Wygoda:** sekcje po lewej zwijają się same — otwarta jest ta, którą trzeba teraz zrobić (kliknij nagłówek,
 żeby otworzyć inną). W Dokumentach, Podobnych i „Nie z aparatu” działa **klawiatura**: strzałki, **1** zdjęcie,
 **2** dokument, **3** śmieci (od razu następne zdjęcie), spacja — powiększenie. Po każdej decyzji na dole pojawia
