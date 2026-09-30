@@ -114,6 +114,32 @@ main{flex:1;min-height:0;position:relative}
 #wyb-lista button{display:block;width:100%;text-align:left;border:0;border-radius:6px;padding:7px 10px;background:none}
 #wyb-lista button:hover{background:var(--akc-miekki)}
 @media (max-width:600px){.w-slupki{height:64px}.w-rok{min-width:72px}}
+
+/* --- wyszukiwarka, filtry, kolekcje --- */
+#szukaj{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--lin);border-radius:999px;padding:6px 14px;width:min(340px,100%);min-width:0}
+#szukaj:focus{outline:none;border-color:var(--akc);box-shadow:0 0 0 3px color-mix(in srgb,var(--akc) 22%,transparent)}
+.filtr{flex:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--lin)}
+.filtr .tyt{font-weight:700;font-size:15px}
+.filtr .zn{display:inline-flex;align-items:center;gap:6px;border:1px solid color-mix(in srgb,var(--akc) 45%,var(--lin));background:var(--akc-miekki);border-radius:999px;padding:3px 4px 3px 12px;font-size:13px}
+.filtr .zn button{border:0;background:none;padding:0 6px;color:var(--mut)}
+.filtr .dzien{border-radius:999px;font-size:13px;padding:4px 12px;background:linear-gradient(90deg,color-mix(in srgb,var(--akc) 14%,transparent),transparent);border-color:color-mix(in srgb,var(--akc) 40%,var(--lin))}
+.k.album .ob{font-size:46px}
+.k.album .op div:first-child{font-weight:700}
+.k.nowy .ob{border:2px dashed var(--lin);background:none}
+.k .znak-f{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.65);color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;z-index:1}
+.k .gw{position:absolute;left:6px;top:6px;z-index:1;font-size:15px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+#mapa-os{position:absolute;right:12px;top:10px;z-index:600;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+#pelny .narz{position:absolute;top:12px;left:12px;display:flex;gap:8px;z-index:2}
+#pelny .narz button{background:rgba(255,255,255,.12);border:none;color:#fff;border-radius:999px;height:40px;padding:0 14px;font-size:14px}
+#pelny .narz button.akt{background:#f5b800;color:#111}
+#pelny .narz button:hover{background:rgba(255,255,255,.24)}
+#pelny .film-blad{max-width:520px;text-align:center;line-height:1.6}
+#pelny .film-blad button,#pelny .film-blad a{margin-top:10px;display:inline-block;background:#fff;color:#111;border-radius:999px;padding:8px 16px;text-decoration:none;border:0}
+.menu-alb{position:absolute;top:58px;left:12px;background:var(--bg);color:var(--fg);border-radius:12px;padding:6px;min-width:220px;max-height:60vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.4);z-index:3}
+.menu-alb button{display:block;width:100%;text-align:left;border:0;border-radius:8px;padding:8px 10px;background:none}
+.menu-alb button:hover{background:var(--akc-miekki)}
+.prz label{font-size:12.5px;color:var(--mut);display:inline-flex;gap:5px;align-items:center}
+@media (max-width:600px){#szukaj{order:5;width:100%}}
 </style>
 </head>
 <body>
@@ -121,6 +147,9 @@ main{flex:1;min-height:0;position:relative}
   <h1>📚 Biblioteka</h1>
   <button id="w-os" class="akt">📅 Oś czasu</button>
   <button id="w-mapa">🗺 Mapa</button>
+  <button id="w-kolekcje" title="Ulubione i albumy">⭐ Kolekcje</button>
+  <input id="szukaj" type="search" placeholder="🔍 Szukaj: Hel, lipiec 2019, Włochy, nazwa…" autocomplete="off"
+         title="Miejsce (miejscowość, kraj), rok, miesiąc, fragment nazwy pliku lub folderu, aparat — można łączyć">
   <span class="info" id="licznik"></span>
   <span class="odstep"></span>
   <select id="zakres" hidden title="Które zdjęcia pokazać">
@@ -136,9 +165,12 @@ main{flex:1;min-height:0;position:relative}
   <button id="prz-dodaj" title="Dodaj dysk lub folder do przeglądania">＋ Dysk lub folder</button>
   <button id="prz-skanuj" class="akt" title="Tylko czyta: nic nie jest zmieniane ani przenoszone">⟳ Skanuj</button>
   <button id="prz-przerwij" hidden>Przerwij</button>
+  <label title="Przy starcie programu i potem co 6 godzin wczytuję nowe i zmienione pliki (tylko odczyt)">
+    <input type="checkbox" id="prz-auto"> odświeżaj samo co 6 h</label>
   <span class="info" id="prz-stan"></span>
   <div class="prz-pasek" id="prz-pasek" hidden><i></i></div>
 </div>
+<div class="filtr" id="filtr" hidden></div>
 <div class="wykres" id="wykres" hidden></div>
 <div class="chipy" id="lata"></div>
 <div class="chipy" id="miesiace"></div>
@@ -146,10 +178,18 @@ main{flex:1;min-height:0;position:relative}
   <div id="os"><div id="siatka"></div></div>
   <div id="mapa" hidden></div>
   <div id="mapa-info" hidden></div>
+  <button id="mapa-os" hidden title="Pokaż na osi czasu tylko zdjęcia z widocznego obszaru mapy">📅 Oś czasu tego obszaru</button>
 </main>
 
 <div id="pelny" hidden>
   <button class="zam" title="Zamknij (Esc)">✕</button>
+  <div class="narz">
+    <button id="p-ulub" hidden title="Ulubione (F)">☆ Ulubione</button>
+    <button id="p-album" hidden title="Dodaj do albumu">＋ Album</button>
+    <button id="p-z-albumu" hidden title="Usuń z tego albumu (zdjęcie zostaje na dysku)">− Z albumu</button>
+    <button id="p-pokaz" title="Pokaz slajdów (P)">▶ Pokaz</button>
+    <button id="p-otworz" hidden title="Otwórz w programie Windows (np. Filmy i TV, VLC)">⤢ Otwórz w programie</button>
+  </div>
   <button class="pop" title="Poprzednie (←)">‹</button>
   <button class="nast" title="Następne (→)">›</button>
   <div id="pelny-tresc"></div>

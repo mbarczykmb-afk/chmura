@@ -30,6 +30,7 @@ class Przegladarka:
         self.stan = {"trwa": False, "etap": "", "zrobione": 0, "wszystkie": 0, "folder": "", "komunikat": "",
                      "blad": "", "czeka": ""}
         self.tempo = stabilnosc.Tempo()
+        self._auto_watek: threading.Thread | None = None
         # galeria widzi tylko aktualnie wybrane foldery (usunięty z listy znika od razu, bez kasowania bazy)
         self.galeria = galeria.Galeria(self.baza, lambda: self.foldery(), pamiec_min=self.katalog / "miniatury",
                                        tylko_zdjecia_ludzi=True)
@@ -52,16 +53,67 @@ class Przegladarka:
         os.replace(tmp, self._plik())
         return lista
 
+    # --- samoczynne odświeżanie: przy starcie programu i co kilka godzin (tylko nowe/zmienione pliki) ---------
+    def _ust(self) -> dict:
+        try:
+            d = json.loads((self.katalog / "ustawienia.json").read_text(encoding="utf-8"))
+            return d if isinstance(d, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def _zapisz_ust(self, **zmiany) -> dict:
+        d = {**self._ust(), **zmiany}
+        tmp = self.katalog / "ustawienia.nowy"
+        tmp.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, self.katalog / "ustawienia.json")
+        return d
+
+    def ustaw_auto(self, auto: bool, co_godzin=None) -> dict:
+        zm = {"auto": bool(auto)}
+        try:
+            if co_godzin is not None:
+                zm["co_godzin"] = min(168.0, max(1.0, float(co_godzin)))
+        except (TypeError, ValueError):
+            pass
+        self._zapisz_ust(**zm)
+        return self.opis()
+
+    def do_odswiezenia(self, teraz: float | None = None) -> bool:
+        u = self._ust()
+        if not u.get("auto", True) or not self.foldery():
+            return False
+        return (teraz or time.time()) - float(u.get("ostatni_skan", 0)) >= float(u.get("co_godzin", 6)) * 3600
+
+    def uruchom_auto(self, pierwsze_po: float = 30, sprawdzaj_co: float = 600) -> None:
+        """Wątek w tle: po starcie programu i potem co `sprawdzaj_co` s — skan, gdy minął ustawiony czas."""
+        if self._auto_watek:
+            return
+
+        def petla():
+            time.sleep(pierwsze_po)
+            while True:
+                try:
+                    if self.do_odswiezenia() and not self.stan["trwa"]:
+                        LOG.info("Przeglądarka: samoczynne odświeżanie")
+                        self.skanuj(auto=True)
+                except Exception:  # noqa: BLE001
+                    LOG.exception("Przeglądarka: odświeżanie")
+                time.sleep(sprawdzaj_co)
+        self._auto_watek = threading.Thread(target=petla, daemon=True, name="przegladarka-auto")
+        self._auto_watek.start()
+
     # --- skanowanie (tylko odczyt) -------------------------------------------------------------
     def opis(self) -> dict:
         with self.blokada:
             s = dict(self.stan)
         s["foldery"] = self.foldery()
+        u = self._ust()
+        s["auto"], s["co_godzin"], s["ostatni_skan"] = u.get("auto", True), u.get("co_godzin", 6), u.get("ostatni_skan")
         if s["trwa"]:
             s.update(self.tempo.wynik())
         return s
 
-    def skanuj(self) -> str | None:
+    def skanuj(self, auto: bool = False) -> str | None:
         foldery = self.foldery()
         if not foldery:
             return "Najpierw dodaj dysk albo folder."
@@ -69,7 +121,8 @@ class Przegladarka:
             if self.stan["trwa"]:
                 return "Skanowanie już trwa."
             self.stan.update(trwa=True, etap="liczenie plików", zrobione=0, wszystkie=0, folder="",
-                             komunikat="Rozpoczynam…", blad="", czeka="")
+                             komunikat="Odświeżam (samoczynnie)…" if auto else "Rozpoczynam…", blad="", czeka="",
+                             auto=auto)
             self.tempo = stabilnosc.Tempo()
         self.przerwij.clear()
         threading.Thread(target=self._skanuj, args=(foldery,), daemon=True, name="przegladarka").start()
@@ -99,6 +152,7 @@ class Przegladarka:
                     w = skaner.skanuj(folder, db, postep=postep, przerwij=self.przerwij, straznik=straznik,
                                       wypisz=lambda *_: None, pomijaj=FOLDERY_SYSTEMOWE)
                     plikow += w.get("wszystkie", 0)
+            self._zapisz_ust(ostatni_skan=time.time())
             k = f"Gotowe — przejrzano {plikow:,} plików w {time.time() - t0:.0f} s.".replace(",", " ")
             if pominiete:
                 k += " Niedostępne: " + ", ".join(pominiete)

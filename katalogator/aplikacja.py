@@ -880,6 +880,13 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij({"blad": "brak dostępu"}, kod=HTTPStatus.FORBIDDEN)
             stan.ostatni_ping = time.time()
             dane = self._json()
+            if u.path.startswith("/api/g/"):  # ulubione, albumy, miniatury filmów — dane galerii, nie projektu
+                w = galeria.obsluz_post(stan.galeria(parse_qs(u.query).get("z", ["biblioteka"])[0]), u.path, dane)
+                if w is None:
+                    return self._wyslij({"blad": "nie ma"}, kod=HTTPStatus.NOT_FOUND)
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/przegladarka/auto":
+                return self._wyslij(stan.przegladarka.ustaw_auto(bool(dane.get("auto")), dane.get("co_godzin")))
             stan.zmiana()
             if u.path == "/api/ustawienia":
                 stan.zapisz_ustawienia(dane)
@@ -1102,6 +1109,7 @@ def main(otworz: bool = True) -> None:
         return
     LOG.info("Start Katalogatora %s — %s", __version__, logi.system())
     serwer, url, stan = uruchom_serwer(katalog)
+    stan.przegladarka.uruchom_auto()  # Przeglądarka: nowe zdjęcia z dysków same się dopisują
     plik_instancji = katalog / "instancja.json"
     try:
         plik_instancji.write_text(json.dumps({"url": url, "pid": os.getpid()}), encoding="utf-8")

@@ -38,6 +38,26 @@ def plik_ui(sciezka_url: str) -> tuple[bytes, str] | None:
     return p.read_bytes(), _TYPY[p.suffix]
 
 
+# Ulubione, albumy i miniatury filmów — w bazie oglądanej galerii (projektu albo Przeglądarki); klucz = ścieżka pliku
+SCHEMAT_KOLEKCJI = """
+CREATE TABLE IF NOT EXISTS g_ulubione (sciezka TEXT PRIMARY KEY, czas REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS g_albumy (id INTEGER PRIMARY KEY AUTOINCREMENT, nazwa TEXT NOT NULL, czas REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS g_album_pliki (album INTEGER NOT NULL, sciezka TEXT NOT NULL, czas REAL NOT NULL,
+                                          PRIMARY KEY (album, sciezka));
+CREATE TABLE IF NOT EXISTS g_min_filmow (sciezka TEXT PRIMARY KEY, mtime REAL NOT NULL, dane BLOB NOT NULL);
+"""
+_MIESIACE_SZUKANIA = [("stycz", 1), ("lut", 2), ("mar", 3), ("kwie", 4), ("maj", 5), ("czerw", 6), ("lip", 7),
+                      ("sierp", 8), ("wrze", 9), ("paźdz", 10), ("pazdz", 10), ("listop", 11), ("grud", 12)]
+_NAZWY_MIES = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień",
+               "październik", "listopad", "grudzień"]
+_KOLUMNY = "rowid id, wzgledna, rodzaj, data, lat, lon, rozmiar"
+
+
+def _nazwa(r: dict) -> dict:
+    r["nazwa"] = re.split(r"[\\/]", r.pop("wzgledna"))[-1]
+    return r
+
+
 class Galeria:
     """Dane dla osi czasu i mapy z bazy skanu. korzenie() -> lista folderów (None = wszystko w bazie)."""
 
@@ -52,9 +72,20 @@ class Galeria:
         self._blokada = threading.Lock()
 
     def _db(self):
-        return skaner.otworz_baze(self.baza)
+        db = skaner.otworz_baze(self.baza)
+        if not getattr(self, "_schemat", False):
+            db.executescript(SCHEMAT_KOLEKCJI)
+            self._schemat = True
+        return db
 
-    def _warunek(self) -> tuple[str, list]:
+    def _warunek(self, obszar: tuple | None = None) -> tuple[str, list]:
+        w, arg = self._zakres()
+        if obszar:  # prostokąt z mapy: (lat1, lat2, lon1, lon2)
+            w += " AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?"
+            arg = arg + [min(obszar[:2]), max(obszar[:2]), min(obszar[2:]), max(obszar[2:])]
+        return w, arg
+
+    def _zakres(self) -> tuple[str, list]:
         k = self.korzenie()
         if k is None:  # wszystko w bazie
             return self.filtr, []
@@ -68,8 +99,8 @@ class Galeria:
             arg += [r, len(pref), pref]
         return " AND (" + " OR ".join(czesci) + ")" + self.filtr, arg
 
-    def lata(self) -> dict:
-        w, arg = self._warunek()
+    def lata(self, obszar: tuple | None = None) -> dict:
+        w, arg = self._warunek(obszar)
         db = self._db()
         try:
             lata: dict[str, dict] = {}
@@ -90,8 +121,8 @@ class Galeria:
         return {"lata": l, "razem": sum(x["n"] for x in l) + bez, "z_gps": sum(x["gps"] for x in l),
                 "bez_daty": bez}
 
-    def pliki(self, rok: str, miesiac: int | None, od: int = 0, ile: int = 200) -> dict:
-        w, arg = self._warunek()
+    def pliki(self, rok: str, miesiac: int | None, od: int = 0, ile: int = 200, obszar: tuple | None = None) -> dict:
+        w, arg = self._warunek(obszar)
         filtr = "substr(data, 1, 4) = ?" + (" AND CAST(substr(data, 6, 2) AS INTEGER) = ?" if miesiac else "")
         a = [str(rok)] + ([int(miesiac)] if miesiac else [])
         db = self._db()
@@ -139,9 +170,15 @@ class Galeria:
                 miejsce = e if not e.startswith("@") else miejsca.fraza(e)
             except Exception:
                 miejsce = None
+        db = self._db()
+        try:
+            ulub = db.execute("SELECT 1 FROM g_ulubione WHERE sciezka=?", (r["sciezka"],)).fetchone() is not None
+            albumy = [x[0] for x in db.execute("SELECT album FROM g_album_pliki WHERE sciezka=?", (r["sciezka"],))]
+        finally:
+            db.close()
         return {"id": r["id"], "nazwa": re.split(r"[\\/]", r["wzgledna"])[-1], "folder": os.path.dirname(r["wzgledna"]),
                 "data": r["data"], "rodzaj": r["rodzaj"], "aparat": r["aparat"], "lat": r["lat"], "lon": r["lon"],
-                "miejsce": miejsce, "rozmiar": r["rozmiar"]}
+                "miejsce": miejsce, "rozmiar": r["rozmiar"], "ulubione": ulub, "albumy": albumy}
 
     def sciezka(self, id_: int, rodzaj: str | None = None) -> str | None:
         r = self._wiersz(id_)
@@ -150,6 +187,17 @@ class Galeria:
         return r["sciezka"]
 
     def miniatura(self, id_: int, srednia: bool = False) -> bytes | None:
+        film = self.sciezka(id_, "film")
+        if film:  # klatka zapisana przez okno programu (przeglądarka wyciąga ją z filmu)
+            db = self._db()
+            try:
+                r = db.execute("SELECT mtime, dane FROM g_min_filmow WHERE sciezka=?", (film,)).fetchone()
+            finally:
+                db.close()
+            try:
+                return r["dane"] if r and abs(r["mtime"] - os.path.getmtime(film)) < 1 else None
+            except OSError:
+                return None
         klucz = (int(id_), srednia)
         with self._blokada:
             if klucz in self._min:
@@ -192,6 +240,245 @@ class Galeria:
             while len(self._min) > 800:
                 self._min.popitem(last=False)
         return dane
+
+    # --- wyszukiwarka: miejsce, rok, miesiąc, nazwa pliku/folderu, aparat ---------------------------------
+    def szukaj(self, tekst: str, od: int = 0, ile: int = 200) -> dict:
+        slowa = [s for s in re.split(r"[\s,;]+", (tekst or "").strip()) if s]
+        rok, mies, reszta = None, None, []
+        for s in slowa:
+            sl = s.lower()
+            m = re.fullmatch(r"(19\d\d|20\d\d)(?:[-./](\d{1,2}))?", sl) or re.fullmatch(r"(\d{1,2})[-./](19\d\d|20\d\d)", sl)
+            if m and rok is None:
+                a, b = m.groups()
+                rok, mm = (a, b) if len(a) == 4 else (b, a)
+                if mm and 1 <= int(mm) <= 12:
+                    mies = int(mm)
+                continue
+            mm = next((n for p, n in _MIESIACE_SZUKANIA if len(sl) >= 3 and (sl.startswith(p) or p.startswith(sl))), None)
+            if mm and mies is None and not sl.isdigit():
+                mies = mm
+                continue
+            reszta.append(s)
+        miejsce, tekstowe = None, reszta
+        if reszta:
+            miejsce = miejsca.szukaj_miejsca(" ".join(reszta))
+            if miejsce:
+                tekstowe = []
+            else:
+                for i, s in enumerate(reszta):
+                    miejsce = miejsca.szukaj_miejsca(s)
+                    if miejsce:
+                        tekstowe = reszta[:i] + reszta[i + 1:]
+                        break
+        if not (rok or mies or miejsce or tekstowe):
+            return {"razem": 0, "pliki": [], "opis": ""}
+        w, arg = self._warunek()
+        war, a = [], []
+        if rok:
+            war.append("substr(data, 1, 4) = ?"); a.append(rok)
+        if mies:
+            war.append("CAST(substr(data, 6, 2) AS INTEGER) = ?"); a.append(mies)
+        for s in tekstowe:
+            war.append("(lower(wzgledna) LIKE ? OR lower(coalesce(aparat, '')) LIKE ?)")
+            a += [f"%{s.lower()}%"] * 2
+        if miejsce:
+            if miejsce["pl"]:
+                war.append("(" + " OR ".join(["(lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?)"] * len(miejsce["pl"])) + ")")
+                for la, lo, _ in miejsce["pl"]:
+                    a += [la - 0.3, la + 0.3, lo - 0.5, lo + 0.5]
+            else:
+                war.append("lat IS NOT NULL")
+        sql = (f"FROM pliki WHERE rodzaj IN ('zdjecie','film') {w} AND " + " AND ".join(war))
+        db = self._db()
+        try:
+            if miejsce:  # dokładnie: najbliższa miejscowość / kraj zdjęcia (jak w nazwach folderów)
+                wiersze = [dict(r) for r in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data DESC", arg + a)]
+                cel = miejsce["nazwa"] if miejsce["pl"] else "@" + miejsce["kraj"]
+
+                def pasuje(r):
+                    e = miejsca.etykieta(r["lat"], r["lon"])
+                    return e == cel or (miejsce["kraj"] == "PL" and not e.startswith("@"))
+                wiersze = [r for r in wiersze if pasuje(r)]
+                razem, wiersze = len(wiersze), wiersze[od:od + ile]
+            else:
+                razem = db.execute(f"SELECT COUNT(*) {sql}", arg + a).fetchone()[0]
+                wiersze = [dict(r) for r in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data DESC LIMIT ? OFFSET ?",
+                                                       arg + a + [int(ile), int(od)])]
+        finally:
+            db.close()
+        opis = [miejsce["nazwa"]] if miejsce else []
+        if mies:
+            opis.append(_NAZWY_MIES[mies - 1] + (f" {rok}" if rok else ""))
+        elif rok:
+            opis.append(rok)
+        opis += [f"„{s}”" for s in tekstowe]
+        return {"razem": razem, "pliki": [_nazwa(r) for r in wiersze], "opis": " · ".join(opis)}
+
+    # --- ten dzień lata temu ------------------------------------------------------------------------------
+    def tego_dnia(self, md: str | None = None) -> dict:
+        md = md if md and re.fullmatch(r"\d\d-\d\d", md) else time.strftime("%m-%d")
+        w, arg = self._warunek()
+        db = self._db()
+        try:
+            wiersze = [dict(r) for r in db.execute(
+                f"""SELECT {_KOLUMNY} FROM pliki WHERE rodzaj IN ('zdjecie','film') AND substr(data, 6, 5) = ?
+                    AND substr(data, 1, 4) < ? {w} ORDER BY data DESC LIMIT 500""", [md, time.strftime("%Y")] + arg)]
+        finally:
+            db.close()
+        lata: dict[str, int] = {}
+        for r in wiersze:
+            lata[r["data"][:4]] = lata.get(r["data"][:4], 0) + 1
+        return {"md": md, "razem": len(wiersze), "lata": [{"rok": k, "n": v} for k, v in lata.items()],
+                "pliki": [_nazwa(r) for r in wiersze]}
+
+    # --- ulubione i albumy ----------------------------------------------------------------------------
+    def _sciezki(self, db, ids) -> list[str]:
+        w, arg = self._warunek()
+        wynik = []
+        for i in ids[:5000]:
+            r = db.execute(f"SELECT sciezka FROM pliki WHERE rowid=? {w}", [int(i)] + arg).fetchone()
+            if r:
+                wynik.append(r[0])
+        return wynik
+
+    def ulubione(self, id_: int, wlacz: bool | None = None) -> dict:
+        db = self._db()
+        try:
+            s = self._sciezki(db, [id_])
+            if not s:
+                return {"blad": "nie ma takiego pliku"}
+            jest = db.execute("SELECT 1 FROM g_ulubione WHERE sciezka=?", (s[0],)).fetchone() is not None
+            nowe = (not jest) if wlacz is None else bool(wlacz)
+            if nowe:
+                db.execute("INSERT OR IGNORE INTO g_ulubione VALUES (?,?)", (s[0], time.time()))
+            else:
+                db.execute("DELETE FROM g_ulubione WHERE sciezka=?", (s[0],))
+            db.commit()
+            return {"ulubione": nowe}
+        finally:
+            db.close()
+
+    def albumy(self) -> dict:
+        w, arg = self._warunek()
+        db = self._db()
+        try:
+            wynik = []
+            for a in db.execute("SELECT id, nazwa FROM g_albumy ORDER BY czas DESC").fetchall():
+                r = db.execute(f"""SELECT COUNT(*) n, MIN(rowid) okladka FROM pliki WHERE rodzaj IN ('zdjecie','film')
+                                   AND sciezka IN (SELECT sciezka FROM g_album_pliki WHERE album=?) {w}""",
+                               [a["id"]] + arg).fetchone()
+                wynik.append({"id": a["id"], "nazwa": a["nazwa"], "n": r["n"], "okladka": r["okladka"]})
+            u = db.execute(f"""SELECT COUNT(*) n, MIN(rowid) okladka FROM pliki WHERE rodzaj IN ('zdjecie','film')
+                               AND sciezka IN (SELECT sciezka FROM g_ulubione) {w}""", arg).fetchone()
+        finally:
+            db.close()
+        return {"albumy": wynik, "ulubione": {"n": u["n"], "okladka": u["okladka"]}}
+
+    def album_nowy(self, nazwa: str, ids=()) -> dict:
+        nazwa = " ".join(str(nazwa or "").split())[:80] or "Nowy album"
+        db = self._db()
+        try:
+            a = db.execute("INSERT INTO g_albumy(nazwa, czas) VALUES (?,?)", (nazwa, time.time())).lastrowid
+            db.commit()
+        finally:
+            db.close()
+        return {"id": a, "nazwa": nazwa, **self.album_dodaj(a, ids)}
+
+    def album_dodaj(self, album: int, ids) -> dict:
+        db = self._db()
+        try:
+            if not db.execute("SELECT 1 FROM g_albumy WHERE id=?", (int(album),)).fetchone():
+                return {"blad": "nie ma takiego albumu"}
+            s = self._sciezki(db, list(ids or []))
+            db.executemany("INSERT OR IGNORE INTO g_album_pliki VALUES (?,?,?)", [(int(album), x, time.time()) for x in s])
+            db.commit()
+            return {"dodane": len(s)}
+        finally:
+            db.close()
+
+    def album_usun_pliki(self, album: int, ids) -> dict:
+        db = self._db()
+        try:
+            s = self._sciezki(db, list(ids or []))
+            db.executemany("DELETE FROM g_album_pliki WHERE album=? AND sciezka=?", [(int(album), x) for x in s])
+            db.commit()
+            return {"usuniete": len(s)}
+        finally:
+            db.close()
+
+    def album_usun(self, album: int) -> dict:  # tylko album — zdjęcia zostają na dysku
+        db = self._db()
+        try:
+            db.execute("DELETE FROM g_album_pliki WHERE album=?", (int(album),))
+            db.execute("DELETE FROM g_albumy WHERE id=?", (int(album),))
+            db.commit()
+            return {"ok": True}
+        finally:
+            db.close()
+
+    def album_nazwa(self, album: int, nazwa: str) -> dict:
+        nazwa = " ".join(str(nazwa or "").split())[:80]
+        if not nazwa:
+            return {"blad": "Podaj nazwę."}
+        db = self._db()
+        try:
+            db.execute("UPDATE g_albumy SET nazwa=? WHERE id=?", (nazwa, int(album)))
+            db.commit()
+            return {"ok": True, "nazwa": nazwa}
+        finally:
+            db.close()
+
+    def kolekcja(self, typ: str, album: int = 0, od: int = 0, ile: int = 200) -> dict:
+        w, arg = self._warunek()
+        if typ == "ulubione":
+            pod, a, nazwa = "SELECT sciezka FROM g_ulubione", [], "⭐ Ulubione"
+        else:
+            pod, a = "SELECT sciezka FROM g_album_pliki WHERE album=?", [int(album)]
+        db = self._db()
+        try:
+            if typ != "ulubione":
+                r = db.execute("SELECT nazwa FROM g_albumy WHERE id=?", (int(album),)).fetchone()
+                if not r:
+                    return {"blad": "nie ma takiego albumu"}
+                nazwa = r[0]
+            sql = f"FROM pliki WHERE rodzaj IN ('zdjecie','film') AND sciezka IN ({pod}) {w}"
+            razem = db.execute(f"SELECT COUNT(*) {sql}", a + arg).fetchone()[0]
+            wiersze = [dict(r) for r in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data, wzgledna LIMIT ? OFFSET ?",
+                                                   a + arg + [int(ile), int(od)])]
+        finally:
+            db.close()
+        return {"razem": razem, "pliki": [_nazwa(r) for r in wiersze], "nazwa": nazwa}
+
+    # --- filmy: miniatura wyciągnięta przez okno programu, odtwarzacz systemowy ---------------------------
+    def zapisz_miniature_filmu(self, id_: int, jpeg: bytes) -> dict:
+        film = self.sciezka(id_, "film")
+        if not film or not jpeg.startswith(b"\xff\xd8") or len(jpeg) > 400_000:
+            return {"blad": "zła miniatura"}
+        try:
+            mt = os.path.getmtime(film)
+        except OSError:
+            return {"blad": "nie ma pliku"}
+        db = self._db()
+        try:
+            db.execute("INSERT OR REPLACE INTO g_min_filmow VALUES (?,?,?)", (film, mt, jpeg))
+            db.commit()
+        finally:
+            db.close()
+        return {"ok": True}
+
+    def otworz(self, id_: int) -> dict:
+        sc = self.sciezka(id_)
+        if not sc or not os.path.isfile(sc):
+            return {"blad": "nie ma pliku"}
+        try:
+            if os.name == "nt":
+                os.startfile(sc)  # noqa: S606 — domyślny program Windows (np. Filmy i TV, VLC)
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", sc], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            return {"blad": str(e)}
+        return {"ok": True}
 
     def podglad(self, id_: int) -> bytes | None:
         sc = self.sciezka(id_, "zdjecie")
@@ -258,10 +545,24 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict):
             return int(q.get(k, [d])[0])
         except (TypeError, ValueError):
             return d
+    def obszar():
+        try:
+            o = tuple(float(q[k][0]) for k in ("lat1", "lat2", "lon1", "lon2"))
+            return o if all(abs(x) <= 360 for x in o) else None
+        except (KeyError, ValueError, IndexError):
+            return None
     if sciezka == "/api/g/lata":
-        return g.lata(), None
+        return g.lata(obszar()), None
     if sciezka == "/api/g/pliki":
-        return g.pliki(q.get("rok", [""])[0], i("miesiac") or None, i("od"), min(i("ile", 200), 500)), None
+        return g.pliki(q.get("rok", [""])[0], i("miesiac") or None, i("od"), min(i("ile", 200), 500), obszar()), None
+    if sciezka == "/api/g/szukaj":
+        return g.szukaj(q.get("q", [""])[0][:200], i("od"), min(i("ile", 200), 500)), None
+    if sciezka == "/api/g/tego-dnia":
+        return g.tego_dnia(q.get("md", [""])[0]), None
+    if sciezka == "/api/g/albumy":
+        return g.albumy(), None
+    if sciezka == "/api/g/kolekcja":
+        return g.kolekcja(q.get("typ", [""])[0], i("album"), i("od"), min(i("ile", 200), 500)), None
     if sciezka == "/api/g/mapa":
         return g.mapa(), None
     if sciezka == "/api/g/plik":
@@ -272,6 +573,33 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict):
         return g.podglad(i("id")), "image/jpeg"
     if sciezka == "/api/g/film":
         return "film", g.sciezka(i("id"), "film")
+    return None
+
+
+def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
+    """Zmiany kolekcji (ulubione, albumy) i miniatury filmów — tylko z okna programu (telefon jest tylko do odczytu)."""
+    ids = [int(x) for x in (dane.get("ids") or []) if str(x).lstrip("-").isdigit()]
+    if sciezka == "/api/g/ulubione":
+        return g.ulubione(int(dane.get("id") or 0), dane.get("wlacz"))
+    if sciezka == "/api/g/album/nowy":
+        return g.album_nowy(str(dane.get("nazwa", "")), ids)
+    if sciezka == "/api/g/album/dodaj":
+        return g.album_dodaj(int(dane.get("album") or 0), ids)
+    if sciezka == "/api/g/album/usun-pliki":
+        return g.album_usun_pliki(int(dane.get("album") or 0), ids)
+    if sciezka == "/api/g/album/usun":
+        return g.album_usun(int(dane.get("album") or 0))
+    if sciezka == "/api/g/album/nazwa":
+        return g.album_nazwa(int(dane.get("album") or 0), str(dane.get("nazwa", "")))
+    if sciezka == "/api/g/miniatura-filmu":
+        import base64
+        try:
+            jpeg = base64.b64decode(str(dane.get("jpg", "")).split(",")[-1], validate=True)
+        except ValueError:
+            return {"blad": "zła miniatura"}
+        return g.zapisz_miniature_filmu(int(dane.get("id") or 0), jpeg)
+    if sciezka == "/api/g/otworz":
+        return g.otworz(int(dane.get("id") or 0))
     return None
 
 

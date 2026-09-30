@@ -294,6 +294,21 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
       telefonie, przeciąganie powiększonego, + / − / 0, Esc = 100%; to samo w podglądzie Dokumentów i Podobnych;
       Przeglądarka całych dysków pomija foldery systemu i programów (Windows, Program Files, AppData…) i drobne
       obrazki bez daty z aparatu (ikony); małe miniatury siatki zapamiętywane na dysku (szybkie przewijanie przez sieć)
+30. **Przeglądarka pro 1.9** ✅ (Biblioteka i Przeglądarka):
+    - **wyszukiwarka** w nagłówku: miejscowość („Hel” — zdjęcia, których najbliższa miejscowość to Hel), kraj lub
+      znane miejsce za granicą („Włochy”, „Rzym”, „Polska”), rok, miesiąc („lipiec”, „lipca 2019”, „2019-07”),
+      fragment nazwy pliku/folderu, aparat — można łączyć („Hel 2019”); wyniki w siatce, *▶ Pokaz slajdów*,
+      *＋ Zapisz jako album*;
+    - **filmy**: klatka z filmu jako miniatura (wyciągana w oknie, zapamiętywana w bazie), czas trwania na kafelku;
+      film, którego przeglądarka nie odtworzy (HEVC z iPhone'a, AVI…) — komunikat i *⤢ Otwórz w programie Windows*
+      (na telefonie: *Pobierz film*);
+    - **⭐ Kolekcje**: ulubione (☆ w podglądzie albo F) i albumy (*＋ Album* w podglądzie, nowy album, zmiana
+      nazwy, usuwanie — zdjęcia zostają na dysku), zapis w bazie oglądanej galerii; na telefonie tylko oglądanie;
+      **pokaz slajdów** na pełnym ekranie (▶ / P, 4 s na zdjęcie, film gra do końca, Esc kończy);
+    - **mapa → oś czasu**: *📅 Oś czasu tego obszaru* — wykres i siatka tylko ze zdjęć z widocznego fragmentu
+      mapy; **„Tego dnia lata temu”** — przycisk nad osią czasu, gdy są zdjęcia z dzisiejszej daty z lat ubiegłych;
+    - **samoczynne odświeżanie** Przeglądarki: przy starcie programu i co 6 h wczytuje nowe i zmienione pliki
+      (pole *odświeżaj samo co 6 h*, domyślnie włączone)
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

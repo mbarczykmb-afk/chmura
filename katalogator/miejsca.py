@@ -317,3 +317,34 @@ def z_folderu(sciezka_wzgledna: str) -> str | None:
                 if trafienie:
                     return trafienie
     return None
+
+
+@lru_cache(maxsize=1)
+def _wspolrzedne_pl() -> dict[str, list[tuple[float, float, str]]]:
+    """„hel” / „krakow” -> [(lat, lon, „Hel”)] — wszystkie miejscowości PL z pliku (do wyszukiwarki zdjęć)."""
+    ind: dict[str, list] = {}
+    with gzip.open(PLIK, "rt", encoding="utf-8") as f:
+        for linia in f:
+            cz = linia.rstrip("\n").split("\t")
+            if len(cz) < 4 or cz[2] != "PL" or not cz[3]:
+                continue
+            p = (float(cz[0]), float(cz[1]), cz[3])
+            for k in {cz[3].lower(), _bez_ogonkow(cz[3].lower())}:
+                ind.setdefault(k, []).append(p)
+    return ind
+
+
+def szukaj_miejsca(tekst: str) -> dict | None:
+    """Wyszukiwarka: „Hel”, „zakopane”, „Włochy”, „Polska” -> {"nazwa", "pl": [(lat, lon, nazwa)], "kraj": kod}."""
+    k = " ".join(tekst.lower().split())
+    if not k:
+        return None
+    kraj = KRAJE_NAZWY.get(k) or KRAJE_NAZWY.get(_bez_ogonkow(k)) or \
+        next((kod for n, kod in KRAJE_NAZWY.items() if _bez_ogonkow(n) == _bez_ogonkow(k)), None) or \
+        ("PL" if _bez_ogonkow(k) == "polska" else None)
+    if kraj:  # kraje i znane miejsca za granicą („Praga”, „Rzym”) — przed polskimi wsiami o tej samej nazwie
+        return {"nazwa": tekst.strip(), "pl": [], "kraj": kraj}
+    pl = _wspolrzedne_pl().get(k) or _wspolrzedne_pl().get(_bez_ogonkow(k)) or []
+    if pl:
+        return {"nazwa": pl[0][2], "pl": pl, "kraj": None}
+    return None

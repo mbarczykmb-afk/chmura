@@ -142,3 +142,85 @@ def test_przegladarka_dyskow(tmp_path):
     assert {q: q.stat().st_mtime for q in tmp_path.rglob("*.jpg")} == przed  # nic nie zmienione
     # projekt porządkowania nie jest dotknięty
     assert not list((tmp_path / "dane").glob("projekty"))
+
+
+def test_wyszukiwarka(biblioteka):
+    tmp, db, cel = biblioteka
+    g = galeria.Galeria(tmp / "k.db")
+    nazwy = lambda q: sorted(p["nazwa"] for p in g.szukaj(q)["pliki"])
+    assert nazwy("Hel") == ["IMG_20230711.jpg"] and g.szukaj("hel")["opis"] == "Hel"
+    assert nazwy("olkusz 2023") == ["IMG_20230310.jpg"]
+    assert nazwy("2023") == ["IMG_20230310.jpg", "IMG_20230711.jpg"]
+    assert nazwy("lipiec") == ["IMG_20230711.jpg"] and g.szukaj("lipca 2023")["opis"] == "lipiec 2023"
+    assert nazwy("20220105") == ["IMG_20220105.jpg"]          # fragment nazwy pliku
+    assert nazwy("Polska") == ["IMG_20230310.jpg", "IMG_20230711.jpg"]
+    assert nazwy("Włochy") == [] and g.szukaj("")["razem"] == 0
+
+
+def test_obszar_z_mapy_i_tego_dnia(biblioteka):
+    tmp, db, cel = biblioteka
+    g = galeria.Galeria(tmp / "k.db")
+    hel = (54.5, 54.7, 18.7, 18.9)
+    assert [(x["rok"], x["n"]) for x in g.lata(hel)["lata"]] == [("2023", 1)]
+    assert [p["nazwa"] for p in g.pliki("2023", None, obszar=hel)["pliki"]] == ["IMG_20230711.jpg"]
+    t = g.tego_dnia("07-11")
+    assert t["razem"] == 1 and t["lata"] == [{"rok": "2023", "n": 1}]
+    assert g.tego_dnia("12-24")["razem"] == 0
+
+
+def test_ulubione_i_albumy(biblioteka):
+    tmp, db, cel = biblioteka
+    g = galeria.Galeria(tmp / "k.db")
+    ids = {p["nazwa"]: p["id"] for p in g.szukaj("20")["pliki"]}
+    hel, olk = ids["IMG_20230711.jpg"], ids["IMG_20230310.jpg"]
+    assert g.ulubione(hel) == {"ulubione": True} and g.plik(hel)["ulubione"]
+    assert [p["nazwa"] for p in g.kolekcja("ulubione")["pliki"]] == ["IMG_20230711.jpg"]
+    a = g.album_nowy("  Wakacje   2023 ", [hel, olk])
+    assert a["nazwa"] == "Wakacje 2023" and a["dodane"] == 2
+    assert g.albumy()["albumy"][0]["n"] == 2 and g.albumy()["ulubione"]["n"] == 1
+    assert g.plik(olk)["albumy"] == [a["id"]]
+    g.album_usun_pliki(a["id"], [olk])
+    assert [p["nazwa"] for p in g.kolekcja("album", a["id"])["pliki"]] == ["IMG_20230711.jpg"]
+    assert g.album_nazwa(a["id"], "Hel")["nazwa"] == "Hel"
+    g.album_usun(a["id"])
+    assert g.albumy()["albumy"] == [] and (tmp / "dysk" / "IMG_20230711.jpg").exists()  # zdjęcia zostają
+    assert g.ulubione(hel) == {"ulubione": False}
+    # telefon (serwer tylko do odczytu) nie zmienia kolekcji — obsługa POST jest tylko w oknie programu
+    assert galeria.obsluz_post(g, "/api/g/nieznane", {}) is None
+
+
+def test_miniatura_filmu_z_okna(tmp_path):
+    from datetime import datetime, timezone
+    from test_katalogator import _mp4
+    k = tmp_path / "d"
+    k.mkdir()
+    _mp4(k / "VID_20230711_120000.mp4", datetime(2023, 7, 11, 12, tzinfo=timezone.utc))
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    g = galeria.Galeria(tmp_path / "k.db")
+    fid = g.pliki("2023", None)["pliki"][0]["id"]
+    assert g.miniatura(fid) is None
+    import base64
+    jpg = b"\xff\xd8" + b"x" * 100 + b"\xff\xd9"
+    assert galeria.obsluz_post(g, "/api/g/miniatura-filmu", {"id": fid, "jpg": "data:image/jpeg;base64," +
+                                                              base64.b64encode(jpg).decode()}) == {"ok": True}
+    assert g.miniatura(fid) == jpg
+    assert galeria.obsluz_post(g, "/api/g/miniatura-filmu", {"id": fid, "jpg": base64.b64encode(b"<svg>").decode()})["blad"]
+
+
+def test_przegladarka_samo_odswieza(tmp_path):
+    import time
+    from katalogator import przegladarka
+    p = przegladarka.Przegladarka(tmp_path / "dane")
+    assert not p.do_odswiezenia()                     # brak folderów
+    (tmp_path / "a").mkdir()
+    p.ustaw_foldery([str(tmp_path / "a")])
+    assert p.do_odswiezenia()                          # nigdy nie skanowano
+    p.skanuj()
+    for _ in range(100):
+        if not p.opis()["trwa"]:
+            break
+        time.sleep(0.05)
+    assert not p.do_odswiezenia() and p.do_odswiezenia(time.time() + 7 * 3600)
+    p.ustaw_auto(False)
+    assert not p.do_odswiezenia(time.time() + 99 * 3600) and p.opis()["auto"] is False

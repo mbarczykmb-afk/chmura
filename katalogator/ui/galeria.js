@@ -9,7 +9,11 @@ let TOKEN = P.get("t") || (() => { try { return localStorage.getItem(KLUCZ) || "
 const MIESIACE = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień",
                   "październik", "listopad", "grudzień"];
 const g = {widok: "os", lata: [], rok: null, mies: null, pliki: [], razem: 0, mapa: null, klaster: null, punkty: null,
-           lista: [], poz: 0, zakres: "biblioteka"};
+           lista: [], poz: 0, zakres: "biblioteka",
+           zrodlo: {typ: "os"},   // co pokazuje siatka: oś czasu / wyniki szukania / kolekcja / tego dnia
+           obszar: null,          // prostokąt z mapy [lat1, lat2, lon1, lon2] — oś czasu tylko z tego miejsca
+           dzien: null, pokaz: null};
+const obszarParam = () => g.obszar ? {lat1: g.obszar[0], lat2: g.obszar[1], lon1: g.obszar[2], lon2: g.obszar[3]} : {};
 
 function url(sciezka, param = {}) {
   const u = new URLSearchParams(param);
@@ -46,14 +50,16 @@ $("login-form").onsubmit = async e => {
 
 // ---------- oś czasu ----------
 async function wczytajLata(tylkoLiczby = false) {
-  const r = await api("/api/g/lata");
+  const r = await api("/api/g/lata", obszarParam());
   g.lata = r.lata;
   $("licznik").textContent = `${r.razem.toLocaleString("pl-PL")} zdjęć i filmów · z miejscem: ${r.z_gps.toLocaleString("pl-PL")}`;
   rysujWykres();
+  if (tylkoLiczby && (g.zrodlo.typ !== "os" || g.widok !== "os")) { uklad(); return; }  // skan w toku: nie przerywaj wyników
   if (tylkoLiczby && g.rok && g.lata.some(x => x.rok === g.rok)) { oznaczWykres(); return; }  // skan w toku
   const l = $("lata"); l.replaceChildren();
   if (!g.lata.length) {
-    $("siatka").innerHTML = `<div class="pusto">${W_PROGRAMIE && g.zakres === "biblioteka"
+    if (g.zrodlo.typ !== "os") return;
+    $("siatka").innerHTML = `<div class="pusto">${g.obszar ? "Brak zdjęć z datą w tym obszarze." : W_PROGRAMIE && g.zakres === "biblioteka"
       ? "Biblioteka jest jeszcze pusta — uporządkuj pliki albo wybierz „Wszystko w projekcie”."
       : g.zakres === "przegladarka"
         ? "Dodaj dysk lub folder (＋) i kliknij „Skanuj”. Przeglądarka tylko czyta — niczego nie zmienia ani nie przenosi."
@@ -84,6 +90,7 @@ function wybierzRok(rok, mies = null) {
 }
 async function wybierzMiesiac(mies) {
   g.mies = mies; g.pliki = [];
+  if (g.zrodlo.typ !== "os") { g.zrodlo = {typ: "os"}; $("szukaj").value = ""; uklad(); }
   document.querySelectorAll("#miesiace button").forEach(b => b.classList.toggle("akt", b.dataset.m === String(mies || "")));
   oznaczWykres();
   await wczytajPliki();
@@ -146,9 +153,16 @@ function tip(el, n, opis) {
   t.style.top = Math.max(6, r.top - tr.height - 8) + "px";
 }
 async function wczytajPliki(wiecej = false) {
-  const r = await api("/api/g/pliki", {rok: g.rok, miesiac: g.mies || 0, od: wiecej ? g.pliki.length : 0, ile: 200});
+  const od = wiecej ? g.pliki.length : 0, z = g.zrodlo;
+  const r = z.typ === "szukaj" ? await api("/api/g/szukaj", {q: z.q, od, ile: 200})
+    : z.typ === "kolekcja" ? await api("/api/g/kolekcja", {typ: z.kol, album: z.album || 0, od, ile: 200})
+    : z.typ === "dzien" ? await api("/api/g/tego-dnia")
+    : await api("/api/g/pliki", {rok: g.rok, miesiac: g.mies || 0, od, ile: 200, ...obszarParam()});
+  if (z !== g.zrodlo) return;  // w międzyczasie wybrano coś innego
   g.pliki = wiecej ? g.pliki.concat(r.pliki) : r.pliki; g.razem = r.razem;
-  rysujSiatke();
+  if (r.opis !== undefined) z.opis = r.opis;
+  if (r.nazwa) z.nazwa = r.nazwa;
+  rysujSiatke(); rysujFiltr();
 }
 function rysujSiatke() {
   const s = $("siatka"); s.replaceChildren();
@@ -158,7 +172,7 @@ function rysujSiatke() {
     if (p.rodzaj === "zdjecie") {
       const im = new Image(); im.loading = "lazy"; im.alt = ""; im.src = miniatura(p.id, false);  // mała: szybka, zapamiętywana na dysku
       im.onerror = () => { ob.textContent = "🖼️"; }; ob.append(im);
-    } else ob.textContent = "🎬";
+    } else miniaturaFilmu(p, ob);
     const op = document.createElement("div"); op.className = "op";
     op.innerHTML = "<div></div><div class='m'></div>";
     op.children[0].textContent = p.nazwa;
@@ -172,7 +186,9 @@ function rysujSiatke() {
     b.textContent = `Pokaż kolejne (zostało ${(g.razem - g.pliki.length).toLocaleString("pl-PL")})`;
     b.onclick = () => wczytajPliki(true); s.append(b);
   }
-  if (!g.pliki.length) s.innerHTML = '<div class="pusto">Brak zdjęć w tym okresie.</div>';
+  if (!g.pliki.length) s.innerHTML = `<div class="pusto">${g.zrodlo.typ === "szukaj" ? "Nic nie znaleziono. Spróbuj: miejscowość, kraj, rok, miesiąc albo fragment nazwy."
+    : g.zrodlo.typ === "kolekcja" ? (g.zrodlo.kol === "ulubione" ? "Brak ulubionych — otwórz zdjęcie i kliknij ☆ Ulubione (albo F)." : "Album jest pusty — otwórz zdjęcie i kliknij ＋ Album.")
+    : "Brak zdjęć w tym okresie."}</div>`;
 }
 
 // ---------- podgląd na cały ekran ----------
@@ -182,6 +198,17 @@ async function pokazPelny(lista, poz) {
   const p = lista[poz], t = $("pelny-tresc"); t.replaceChildren();
   if (p.rodzaj === "film") {
     const v = document.createElement("video"); v.controls = true; v.autoplay = true; v.src = url("/api/g/film", {id: p.id});
+    v.onerror = () => {  // np. HEVC z iPhone'a albo AVI — przeglądarka nie odtworzy
+      const b = document.createElement("div"); b.className = "film-blad";
+      b.append("🎬 Tego filmu nie da się odtworzyć w przeglądarce (np. format HEVC z iPhone'a albo AVI).", document.createElement("br"));
+      if (W_PROGRAMIE) {
+        const o = document.createElement("button"); o.textContent = "⤢ Otwórz w programie Windows"; o.onclick = e => { e.stopPropagation(); otworzWProgramie(p); }; b.append(o);
+      } else {
+        const a = document.createElement("a"); a.href = url("/api/g/film", {id: p.id}); a.download = p.nazwa; a.textContent = "⬇ Pobierz film"; b.append(a);
+      }
+      t.replaceChildren(b);
+    };
+    v.onended = () => { if (g.pokaz) krokPokazu(); };
     t.append(v);
   } else {
     const mini = new Image(); mini.src = miniatura(p.id); t.append(mini);  // najpierw szybka miniatura
@@ -190,14 +217,17 @@ async function pokazPelny(lista, poz) {
   }
   $("pelny-opis").textContent = `${p.nazwa} · ${dataTxt(p.data)}`;
   $("pelny-opis").title = "Kółko myszy / szczypanie = powiększenie · dwuklik = 250% · przeciągnij, żeby przesunąć · 0 = całe";
+  narzedziaPelnego(p);
   if (p.miejsce === undefined) {
-    try { const d = await api("/api/g/plik", {id: p.id}); p.miejsce = d.miejsce; } catch (e) { p.miejsce = null; }
+    try { const d = await api("/api/g/plik", {id: p.id}); p.miejsce = d.miejsce; p.ulubione = d.ulubione; }
+    catch (e) { p.miejsce = null; }
   }
+  if (g.lista[g.poz] === p) narzedziaPelnego(p);
   if (g.lista[g.poz] === p && p.miejsce) $("pelny-opis").textContent += " · " + p.miejsce;
   $("pelny").querySelector(".pop").hidden = poz <= 0;
   $("pelny").querySelector(".nast").hidden = poz >= lista.length - 1;
 }
-function zamknijPelny() { $("pelny").hidden = true; $("pelny-tresc").replaceChildren(); zoomReset(); }
+function zamknijPelny() { stopPokaz(); $("pelny").hidden = true; $("pelny-tresc").replaceChildren(); zoomReset(); zamknijMenuAlb(); }
 
 // ---------- powiększanie: kółko myszy (do kursora), dwuklik, szczypanie na telefonie, przeciąganie ----------
 const zoom = {s: 1, x: 0, y: 0, palce: new Map(), start: null, zegar: null};
@@ -253,15 +283,18 @@ for (const t of ["pointerup", "pointercancel"]) $("pelny-tresc").addEventListene
   const im = obrazPelny(); if (im && !zoom.palce.size) im.classList.remove("ciagnie");
 });
 function krok(d) { const n = g.poz + d; if (n >= 0 && n < g.lista.length) pokazPelny(g.lista, n); }
+function krokRecznie(d) { stopPokaz(); krok(d); }
 $("pelny").querySelector(".zam").onclick = zamknijPelny;
-$("pelny").querySelector(".pop").onclick = e => { e.stopPropagation(); krok(-1); };
-$("pelny").querySelector(".nast").onclick = e => { e.stopPropagation(); krok(1); };
+$("pelny").querySelector(".pop").onclick = e => { e.stopPropagation(); krokRecznie(-1); };
+$("pelny").querySelector(".nast").onclick = e => { e.stopPropagation(); krokRecznie(1); };
 $("pelny").onclick = e => { if (e.target.id === "pelny" || e.target.id === "pelny-tresc") zamknijPelny(); };
 document.addEventListener("keydown", e => {
   if ($("pelny").hidden) return;
-  if (e.key === "Escape") { if (zoom.s > 1) zoomReset(); else zamknijPelny(); }
-  if (e.key === "ArrowLeft" && zoom.s === 1) krok(-1);
-  if (e.key === "ArrowRight" && zoom.s === 1) krok(1);
+  if (e.key === "Escape") { if (g.pokaz) stopPokaz(); else if (zoom.s > 1) zoomReset(); else zamknijPelny(); }
+  if (e.key === "ArrowLeft" && zoom.s === 1) krokRecznie(-1);
+  if (e.key === "ArrowRight" && zoom.s === 1) krokRecznie(1);
+  if (e.key === "p" || e.key === "P") przelaczPokaz();
+  if ((e.key === "f" || e.key === "F") && W_PROGRAMIE) $("p-ulub").click();
   if (e.key === "+" || e.key === "=") zoomUstaw(zoom.s * 1.4);
   if (e.key === "-") zoomUstaw(zoom.s / 1.4);
   if (e.key === "0") zoomUstaw(1);
@@ -271,7 +304,7 @@ $("pelny").addEventListener("touchstart", e => { dotyk = e.touches.length === 1 
 $("pelny").addEventListener("touchend", e => {
   if (dotyk === null || zoom.s > 1 || zoom.palce.size) { dotyk = null; return; }  // powiększone: palec przesuwa
   const d = e.changedTouches[0].clientX - dotyk; dotyk = null;
-  if (Math.abs(d) > 50) krok(d < 0 ? 1 : -1);
+  if (Math.abs(d) > 50) krokRecznie(d < 0 ? 1 : -1);
 });
 
 // ---------- mapa ----------
@@ -333,16 +366,30 @@ async function pelnyZPinezki(id, film) {
 }
 
 // ---------- przełączanie widoków ----------
+function uklad() {  // co widać: oś czasu (wykres, miesiące), wyniki/kolekcja (sama siatka), kolekcje, mapa
+  const w = g.widok, os = w === "os" && g.zrodlo.typ === "os";
+  $("w-os").classList.toggle("akt", os); $("w-mapa").classList.toggle("akt", w === "mapa");
+  $("w-kolekcje").classList.toggle("akt", w === "kolekcje" || (w === "os" && g.zrodlo.typ === "kolekcja"));
+  $("os").hidden = w === "mapa"; $("lata").hidden = !os; $("miesiace").hidden = !os; tip(null);
+  $("wykres").hidden = !os || !$("wykres").childElementCount;
+  $("mapa").hidden = w !== "mapa"; $("mapa-info").hidden = w !== "mapa"; $("mapa-os").hidden = w !== "mapa";
+  rysujFiltr();
+}
 function widok(w) {
   g.widok = w;
-  $("w-os").classList.toggle("akt", w === "os"); $("w-mapa").classList.toggle("akt", w === "mapa");
-  $("os").hidden = w !== "os"; $("lata").hidden = w !== "os"; $("miesiace").hidden = w !== "os"; tip(null);
-  $("wykres").hidden = w !== "os" || !$("wykres").childElementCount;
-  $("mapa").hidden = w !== "mapa"; $("mapa-info").hidden = w !== "mapa";
+  if (w === "os" && g.zrodlo.typ !== "os") { g.zrodlo = {typ: "os"}; $("szukaj").value = ""; wczytajPliki(); }
+  uklad();
   if (w === "mapa") pokazMape().catch(e => info(e.message));
+  if (w === "kolekcje") rysujKolekcje();
+}
+function pokazWyniki(zrodlo) {  // wyniki szukania, ulubione, album, tego dnia — w tej samej siatce
+  g.zrodlo = zrodlo; g.widok = "os"; g.pliki = []; g.razem = 0;
+  $("siatka").innerHTML = '<div class="pusto">Szukam…</div>';
+  uklad(); wczytajPliki().catch(e => { $("siatka").innerHTML = `<div class="pusto">${e.message}</div>`; });
 }
 $("w-os").onclick = () => widok("os");
 $("w-mapa").onclick = () => widok("mapa");
+$("w-kolekcje").onclick = () => widok("kolekcje");
 
 // ---------- w oknie programu: zakres, zamykanie, udostępnianie na telefon ----------
 if (W_PROGRAMIE) {
@@ -379,6 +426,225 @@ async function telefon(wlacz) {
   } catch (e) { $("tel-tresc").textContent = e.message; }
 }
 
+// ---------- pasek nad siatką: szukanie, obszar z mapy, kolekcja, tego dnia ----------
+function liczbaZdjec(n) {
+  const f = n === 1 ? "zdjęcie" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "zdjęcia" : "zdjęć";
+  return `${n.toLocaleString("pl-PL")} ${f}`;
+}
+function przycisk(tekst, akcja, tytul = "", klasa = "") {
+  const b = document.createElement("button"); b.textContent = tekst; b.onclick = akcja;
+  if (tytul) b.title = tytul; if (klasa) b.className = klasa; return b;
+}
+function znacznik(tekst, zamknij, tytul) {
+  const z = document.createElement("span"); z.className = "zn"; z.append(tekst);
+  const x = przycisk("✕", zamknij, tytul); z.append(x); return z;
+}
+function rysujFiltr() {
+  const f = $("filtr"); f.replaceChildren();
+  const z = g.zrodlo, ile = liczbaZdjec;
+  const inf = t => { const s = document.createElement("span"); s.className = "info"; s.textContent = t; return s; };
+  const pokaz = () => g.pliki.length ? przycisk("▶ Pokaz slajdów", () => { pokazPelny(g.pliki, 0); startPokaz(); }, "Pokaz na cały ekran (P)") : null;
+  if (g.widok === "kolekcje") {
+    const t = document.createElement("span"); t.className = "tyt"; t.textContent = "⭐ Kolekcje"; f.append(t, inf("ulubione i albumy"));
+  } else if (g.widok === "os" && z.typ === "szukaj") {
+    f.append(znacznik("🔍 " + (z.opis || z.q), () => { $("szukaj").value = ""; widok("os"); }, "Wyczyść szukanie"), inf(ile(g.razem)));
+    const p = pokaz(); if (p) f.append(p);
+    if (W_PROGRAMIE && g.razem) f.append(przycisk("＋ Zapisz jako album", () => zapiszJakoAlbum(z.opis || z.q), "Nowy album z wynikami (do 5000)"));
+  } else if (g.widok === "os" && z.typ === "kolekcja") {
+    f.append(przycisk("← Kolekcje", () => widok("kolekcje")));
+    const t = document.createElement("span"); t.className = "tyt"; t.textContent = z.nazwa || ""; f.append(t, inf(ile(g.razem)));
+    const p = pokaz(); if (p) f.append(p);
+    if (W_PROGRAMIE && z.kol === "album") {
+      f.append(przycisk("✎ Zmień nazwę", async () => {
+        const n = prompt("Nowa nazwa albumu:", z.nazwa || ""); if (!n) return;
+        const w = await post("/api/g/album/nazwa", {album: z.album, nazwa: n}); z.nazwa = w.nazwa; rysujFiltr();
+      }), przycisk("🗑 Usuń album", async () => {
+        if (!confirm(`Usunąć album „${z.nazwa}”?\n\nZdjęcia zostają na dysku — znika tylko album.`)) return;
+        await post("/api/g/album/usun", {album: z.album}); widok("kolekcje");
+      }));
+    }
+  } else if (g.widok === "os" && z.typ === "dzien") {
+    f.append(znacznik("📅 Tego dnia lata temu", () => widok("os")), inf(ile(g.razem)));
+    const p = pokaz(); if (p) f.append(p);
+  } else if (g.widok === "os") {
+    if (g.obszar) f.append(znacznik("📍 Obszar z mapy", () => { g.obszar = null; g.rok = null; wczytajLata(); rysujFiltr(); },
+                                    "Pokaż wszystkie miejsca"));
+    if (g.dzien && g.dzien.razem && !g.obszar) {
+      const lata = g.dzien.lata.map(x => x.rok).slice(0, 4).join(", ");
+      f.append(przycisk(`📅 Tego dnia lata temu: ${lata} (${g.dzien.razem})`, () => pokazWyniki({typ: "dzien"}),
+                        "Zdjęcia zrobione tego samego dnia w poprzednich latach", "dzien"));
+    }
+    const p = pokaz(); if (p && f.childElementCount) f.append(p);
+  }
+  f.hidden = !f.childElementCount;
+}
+
+// ---------- wyszukiwarka ----------
+let szukajZegar = null;
+$("szukaj").addEventListener("input", () => {
+  clearTimeout(szukajZegar);
+  szukajZegar = setTimeout(() => {
+    const q = $("szukaj").value.trim();
+    if (q.length >= 2) pokazWyniki({typ: "szukaj", q}); else if (!q && g.zrodlo.typ === "szukaj") widok("os");
+  }, 450);
+});
+$("szukaj").addEventListener("keydown", e => {
+  if (e.key === "Enter") { clearTimeout(szukajZegar); const q = $("szukaj").value.trim(); if (q) pokazWyniki({typ: "szukaj", q}); }
+  if (e.key === "Escape") { $("szukaj").value = ""; if (g.zrodlo.typ === "szukaj") widok("os"); }
+});
+async function wszystkieId() {  // wszystkie wyniki (do 5000) — np. do zapisania jako album
+  while (g.pliki.length < Math.min(g.razem, 5000)) { const n = g.pliki.length; await wczytajPliki(true); if (g.pliki.length === n) break; }
+  return g.pliki.map(p => p.id);
+}
+async function zapiszJakoAlbum(nazwa) {
+  const n = prompt("Nazwa nowego albumu:", nazwa); if (!n) return;
+  const ids = await wszystkieId();
+  const w = await post("/api/g/album/nowy", {nazwa: n, ids});
+  alert(`Utworzono album „${w.nazwa}” (${w.dodane} zdjęć). Znajdziesz go w ⭐ Kolekcje.`);
+}
+
+// ---------- kolekcje: ulubione i albumy ----------
+async function rysujKolekcje() {
+  const s = $("siatka"); s.innerHTML = '<div class="pusto">Wczytuję…</div>';
+  let r; try { r = await api("/api/g/albumy"); } catch (e) { s.innerHTML = `<div class="pusto">${e.message}</div>`; return; }
+  if (g.widok !== "kolekcje") return;
+  s.replaceChildren();
+  const kafel = (ikona, nazwa, n, okladka, klik, klasa = "") => {
+    const k = document.createElement("div"); k.className = "k album " + klasa; k.style.cursor = "pointer";
+    const ob = document.createElement("div"); ob.className = "ob"; ob.textContent = ikona;
+    if (okladka) { const im = new Image(); im.src = miniatura(okladka, false); im.alt = ""; ob.append(im); }
+    const op = document.createElement("div"); op.className = "op"; op.innerHTML = "<div></div><div class='m'></div>";
+    op.children[0].textContent = nazwa; op.children[1].textContent = n === null ? "" : liczbaZdjec(n);
+    k.append(ob, op); k.onclick = klik; s.append(k);
+  };
+  kafel("⭐", "Ulubione", r.ulubione.n, r.ulubione.okladka, () => pokazWyniki({typ: "kolekcja", kol: "ulubione"}));
+  for (const a of r.albumy) kafel("🗂", a.nazwa, a.n, a.okladka, () => pokazWyniki({typ: "kolekcja", kol: "album", album: a.id, nazwa: a.nazwa}));
+  if (W_PROGRAMIE) kafel("＋", "Nowy album", null, null, async () => {
+    const n = prompt("Nazwa nowego albumu:", "Wakacje " + new Date().getFullYear()); if (!n) return;
+    await post("/api/g/album/nowy", {nazwa: n, ids: []}); rysujKolekcje();
+  }, "nowy");
+  if (!W_PROGRAMIE && !r.albumy.length && !r.ulubione.n) s.innerHTML = '<div class="pusto">Brak ulubionych i albumów — tworzy się je w programie na komputerze.</div>';
+}
+
+// ---------- podgląd: ulubione, album, pokaz slajdów, otwieranie w programie ----------
+function narzedziaPelnego(p) {
+  const ul = $("p-ulub");
+  ul.hidden = !W_PROGRAMIE; ul.classList.toggle("akt", !!p.ulubione); ul.textContent = p.ulubione ? "★ Ulubione" : "☆ Ulubione";
+  $("p-album").hidden = !W_PROGRAMIE;
+  $("p-z-albumu").hidden = !(W_PROGRAMIE && g.zrodlo.typ === "kolekcja" && g.zrodlo.kol === "album" && g.lista === g.pliki);
+  $("p-otworz").hidden = !W_PROGRAMIE;
+  $("p-pokaz").textContent = g.pokaz ? "⏸ Pauza" : "▶ Pokaz";
+}
+const biezacy = () => g.lista[g.poz];
+$("p-ulub").onclick = async e => {
+  e && e.stopPropagation && e.stopPropagation();
+  const p = biezacy(); if (!p) return;
+  try { const w = await post("/api/g/ulubione", {id: p.id}); p.ulubione = w.ulubione; narzedziaPelnego(p); } catch (err) { alert(err.message); }
+};
+$("p-z-albumu").onclick = async e => {
+  e.stopPropagation(); const p = biezacy(); if (!p) return;
+  await post("/api/g/album/usun-pliki", {album: g.zrodlo.album, ids: [p.id]});
+  const i = g.pliki.indexOf(p); g.pliki.splice(i, 1); g.razem--; rysujSiatke(); rysujFiltr();
+  if (!g.pliki.length) zamknijPelny(); else pokazPelny(g.pliki, Math.min(i, g.pliki.length - 1));
+};
+$("p-otworz").onclick = e => { e.stopPropagation(); const p = biezacy(); if (p) otworzWProgramie(p); };
+async function otworzWProgramie(p) { stopPokaz(); try { await post("/api/g/otworz", {id: p.id}); } catch (e) { alert(e.message); } }
+function zamknijMenuAlb() { document.querySelectorAll(".menu-alb").forEach(m => m.remove()); }
+$("p-album").onclick = async e => {
+  e.stopPropagation();
+  if (document.querySelector(".menu-alb")) { zamknijMenuAlb(); return; }
+  const p = biezacy(); if (!p) return;
+  const m = document.createElement("div"); m.className = "menu-alb"; m.onclick = ev => ev.stopPropagation();
+  m.textContent = "Wczytuję…"; $("pelny").append(m);
+  const r = await api("/api/g/albumy"); m.replaceChildren();
+  const dodaj = async (album, nazwa) => {
+    await post("/api/g/album/dodaj", {album, ids: [p.id]}); zamknijMenuAlb();
+    const b = $("p-album"); b.textContent = `✓ W „${nazwa}”`; setTimeout(() => { b.textContent = "＋ Album"; }, 1800);
+  };
+  for (const a of r.albumy) m.append(przycisk(`🗂 ${a.nazwa}`, () => dodaj(a.id, a.nazwa)));
+  m.append(przycisk("＋ Nowy album…", async () => {
+    const n = prompt("Nazwa nowego albumu:"); if (!n) return;
+    const w = await post("/api/g/album/nowy", {nazwa: n, ids: [p.id]}); zamknijMenuAlb();
+    const b = $("p-album"); b.textContent = `✓ W „${w.nazwa}”`; setTimeout(() => { b.textContent = "＋ Album"; }, 1800);
+  }));
+};
+function startPokaz() {
+  if (g.pokaz) return;
+  g.pokaz = setTimeout(krokPokazu, 4000);
+  try { if (!document.fullscreenElement) $("pelny").requestFullscreen().catch(() => {}); } catch (e) { /* bez pełnego ekranu */ }
+  narzedziaPelnego(biezacy() || {});
+}
+function stopPokaz() {
+  if (!g.pokaz) return;
+  clearTimeout(g.pokaz); g.pokaz = null;
+  try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch (e) { /* nic */ }
+  if (!$("pelny").hidden) narzedziaPelnego(biezacy() || {});
+}
+function przelaczPokaz() { if (g.pokaz) stopPokaz(); else startPokaz(); }
+async function krokPokazu() {
+  if (!g.pokaz) return;
+  const v = $("pelny-tresc").querySelector("video");
+  if (v && !v.ended && !v.error && !v.paused) { g.pokaz = setTimeout(krokPokazu, 1000); return; }  // film gra do końca
+  if (g.poz >= g.lista.length - 1 && g.lista === g.pliki && g.pliki.length < g.razem) await wczytajPliki(true);
+  if (!g.pokaz) return;
+  if (g.poz < g.lista.length - 1) { krok(1); g.pokaz = setTimeout(krokPokazu, 4000); } else stopPokaz();
+}
+$("p-pokaz").onclick = e => { e.stopPropagation(); przelaczPokaz(); };
+
+// ---------- filmy: klatka jako miniatura (wyciągana w przeglądarce, zapamiętywana przez program) ----------
+const filmy = {kolejka: [], trwa: 0};
+const obserwator = "IntersectionObserver" in window ? new IntersectionObserver(wpisy => {
+  for (const w of wpisy) if (w.isIntersecting) { obserwator.unobserve(w.target); filmy.kolejka.push(w.target._film); nastepnyFilm(); }
+}, {rootMargin: "300px"}) : null;
+function miniaturaFilmu(p, ob) {
+  const z = document.createElement("span"); z.className = "znak-f"; z.textContent = "▶ film"; ob.append("🎬", z);
+  ob._film = {p, ob, z};
+  if (obserwator) obserwator.observe(ob);  // zapamiętana klatka albo wyciągnięcie jej z filmu — gdy kafelek jest widoczny
+  else filmy.kolejka.push(ob._film);
+}
+function nastepnyFilm() {
+  while (filmy.trwa < 2 && filmy.kolejka.length) {
+    const {p, ob, z} = filmy.kolejka.shift(); filmy.trwa++;
+    if (!p.bezMin) {  // najpierw klatka zapamiętana wcześniej przez program
+      const im = new Image(); im.alt = "";
+      im.onload = () => { ob.prepend(im); filmy.trwa--; nastepnyFilm(); };
+      im.onerror = () => { p.bezMin = true; filmy.trwa--; filmy.kolejka.unshift({p, ob, z}); nastepnyFilm(); };
+      im.src = miniatura(p.id, false);
+      continue;
+    }
+    const v = document.createElement("video"); v.muted = true; v.preload = "metadata"; v.playsInline = true;
+    let koniec = false;
+    const zakoncz = () => { if (koniec) return; koniec = true; clearTimeout(zeg); v.removeAttribute("src"); v.load(); filmy.trwa--; nastepnyFilm(); };
+    const zeg = setTimeout(zakoncz, 20000);
+    v.onloadedmetadata = () => {
+      if (isFinite(v.duration)) z.textContent = "▶ " + Math.floor(v.duration / 60) + ":" + String(Math.floor(v.duration % 60)).padStart(2, "0");
+      v.currentTime = Math.min(1, (v.duration || 2) * 0.1);
+    };
+    v.onseeked = () => {
+      try {
+        const c = document.createElement("canvas"), sk = Math.min(1, 360 / (v.videoWidth || 360));
+        c.width = Math.round((v.videoWidth || 320) * sk); c.height = Math.round((v.videoHeight || 240) * sk);
+        c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+        const d = c.toDataURL("image/jpeg", 0.8);
+        const im = new Image(); im.alt = ""; im.src = d; ob.prepend(im);
+        if (W_PROGRAMIE) post("/api/g/miniatura-filmu", {id: p.id, jpg: d}).catch(() => {});
+      } catch (e) { /* bez klatki */ }
+      zakoncz();
+    };
+    v.onerror = () => { z.textContent = "▶ film (inny format)"; z.title = "Przeglądarka nie odtworzy tego formatu — otwórz w programie"; zakoncz(); };
+    v.src = url("/api/g/film", {id: p.id});
+  }
+}
+
+// ---------- mapa → oś czasu ----------
+$("mapa-os").onclick = () => {
+  if (!g.mapa) return;
+  const b = g.mapa.getBounds();
+  g.obszar = [b.getSouth(), b.getNorth(), b.getWest(), b.getEast()].map(x => Math.round(x * 1e5) / 1e5);
+  g.rok = null; g.zrodlo = {typ: "os"}; $("szukaj").value = "";
+  widok("os"); wczytajLata();
+};
+
 // ---------- przeglądarka dysków: wybrane dyski tylko skanowane i oglądane ----------
 async function post(sciezka, dane) {
   const r = await fetch(url(sciezka), {method: "POST", headers: {"Content-Type": "application/json", "X-Token": TOKEN},
@@ -406,6 +672,9 @@ function rysujPrz(s) {
     c.append(n, x); f.append(c);
   }
   $("prz-skanuj").disabled = s.trwa || !s.foldery.length;
+  $("prz-auto").checked = s.auto !== false;
+  $("prz-auto").parentElement.title = "Przy starcie programu i potem co " + (s.co_godzin || 6) + " h wczytuję nowe i zmienione pliki (tylko odczyt)" +
+    (s.ostatni_skan ? " · ostatnio: " + new Date(s.ostatni_skan * 1000).toLocaleString("pl-PL") : "");
   $("prz-przerwij").hidden = !s.trwa;
   const pasek = $("prz-pasek"); pasek.hidden = !s.trwa;
   if (s.trwa) {
@@ -432,6 +701,7 @@ $("prz-skanuj").onclick = async () => {
   try { rysujPrz(await post("/api/przegladarka/skanuj")); odswiezPrz(); } catch (e) { $("prz-stan").textContent = e.message; }
 };
 $("prz-przerwij").onclick = () => post("/api/przegladarka/przerwij").catch(() => {});
+$("prz-auto").onchange = () => post("/api/przegladarka/auto", {auto: $("prz-auto").checked}).then(rysujPrz).catch(() => {});
 // wybór dysku / folderu
 const wyb = {sciezka: null};
 async function pokazWybor(sciezka) {
@@ -479,7 +749,13 @@ $("wyb-ok").onclick = async () => {
 };
 
 async function start() {
-  try { await wczytajLata(); if (g.widok === "mapa") await pokazMape(); }
+  try {
+    await wczytajLata();
+    if (g.widok === "mapa") await pokazMape();
+    try { g.dzien = await api("/api/g/tego-dnia"); } catch (e) { g.dzien = null; }
+    if (g.widok === "kolekcje") rysujKolekcje();
+    uklad();
+  }
   catch (e) { if (e.message !== "Podaj PIN") $("siatka").innerHTML = `<div class="pusto">${e.message}</div>`; }
 }
 start();
