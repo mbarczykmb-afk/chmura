@@ -23,6 +23,27 @@ SPRAWDZAJ_CO = 5
 _BLEDY_PLIKU = (FileNotFoundError, PermissionError, FileExistsError, IsADirectoryError, NotADirectoryError)
 
 
+# Windows: plik tylko w chmurze (OneDrive, Dysk Google, iCloud…) — otwarcie pobiera go z internetu albo kończy się błędem
+_ATR_W_CHMURZE = 0x00400000 | 0x00040000 | 0x00001000  # RECALL_ON_DATA_ACCESS | RECALL_ON_OPEN | OFFLINE
+
+
+def tylko_w_chmurze(sciezka: str) -> bool:
+    """Czy plik jest tylko „online” (bez kopii na dysku)? Na innych systemach — zawsze False."""
+    try:
+        return bool(getattr(os.stat(sciezka), "st_file_attributes", 0) & _ATR_W_CHMURZE)
+    except OSError:
+        return False
+
+
+def blad_chmury(e: OSError) -> bool:
+    """Błąd dostawcy plików w chmurze (WinError 357–400, np. 362 „dostawca nie działa”, 389 „plik niedostępny”)."""
+    return 357 <= (getattr(e, "winerror", None) or 0) <= 400
+
+
+def opis_bledu(e: OSError) -> str:
+    return (e.strerror or str(e)) + (f" [WinError {e.winerror}]" if getattr(e, "winerror", None) else "")
+
+
 def _dostepny(sciezka: str) -> bool:
     try:
         return os.path.isdir(sciezka)
@@ -41,6 +62,7 @@ class Straznik:
         self.przerwij, self.zglos = przerwij, zglos
         self.czekaj_maks, self.sprawdzaj_co, self.pauza = czekaj_maks, sprawdzaj_co, pauza
         self.przerwy = 0          # ile razy dysk znikał
+        self.daremne = 0          # ponowienia z rzędu, które nic nie dały — wtedy przestajemy czekać
         self._blokada = threading.Lock()
 
     def korzen(self, sciezka: str) -> str | None:
@@ -84,17 +106,24 @@ class Straznik:
         """f(*a, **kw) z ponawianiem, gdy błąd wynika z utraty dostępu do dysku."""
         for proba in range(proby):
             try:
-                return f(*a, **kw)
+                w = f(*a, **kw)
+                if proba:
+                    self.daremne = 0  # ponowienie pomogło — czkawki sieci warto przeczekiwać
+                return w
             except Przerwano:
                 raise
             except OSError as e:
                 if proba == proby - 1:
+                    if proba:
+                        self.daremne += 1
                     raise
                 k = self.korzen(sciezka)
                 if k and self.czekaj_na(k):
                     continue          # dysk wrócił — ponów ten sam plik
-                if isinstance(e, _BLEDY_PLIKU) or e.errno is None:
-                    raise  # błąd samego pliku (np. uszkodzony obraz) — ponawianie nic nie da
+                if isinstance(e, _BLEDY_PLIKU) or e.errno is None or blad_chmury(e):
+                    raise  # błąd samego pliku (np. uszkodzony obraz, plik tylko w chmurze) — ponawianie nic nie da
+                if self.daremne >= 3:
+                    raise  # kolejne pliki z tym samym błędem mimo dostępnego dysku — nie czekamy przy każdym
                 self._spij(self.pauza)  # chwilowa czkawka sieci — jeszcze jedna próba
         return None  # pragma: no cover
 

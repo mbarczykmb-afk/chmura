@@ -327,3 +327,57 @@ def test_duze_pliki_liczone_po_jednym(tmp_path, monkeypatch):
     monkeypatch.setattr(duplikaty, "_odcisk", wolny)
     w = duplikaty.szukaj(db)
     assert w["grupy"] == 3 and maks[0] == 1
+
+
+def test_masowe_bledy_odczytu_nie_spowalniaja(tmp_path, monkeypatch):
+    """Każdy plik daje ten sam błąd (np. chmura), dysk dostępny: po kilku daremnych ponowieniach — bez pauz."""
+    import errno as er
+    import time as t
+    from katalogator import duplikaty, skaner, stabilnosc
+    k = tmp_path / "d"
+    k.mkdir()
+    for i in range(40):
+        (k / f"p{i}.jpg").write_bytes(b"x" * 1000)
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+
+    def blad(*a, **kw):
+        raise OSError(er.EIO, "Błąd wejścia/wyjścia")
+    monkeypatch.setattr(duplikaty, "_odcisk", blad)
+    monkeypatch.setattr(stabilnosc.Straznik.__init__, "__defaults__",
+                        (None, None, stabilnosc.CZEKAJ_MAKS, stabilnosc.SPRAWDZAJ_CO, 0.3))
+    t0 = t.monotonic()
+    w = duplikaty.szukaj(db)
+    # bez „uczenia się” 40 plików × 2 pauzy × 0,3 s / 4 wątki = 6 s
+    assert t.monotonic() - t0 < 3
+    assert "nie da się odczytać 40 plików" in w["problemy"] and "Błąd wejścia/wyjścia" in w["problemy"]
+
+
+def test_pliki_tylko_w_chmurze_pomijane(tmp_path, monkeypatch):
+    from katalogator import duplikaty, skaner
+    k = tmp_path / "d"
+    k.mkdir()
+    for i in range(4):
+        (k / f"p{i}.jpg").write_bytes(b"x" * 1000)
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    monkeypatch.setattr(duplikaty, "tylko_w_chmurze", lambda s: s.endswith(("p0.jpg", "p1.jpg")))
+    w = duplikaty.szukaj(db)
+    assert w["grupy"] == 1 and w["nadmiar"] == 1  # p2 i p3
+    assert w["problemy"] == "2 plików tylko w chmurze (pominięte)"
+
+
+def test_blad_chmury_bez_ponawiania():
+    from katalogator import stabilnosc
+    e = OSError(22, "Dostawca plików w chmurze nie działa")
+    e.winerror = 362
+    assert stabilnosc.blad_chmury(e) and "WinError 362" in stabilnosc.opis_bledu(e)
+    wywolania = []
+
+    def f():
+        wywolania.append(1)
+        raise e
+    s = stabilnosc.Straznik([], pauza=5)
+    with pytest.raises(OSError):
+        s.wykonaj(f, "/x")
+    assert len(wywolania) == 1

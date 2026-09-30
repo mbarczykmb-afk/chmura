@@ -493,9 +493,9 @@ class Stan:
         try:
             with stabilnosc.Czuwanie():
                 w = duplikaty.szukaj(db, postep=postep, przerwij=self.przerwij)
-            komunikat, blad = (f"Znaleziono {w['nadmiar']} zbędnych kopii "
-                               f"({raport.rozmiar_txt(w['bajty'])})." if w["nadmiar"]
-                               else "Nie znaleziono duplikatów."), ""
+            komunikat = (f"Znaleziono {w['nadmiar']} zbędnych kopii ({raport.rozmiar_txt(w['bajty'])})."
+                         if w["nadmiar"] else "Nie znaleziono duplikatów.")
+            komunikat, blad = komunikat + (f" Uwaga: {w['problemy']}." if w.get("problemy") else ""), ""
         except skaner.Przerwano:
             komunikat, blad = ("Przerwano. Sprawdzone pliki są zapamiętane — wznowienie zacznie od miejsca przerwania. "
                                "Największe pliki (filmy, archiwa) są sprawdzane na końcu, więc dalsza część "

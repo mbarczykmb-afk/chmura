@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from . import indeks
 from .skaner import Przerwano, Zatwierdzanie
+from .stabilnosc import opis_bledu, tylko_w_chmurze
 
 BLOK = 1 << 20
 # Pełny odcisk dużych plików liczymy po jednym naraz: kilka równoległych długich odczytów z jednego dysku
@@ -97,9 +98,21 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
     razem = [0]
     biezacy = {"etap": "", "zrobione": 0, "wszystkie": 0, "t": 0.0, "plik": ""}
     jeden_duzy = threading.Lock()
+    problemy = {"chmura": 0, "bledy": 0, "przyklad": ""}  # pliki pominięte — widać je w oknie
+
+    def opis_problemow() -> str:
+        t = []
+        if problemy["chmura"]:
+            t.append(f"{problemy['chmura']} plików tylko w chmurze (pominięte)")
+        if problemy["bledy"]:
+            t.append(f"nie da się odczytać {problemy['bledy']} plików — np. {problemy['przyklad']}")
+        return "; ".join(t)
 
     def dod():
-        return {"bajty_razem": razem[0], **({"plik": biezacy["plik"]} if biezacy["plik"] else {})}
+        d = {"bajty_razem": razem[0], **({"plik": biezacy["plik"]} if biezacy["plik"] else {})}
+        if problemy["chmura"] or problemy["bledy"]:
+            d["opis"] = "⚠ " + opis_problemow()
+        return d
 
     def licz(n):  # wołane w trakcie czytania — pasek rusza się także przy jednym wielkim pliku
         bajty[0] += n
@@ -128,6 +141,9 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
                 raise Przerwano(w["sciezka"])
             if w["sciezka"] in gotowe:
                 return w, gotowe[w["sciezka"]]
+            if tylko_w_chmurze(w["sciezka"]):  # otwarcie ściągałoby plik z internetu (albo kończyło się błędem)
+                problemy["chmura"] += 1
+                return w, None
             try:
                 if pelny and w["rozmiar"] >= DUZY_PLIK:
                     with jeden_duzy:  # duże pliki po kolei — odczyt ciągły zamiast skakania po dysku
@@ -142,8 +158,11 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
                 return w, straznik.wykonaj(_odcisk, w["sciezka"], w["sciezka"], w["rozmiar"], pelny, przerwij, licz)
             except Przerwano:
                 raise
-            except OSError:
-                return w, None  # plik zniknął / brak dostępu — pomijamy
+            except OSError as e:  # plik zniknął / brak dostępu — pomijamy, ale widać to w oknie
+                problemy["bledy"] += 1
+                if not problemy["przyklad"]:
+                    problemy["przyklad"] = f"„{os.path.basename(w['sciezka'])}”: {opis_bledu(e)}"
+                return w, None
 
         zatwierdz = Zatwierdzanie(db)
         nowe_do_indeksu: list = []
@@ -207,7 +226,7 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
         db.execute("INSERT OR REPLACE INTO dup_meta VALUES ('ostatnie_szukanie', ?)", (str(time.time()),))
     finally:
         db.commit()
-    return podsumowanie(db)
+    return {**podsumowanie(db), "problemy": opis_problemow()}
 
 
 def szukano(db: sqlite3.Connection) -> bool:
