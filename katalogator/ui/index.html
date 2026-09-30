@@ -423,7 +423,11 @@ button.niebezp{background:linear-gradient(135deg,#dc2626,#b91c1c)!important;box-
 .smieci-w{display:grid;grid-template-columns:18px 44px 1fr auto;gap:10px;align-items:center;padding:5px 12px;font-size:13px;border-top:1px solid var(--lin)}
 .smieci-w img,.smieci-w .ik{width:44px;height:33px;object-fit:cover;border-radius:4px;background:var(--lin);display:grid;place-items:center;font-size:16px}
 .smieci-w .sc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
-@media (max-width:1300px){.tryby button{padding:6px 10px}}
+header>*{flex-shrink:0} header .projekt-btn{flex-shrink:1;min-width:0}
+header .wersja,#biblioteka-btn,.tryby button{white-space:nowrap}
+@media (max-width:1400px){header .wersja{display:none}}
+@media (max-width:1300px){.tryby button{padding:6px 10px} #biblioteka-btn .t{display:none}}
+@media (max-width:1150px){.tryby button .t{display:none} .tryby button{font-size:17px;padding:5px 12px} header h1 .logo-tekst{display:none}}
 </style>
 </head>
 <body>
@@ -432,13 +436,13 @@ button.niebezp{background:linear-gradient(135deg,#dc2626,#b91c1c)!important;box-
 <header>
   <h1><img src="/ui/ikona.png" alt=""><span class="logo-tekst">Katalogator</span></h1><span class="wersja" id="wersja"></span>
   <nav class="tryby" role="tablist" aria-label="Tryb pracy">
-    <button role="tab" data-tryb="porzadkowanie" title="Porządkowanie: kopiuje lub przenosi pliki do uporządkowanej biblioteki (Rok → Miesiąc → Miejsce)">🗂 Porządkowanie</button>
-    <button role="tab" data-tryb="sprzatanie" title="Sprzątanie na miejscu: duplikaty i śmieci w istniejących folderach — bez kopiowania i bez nowego drzewa">🧹 Sprzątanie</button>
-    <button role="tab" data-tryb="przegladarka" id="przegladarka-btn" title="Przeglądarka: zdjęcia z dowolnych dysków na osi czasu i mapie — tylko oglądanie">🔭 Przeglądarka</button>
+    <button role="tab" data-tryb="porzadkowanie" title="Porządkowanie: kopiuje lub przenosi pliki do uporządkowanej biblioteki (Rok → Miesiąc → Miejsce)">🗂<span class="t"> Porządkowanie</span></button>
+    <button role="tab" data-tryb="sprzatanie" title="Sprzątanie na miejscu: duplikaty i śmieci w istniejących folderach — bez kopiowania i bez nowego drzewa">🧹<span class="t"> Sprzątanie</span></button>
+    <button role="tab" data-tryb="przegladarka" id="przegladarka-btn" title="Przeglądarka: zdjęcia z dowolnych dysków na osi czasu i mapie — tylko oglądanie">🔭<span class="t"> Przeglądarka</span></button>
   </nav>
   <button class="projekt-btn" id="projekt-btn" title="Zmień projekt">📁 <span id="projekt-nazwa">…</span> ▾</button>
   <span class="odstep"></span>
-  <button id="biblioteka-btn" class="tylko-porz" title="Przeglądaj bibliotekę: oś czasu i mapa miejsc; także na telefonie">📚 Biblioteka</button>
+  <button id="biblioteka-btn" class="tylko-porz" title="Przeglądaj bibliotekę: oś czasu i mapa miejsc; także na telefonie">📚<span class="t"> Biblioteka</span></button>
   <button id="motyw-btn" title="Motyw: jasny / ciemny" aria-label="Przełącz motyw jasny / ciemny"></button>
   <div style="position:relative">
     <button id="pomoc-btn" title="Pomoc, zgłaszanie problemów, aktualizacje">?</button>
