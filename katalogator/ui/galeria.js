@@ -15,10 +15,14 @@ const g = {widok: "os", lata: [], rok: null, mies: null, pliki: [], razem: 0, ma
            dzien: null, pokaz: null};
 const obszarParam = () => g.obszar ? {lat1: g.obszar[0], lat2: g.obszar[1], lon1: g.obszar[2], lon2: g.obszar[3]} : {};
 
+// na telefonie: który zbiór oglądamy (z pilota: biblioteka / cały projekt / Przeglądarka dysków)
+const Z_TELEFON = !W_PROGRAMIE && ["biblioteka", "wszystko", "przegladarka"].includes(P.get("z")) ? P.get("z") : "";
+if (Z_TELEFON) g.zakres = Z_TELEFON;
+
 function url(sciezka, param = {}) {
   const u = new URLSearchParams(param);
   if (TOKEN) u.set("t", TOKEN);
-  if (W_PROGRAMIE) u.set("z", g.zakres);
+  if (W_PROGRAMIE || Z_TELEFON) u.set("z", g.zakres);
   return sciezka + "?" + u.toString();
 }
 async function api(sciezka, param) {
@@ -401,12 +405,23 @@ if (W_PROGRAMIE) {
   $("tel-zamknij").onclick = () => { $("telefon").hidden = true; };
   $("tel-wylacz").onclick = () => telefon(false);
   ustawZakres();
+  if (P.get("tel") === "1") telefon(true);  // 📱 w nagłówku programu
+}
+if (!W_PROGRAMIE && P.get("pilot")) {  // telefon: powrót do pilota (stan komputera, kolejne kroki)
+  $("zamknij").hidden = false; $("zamknij").textContent = "← Pilot"; $("zamknij").title = "Wróć do pilota";
+  $("zamknij").onclick = () => { location.href = "/"; };
+  document.querySelector("header h1").textContent = {przegladarka: "🔭 Przeglądarka", wszystko: "🗂 Projekt"}[g.zakres] || "📚 Biblioteka";
+}
+function telSterowanie() {
+  const c = $("tel-ster");
+  if (c) return c.checked;
+  try { return localStorage.getItem("katalogator_tel_ster") !== "0"; } catch (e) { return true; }
 }
 async function telefon(wlacz) {
   $("telefon").hidden = false; $("tel-tresc").textContent = wlacz ? "Uruchamiam…" : "Wyłączam…";
   try {
     const r = await fetch(url("/api/telefon"), {method: "POST", headers: {"Content-Type": "application/json", "X-Token": TOKEN},
-                                                 body: JSON.stringify({wlacz, zakres: g.zakres})});
+                                                 body: JSON.stringify({wlacz, zakres: g.zakres, sterowanie: telSterowanie()})});
     const j = await r.json();
     if (!r.ok || j.blad) throw new Error(j.blad || r.statusText);
     if (!j.wlaczone) { $("telefon").hidden = true; return; }
@@ -419,7 +434,13 @@ async function telefon(wlacz) {
       adres zaczyna się od 100.): <span id="tel-inne"></span></li>
       <li>Windows może zapytać o zaporę — zaznacz <b>sieci prywatne</b> i kliknij <b>Zezwalaj</b>.</li>
       <li>Działa, dopóki Katalogator jest otwarty. Na 24/7 — Raspberry Pi (instrukcja w README).</li>
-      <li>Tylko oglądanie — z telefonu nie da się niczego zmienić ani usunąć.</li></ul>`;
+      <li>Na telefonie zobaczysz, co robi program, i uruchomisz kolejne kroki projektu; zdjęcia — tylko do oglądania.</li></ul>
+      <label class="tel-ster"><input type="checkbox" id="tel-ster"> Pozwól sterować z telefonu (uruchamianie kroków, przerywanie)</label>`;
+    $("tel-ster").checked = j.sterowanie !== false;
+    $("tel-ster").onchange = () => {
+      try { localStorage.setItem("katalogator_tel_ster", $("tel-ster").checked ? "1" : "0"); } catch (e) { /* bez pamięci */ }
+      telefon(true);
+    };
     $("tel-tresc").querySelector(".pin").textContent = j.pin;
     $("tel-adr").textContent = adr;
     $("tel-inne").textContent = j.adresy.slice(1).join(", ") || "—";

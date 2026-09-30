@@ -444,6 +444,7 @@ header .wersja,#biblioteka-btn,.tryby button{white-space:nowrap}
   <button class="projekt-btn" id="projekt-btn" title="Zmień projekt">📁 <span id="projekt-nazwa">…</span> ▾</button>
   <span class="odstep"></span>
   <button id="biblioteka-btn" class="tylko-porz" title="Przeglądaj bibliotekę: oś czasu i mapa miejsc; także na telefonie">📚<span class="t"> Biblioteka</span></button>
+  <button id="telefon-btn" title="Telefon jako pilot: co robi program, uruchamianie kolejnych kroków, przeglądanie zdjęć">📱</button>
   <button id="motyw-btn" title="Motyw: jasny / ciemny" aria-label="Przełącz motyw jasny / ciemny"></button>
   <div style="position:relative">
     <button id="pomoc-btn" title="Pomoc, zgłaszanie problemów, aktualizacje">?</button>
@@ -988,6 +989,7 @@ function otworzGalerie(z) {
 // przed porządkowaniem biblioteka bywa pusta
 $("biblioteka-btn").onclick = () => otworzGalerie(stan.wykonanie ? "biblioteka" : "wszystko");
 $("przegladarka-btn").onclick = () => otworzGalerie("przegladarka");
+$("telefon-btn").onclick = () => { otworzGalerie(stan.wykonanie ? "biblioteka" : "wszystko"); $("galeria-ramka").src += "&tel=1"; };
 window.addEventListener("message", e => {
   if (e.data === "zamknij-galerie") zamknijGalerie();
 });

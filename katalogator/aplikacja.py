@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import (__version__, aktualizacje, analiza, duplikaty, dyski, galeria, indeks, logi, planista, projekty, przegladarka,
+from . import (__version__, aktualizacje, analiza, duplikaty, dyski, galeria, indeks, logi, pilot, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, wykonawca)
 from .logi import LOG
 
@@ -66,9 +66,13 @@ class Stan:
             g = self._galerie[klucz] = galeria.Galeria(self.baza, korzenie)
         return g
 
-    def telefon(self, wlacz: bool, zakres: str = "biblioteka") -> dict:
-        """Udostępnienie galerii na telefon (tylko odczyt, PIN) — sieć domowa albo Tailscale."""
+    def telefon(self, wlacz: bool, zakres: str = "biblioteka", sterowanie: bool = True) -> dict:
+        """Telefon (PIN; sieć domowa albo Tailscale): stan pracy, kolejne kroki (gdy `sterowanie`) i galeria."""
         with self.blokada:
+            if self.serwer_tel is not None and wlacz:  # już działa — ten sam PIN, zmieniamy tylko sterowanie
+                self.serwer_tel.pilot.sterowanie = sterowanie
+                s = self.serwer_tel
+                return {"wlaczone": True, "pin": s.pin, "adresy": s.adresy(), "port": s.port, "sterowanie": sterowanie}
             if self.serwer_tel is not None:
                 self.serwer_tel.stop()
                 self.serwer_tel = None
@@ -76,13 +80,15 @@ class Stan:
                 return {"wlaczone": False}
             for port in (8765, 8766, 8767, 0):
                 try:
-                    self.serwer_tel = galeria.SerwerGalerii(self.galeria(zakres), port=port).start()
+                    self.serwer_tel = galeria.SerwerGalerii(self.galeria(zakres), port=port,
+                                                            pilot=pilot.Pilot(self, sterowanie),
+                                                            galerie=self.galeria).start()
                     break
                 except OSError:
                     continue
             s = self.serwer_tel
         LOG.info("Udostępnianie na telefon: %s", s.adresy())
-        return {"wlaczone": True, "pin": s.pin, "adresy": s.adresy(), "port": s.port}
+        return {"wlaczone": True, "pin": s.pin, "adresy": s.adresy(), "port": s.port, "sterowanie": sterowanie}
 
     def _otworz(self, pid: str) -> None:
         self.projekt = self.projekty.wczytaj(pid)
@@ -946,7 +952,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 w = dyski.nowy_folder(str(dane.get("w", "")), str(dane.get("nazwa", "")))
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/telefon":
-                return self._wyslij(stan.telefon(bool(dane.get("wlacz")), str(dane.get("zakres") or "biblioteka")))
+                return self._wyslij(stan.telefon(bool(dane.get("wlacz")), str(dane.get("zakres") or "biblioteka"),
+                                                bool(dane.get("sterowanie", True))))
             if u.path == "/api/skanuj":
                 blad = stan.rozpocznij_skan()
                 return self._wyslij({"blad": blad} if blad else stan.stan(),

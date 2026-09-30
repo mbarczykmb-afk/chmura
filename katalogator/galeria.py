@@ -687,10 +687,16 @@ def adresy_ip() -> list[str]:
 
 
 class SerwerGalerii:
-    """HTTP tylko do odczytu na wszystkich interfejsach; dostęp po PIN-ie (token w przeglądarce telefonu)."""
+    """HTTP na wszystkich interfejsach; dostęp po PIN-ie (token w przeglądarce telefonu). Galeria tylko do odczytu;
+    z `pilot` (program na komputerze) telefon widzi też stan pracy i może uruchamiać kolejne kroki."""
 
-    def __init__(self, galeria: Galeria, port: int = 8765, pin: str | None = None, host: str = "0.0.0.0"):
+    ZAKRESY = ("biblioteka", "wszystko", "przegladarka")
+
+    def __init__(self, galeria: Galeria, port: int = 8765, pin: str | None = None, host: str = "0.0.0.0",
+                 pilot=None, galerie=None):
         self.galeria = galeria
+        self.pilot = pilot        # pilot.Pilot — stan i sterowanie programem
+        self.galerie = galerie    # zakres -> Galeria (telefon wybiera: biblioteka / wszystko / przeglądarka)
         self.pin = pin or f"{secrets.randbelow(10**6):06d}"
         self.tokeny: set[str] = set()
         self.nieudane: dict[str, list[float]] = {}
@@ -738,6 +744,8 @@ class SerwerGalerii:
             def do_GET(self):
                 u = urlparse(self.path)
                 q = parse_qs(u.query)
+                if u.path == "/" and s.pilot is not None:
+                    return self._wyslij((UI / "pilot.html").read_bytes(), "text/html; charset=utf-8")
                 if u.path in ("/", "/galeria"):
                     return self._wyslij((UI / "galeria.html").read_bytes(), "text/html; charset=utf-8")
                 if u.path.startswith("/ui/"):
@@ -745,8 +753,14 @@ class SerwerGalerii:
                     return self._wyslij(*p) if p else self._wyslij(None)
                 if not self._ok(q):
                     return self._wyslij({"blad": "Podaj PIN"}, kod=HTTPStatus.UNAUTHORIZED)
+                if u.path == "/api/pilot":
+                    return self._wyslij(s.pilot.status() if s.pilot else None)
+                g = s.galeria
+                z = q.get("z", [""])[0]
+                if s.galerie is not None and z in s.ZAKRESY:
+                    g = s.galerie(z)
                 try:
-                    w = obsluz_api(s.galeria, u.path, q)
+                    w = obsluz_api(g, u.path, q)
                 except Exception as e:  # pragma: no cover - nie wywracamy serwera
                     return self._wyslij({"blad": str(e)}, kod=HTTPStatus.INTERNAL_SERVER_ERROR)
                 if w is None:
@@ -757,6 +771,22 @@ class SerwerGalerii:
 
             def do_POST(self):
                 u = urlparse(self.path)
+                if u.path.startswith("/api/pilot/") and s.pilot is not None:
+                    if not self._ok(parse_qs(u.query)):
+                        return self._wyslij({"blad": "Podaj PIN"}, kod=HTTPStatus.UNAUTHORIZED)
+                    try:
+                        n = int(self.headers.get("Content-Length") or 0)
+                        dane = json.loads(self.rfile.read(min(n, 10000)) or b"{}")
+                        dane = dane if isinstance(dane, dict) else {}
+                    except ValueError:
+                        dane = {}
+                    try:
+                        blad = s.pilot.akcja(u.path.rsplit("/", 1)[1], dane)
+                    except Exception as e:  # pragma: no cover - nie wywracamy serwera
+                        blad = str(e)
+                    if blad:
+                        return self._wyslij({"blad": blad}, kod=HTTPStatus.BAD_REQUEST)
+                    return self._wyslij(s.pilot.status())
                 if u.path != "/api/g/zaloguj":
                     return self._wyslij(None)
                 ip = self.client_address[0]

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#060a15">
+<title>Katalogator — pilot</title>
+<link rel="icon" href="/ui/ikona.png">
+<style>
+:root{--bg:#f4f6fb;--karta:#fff;--fg:#0f172a;--mut:#5b6b86;--lin:#e1e7f0;--akc:#4f46e5;--grad:linear-gradient(135deg,#2563eb,#7c3aed);--ok:#059669;--blad:#dc2626;--ostr:#b45309}
+@media (prefers-color-scheme:dark){:root{--bg:#060a15;--karta:#0d1426;--fg:#e7ecf7;--mut:#8a97b4;--lin:#1c2742;--akc:#7c83ff;--ok:#34d399;--blad:#f87171;--ostr:#fbbf24}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:0 14px calc(24px + env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;gap:10px;padding:14px 0 10px;position:sticky;top:0;background:var(--bg);z-index:5}
+header img{width:30px;height:30px}
+header h1{font-size:18px;margin:0;flex:1}
+header .wer{color:var(--mut);font-size:12px}
+.karta{background:var(--karta);border:1px solid var(--lin);border-radius:16px;padding:14px;margin:10px 0}
+.karta h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 8px;font-weight:600}
+select,button{font:inherit;color:inherit;border-radius:12px;border:1px solid var(--lin);background:var(--karta);padding:10px 12px}
+select{width:100%;font-weight:600}
+button{cursor:pointer;min-height:44px}
+button.gl{background:var(--grad);color:#fff;border:0;font-weight:600}
+button:disabled{opacity:.45;cursor:default}
+.mut{color:var(--mut);font-size:13px}
+.pasek{height:10px;border-radius:999px;background:var(--lin);overflow:hidden;margin:10px 0 6px}
+.pasek i{display:block;height:100%;background:var(--grad);width:0;transition:width .6s}
+.pasek.nieokr i{width:35%;animation:jedz 1.3s ease-in-out infinite}
+@keyframes jedz{0%{margin-left:-35%}100%{margin-left:100%}}
+.teraz-t{font-size:17px;font-weight:700}
+.teraz .dol{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.krok{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--lin)}
+.krok:first-of-type{border-top:0}
+.krok .ik{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:var(--lin);font-size:14px}
+.krok.zrob .ik{background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok)}
+.krok.nast .ik{background:var(--grad);color:#fff}
+.krok.trwa .ik{background:var(--akc);color:#fff}
+.krok .t{font-weight:600}
+.krok .o{color:var(--mut);font-size:12.5px;word-break:break-word}
+.krok button{min-height:40px;padding:8px 12px;font-size:14px}
+.kom{font-size:13px;padding:6px 0;border-top:1px solid var(--lin)}
+.kom:first-of-type{border-top:0}
+.kom.bl{color:var(--blad)}
+.siatka{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.siatka a{display:flex;flex-direction:column;gap:2px;text-decoration:none;color:inherit;border:1px solid var(--lin);border-radius:12px;padding:12px;background:var(--bg)}
+.siatka a b{font-size:15px}
+.siatka a span{color:var(--mut);font-size:12px}
+.uwaga{font-size:13px;color:var(--ostr)}
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;max-width:92%;box-shadow:0 6px 24px rgba(0,0,0,.3);z-index:20}
+#login{position:fixed;inset:0;background:var(--bg);z-index:30;display:grid;place-items:center;padding:20px}
+#login form{max-width:320px;width:100%;text-align:center}
+#login input{font:inherit;font-size:26px;letter-spacing:6px;text-align:center;width:100%;padding:10px;border:1px solid var(--lin);border-radius:12px;background:var(--karta);color:var(--fg);margin:14px 0}
+#login button{width:100%}
+#login .bl{color:var(--blad);min-height:20px;margin-top:8px}
+#brak{color:var(--blad);font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <img src="/ui/ikona.png" alt="">
+  <h1>Katalogator</h1>
+  <span class="wer" id="wer"></span>
+</header>
+<div id="brak" hidden>Brak połączenia z komputerem — czy Katalogator jest otwarty?</div>
+
+<section class="karta">
+  <h2>Projekt</h2>
+  <select id="projekt" aria-label="Projekt"></select>
+  <div class="mut" id="foldery" style="margin-top:8px"></div>
+</section>
+
+<section class="karta teraz" id="teraz">
+  <h2>Teraz na komputerze</h2>
+  <div class="teraz-t" id="teraz-t">…</div>
+  <div class="pasek" id="teraz-pasek" hidden><i></i></div>
+  <div class="dol"><span class="mut" id="teraz-o"></span>
+    <button id="przerwij" hidden>⏹ Przerwij</button></div>
+</section>
+
+<section class="karta">
+  <h2>Kroki</h2>
+  <div id="kroki"></div>
+  <div class="uwaga" id="bez-sterowania" hidden>Sterowanie z telefonu jest wyłączone — tylko podgląd.
+    Włączysz je na komputerze: 📚 Biblioteka → 📱 Na telefon.</div>
+  <div class="mut" style="margin-top:8px">Decyzje (które duplikaty zostawić, dokumenty, drzewo folderów) podejmujesz na komputerze —
+    tu uruchamiasz kolejne kroki i widzisz postęp.</div>
+</section>
+
+<section class="karta" id="ostatnie-k" hidden>
+  <h2>Ostatnio</h2>
+  <div id="ostatnie"></div>
+</section>
+
+<section class="karta">
+  <h2>Przeglądaj</h2>
+  <div class="siatka">
+    <a href="/galeria?z=biblioteka&pilot=1"><b>📚 Biblioteka</b><span>uporządkowane zdjęcia</span></a>
+    <a href="/galeria?z=wszystko&pilot=1"><b>🗂 Cały projekt</b><span>wszystko ze skanu</span></a>
+    <a href="/galeria?z=przegladarka&pilot=1" style="grid-column:1/-1"><b>🔭 Przeglądarka dysków</b><span id="prz-o">oś czasu i mapa z dowolnych dysków</span></a>
+  </div>
+  <button id="prz-skanuj" style="width:100%;margin-top:8px">⟳ Odśwież Przeglądarkę (skanuj dyski)</button>
+</section>
+
+<div id="toast" hidden></div>
+
+<div id="login" hidden>
+  <form id="login-form">
+    <div style="font-size:44px">📱</div>
+    <h2 style="margin:6px 0">Katalogator — pilot</h2>
+    <div class="mut">Podaj PIN widoczny na komputerze (📚 Biblioteka → 📱 Na telefon).</div>
+    <input id="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="PIN">
+    <button type="submit" class="gl">Połącz</button>
+    <div class="bl" id="login-blad"></div>
+  </form>
+</div>
+<script src="/ui/pilot.js"></script>
+</body>
+</html>

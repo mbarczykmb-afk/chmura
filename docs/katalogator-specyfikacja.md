@@ -346,6 +346,10 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     z dysku jest raz (przez sieć to największy koszt); zmieniony plik czytany od nowa; pliki z .json/.xmp obok
     zawsze świeżo; pliki, których już nie ma, znikają z indeksu przy skanie. Indeks to tylko pamięć podręczna —
     jego błąd = zwykły odczyt. Projekty nadal mają własne bazy (decyzje, plany, odłożenia są osobne).
+36. **Pilot na telefonie 1.12** ✅: serwer telefonu (PIN, sieć domowa / Tailscale) pod `/` pokazuje pilota
+    (`ui/pilot.html`, `katalogator/pilot.py`): stan bieżącego zadania, kroki projektu (następny wyróżniony) z
+    uruchamianiem, Przerwij, przełączanie projektu, skan Przeglądarki; galeria z wyborem zakresu (`?z=`). Kroki
+    zmieniające pliki wymagają potwierdzenia; sterowanie można wyłączyć (tylko podgląd). Decyzje — na komputerze.
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.
