@@ -45,15 +45,19 @@ $("login-form").onsubmit = async e => {
 };
 
 // ---------- oś czasu ----------
-async function wczytajLata() {
+async function wczytajLata(tylkoLiczby = false) {
   const r = await api("/api/g/lata");
   g.lata = r.lata;
   $("licznik").textContent = `${r.razem.toLocaleString("pl-PL")} zdjęć i filmów · z miejscem: ${r.z_gps.toLocaleString("pl-PL")}`;
+  rysujWykres();
+  if (tylkoLiczby && g.rok && g.lata.some(x => x.rok === g.rok)) { oznaczWykres(); return; }  // skan w toku
   const l = $("lata"); l.replaceChildren();
   if (!g.lata.length) {
     $("siatka").innerHTML = `<div class="pusto">${W_PROGRAMIE && g.zakres === "biblioteka"
       ? "Biblioteka jest jeszcze pusta — uporządkuj pliki albo wybierz „Wszystko w projekcie”."
-      : "Brak zdjęć z datą."}</div>`;
+      : g.zakres === "przegladarka"
+        ? "Dodaj dysk lub folder (＋) i kliknij „Skanuj”. Przeglądarka tylko czyta — niczego nie zmienia ani nie przenosi."
+        : "Brak zdjęć z datą."}</div>`;
     $("miesiace").replaceChildren(); return;
   }
   for (const rok of g.lata) {
@@ -64,7 +68,7 @@ async function wczytajLata() {
   }
   wybierzRok(g.lata.some(x => x.rok === g.rok) ? g.rok : g.lata[0].rok);
 }
-function wybierzRok(rok) {
+function wybierzRok(rok, mies = null) {
   g.rok = rok;
   document.querySelectorAll("#lata button").forEach(b => b.classList.toggle("akt", b.dataset.rok === rok));
   const r = g.lata.find(x => x.rok === rok);
@@ -75,13 +79,71 @@ function wybierzRok(rok) {
     const b = document.createElement("button"); b.innerHTML = `${MIESIACE[x.m - 1] || "?"}<small>${x.n}</small>`;
     b.dataset.m = x.m; b.onclick = () => wybierzMiesiac(x.m); m.append(b);
   }
-  wybierzMiesiac(null);
+  wybierzMiesiac(mies);
   document.querySelector(`#lata button[data-rok="${rok}"]`)?.scrollIntoView({inline: "nearest", block: "nearest"});
 }
 async function wybierzMiesiac(mies) {
   g.mies = mies; g.pliki = [];
   document.querySelectorAll("#miesiace button").forEach(b => b.classList.toggle("akt", b.dataset.m === String(mies || "")));
+  oznaczWykres();
   await wczytajPliki();
+}
+
+// ---------- wykres: liczba zdjęć w każdym miesiącu (ciągła oś czasu, klik = miesiąc) ----------
+function rysujWykres() {
+  const w = $("wykres"); w.replaceChildren();
+  const ile = new Map(); let min = Infinity, max = -Infinity, maks = 0;
+  for (const r of g.lata) for (const m of r.miesiace) {
+    if (!(m.m >= 1 && m.m <= 12)) continue;
+    const k = +r.rok * 12 + m.m - 1; ile.set(k, m.n);
+    min = Math.min(min, k); max = Math.max(max, k); maks = Math.max(maks, m.n);
+  }
+  w.hidden = !ile.size || g.widok !== "os";
+  if (!ile.size) return;
+  const tor = document.createElement("div"); tor.className = "w-tor";
+  for (let rok = Math.floor(min / 12); rok <= Math.floor(max / 12); rok++) {
+    const kol = document.createElement("div"); kol.className = "w-rok"; kol.dataset.rok = rok;
+    const sl = document.createElement("div"); sl.className = "w-slupki";
+    for (let m = 1; m <= 12; m++) {
+      const n = ile.get(rok * 12 + m - 1) || 0;
+      const b = document.createElement("button"); b.className = "w-s"; b.dataset.m = m; b.disabled = !n;
+      b.setAttribute("aria-label", `${MIESIACE[m - 1]} ${rok}: ${n} zdjęć i filmów`);
+      const i = document.createElement("i"); i.style.height = n ? `max(3px, ${(n / maks * 100).toFixed(1)}%)` : "0";
+      b.append(i);
+      const pokaz = () => tip(b, n, `${MIESIACE[m - 1]} ${rok}`);
+      b.onpointerenter = pokaz; b.onfocus = pokaz; b.onpointerleave = b.onblur = () => tip(null);
+      if (n) b.onclick = () => { if (g.rok !== String(rok)) wybierzRok(String(rok), m); else wybierzMiesiac(m); };
+      sl.append(b);
+    }
+    const et = document.createElement("button"); et.className = "w-et"; et.textContent = rok;
+    const suma = (g.lata.find(x => x.rok === String(rok)) || {}).n || 0;
+    et.title = `${rok}: ${suma.toLocaleString("pl-PL")} — pokaż cały rok`;
+    et.disabled = !suma; if (suma) et.onclick = () => wybierzRok(String(rok));
+    kol.append(sl, et); tor.append(kol);
+  }
+  const mx = document.createElement("div"); mx.className = "w-max";
+  mx.textContent = `najwięcej: ${maks.toLocaleString("pl-PL")} w miesiącu`;
+  w.append(tor, mx);
+  oznaczWykres();
+}
+function oznaczWykres() {
+  document.querySelectorAll("#wykres .w-rok").forEach(k => {
+    const ten = k.dataset.rok === String(g.rok);
+    k.classList.toggle("akt", ten);
+    k.querySelectorAll(".w-s").forEach(s => s.classList.toggle("akt", ten && g.mies === +s.dataset.m));
+    if (ten) k.scrollIntoView({inline: "nearest", block: "nearest"});
+  });
+}
+function tip(el, n, opis) {
+  const t = $("w-tip");
+  if (!el) { t.hidden = true; return; }
+  t.replaceChildren();
+  const b = document.createElement("b"); b.textContent = n.toLocaleString("pl-PL");
+  const s = document.createElement("span"); s.textContent = opis;
+  t.append(b, s); t.hidden = false;
+  const r = el.getBoundingClientRect(), tr = t.getBoundingClientRect();
+  t.style.left = Math.max(6, Math.min(innerWidth - tr.width - 6, r.left + r.width / 2 - tr.width / 2)) + "px";
+  t.style.top = Math.max(6, r.top - tr.height - 8) + "px";
 }
 async function wczytajPliki(wiecej = false) {
   const r = await api("/api/g/pliki", {rok: g.rok, miesiac: g.mies || 0, od: wiecej ? g.pliki.length : 0, ile: 200});
@@ -216,7 +278,8 @@ async function pelnyZPinezki(id, film) {
 function widok(w) {
   g.widok = w;
   $("w-os").classList.toggle("akt", w === "os"); $("w-mapa").classList.toggle("akt", w === "mapa");
-  $("os").hidden = w !== "os"; $("lata").hidden = w !== "os"; $("miesiace").hidden = w !== "os";
+  $("os").hidden = w !== "os"; $("lata").hidden = w !== "os"; $("miesiace").hidden = w !== "os"; tip(null);
+  $("wykres").hidden = w !== "os" || !$("wykres").childElementCount;
   $("mapa").hidden = w !== "mapa"; $("mapa-info").hidden = w !== "mapa";
   if (w === "mapa") pokazMape().catch(e => info(e.message));
 }
@@ -227,11 +290,12 @@ $("w-mapa").onclick = () => widok("mapa");
 if (W_PROGRAMIE) {
   $("zakres").hidden = false; $("na-telefon").hidden = false; $("zamknij").hidden = false;
   g.zakres = P.get("z") || "biblioteka"; $("zakres").value = g.zakres;
-  $("zakres").onchange = () => { g.zakres = $("zakres").value; g.punkty = null; start(); };
+  $("zakres").onchange = () => { g.zakres = $("zakres").value; g.punkty = null; g.rok = null; ustawZakres(); start(); };
   $("zamknij").onclick = () => window.parent.postMessage("zamknij-galerie", "*");
   $("na-telefon").onclick = () => telefon(true);
   $("tel-zamknij").onclick = () => { $("telefon").hidden = true; };
   $("tel-wylacz").onclick = () => telefon(false);
+  ustawZakres();
 }
 async function telefon(wlacz) {
   $("telefon").hidden = false; $("tel-tresc").textContent = wlacz ? "Uruchamiam…" : "Wyłączam…";
@@ -256,6 +320,105 @@ async function telefon(wlacz) {
     $("tel-inne").textContent = j.adresy.slice(1).join(", ") || "—";
   } catch (e) { $("tel-tresc").textContent = e.message; }
 }
+
+// ---------- przeglądarka dysków: wybrane dyski tylko skanowane i oglądane ----------
+async function post(sciezka, dane) {
+  const r = await fetch(url(sciezka), {method: "POST", headers: {"Content-Type": "application/json", "X-Token": TOKEN},
+                                       body: JSON.stringify(dane || {})});
+  const j = await r.json();
+  if (!r.ok || j.blad) throw new Error(j.blad || r.statusText);
+  return j;
+}
+const prz = {foldery: [], trwa: false, zegar: null, licz: 0};
+function ustawZakres() {
+  const p = g.zakres === "przegladarka";
+  $("prz").hidden = !p;
+  document.querySelector("header h1").textContent = p ? "🔭 Przeglądarka" : "📚 Biblioteka";
+  document.title = (p ? "Przeglądarka" : "Biblioteka") + " — Katalogator";
+  if (p) odswiezPrz();
+}
+function rysujPrz(s) {
+  prz.foldery = s.foldery; prz.trwa = s.trwa;
+  const f = $("prz-foldery"); f.replaceChildren();
+  for (const sc of s.foldery) {
+    const c = document.createElement("span"); c.className = "prz-f"; c.title = sc;
+    const n = document.createElement("span"); n.textContent = "\u200E📁 " + sc;
+    const x = document.createElement("button"); x.textContent = "✕"; x.title = "Usuń z przeglądarki (pliki zostają na dysku)";
+    x.onclick = async () => { rysujPrz(await post("/api/przegladarka/foldery", {foldery: prz.foldery.filter(y => y !== sc)})); g.punkty = null; start(); };
+    c.append(n, x); f.append(c);
+  }
+  $("prz-skanuj").disabled = s.trwa || !s.foldery.length;
+  $("prz-przerwij").hidden = !s.trwa;
+  const pasek = $("prz-pasek"); pasek.hidden = !s.trwa;
+  if (s.trwa) {
+    const u = s.wszystkie ? Math.min(1, s.zrobione / s.wszystkie) : null;
+    pasek.firstChild.style.width = u === null ? "15%" : (u * 100).toFixed(1) + "%";
+    $("prz-stan").textContent = [s.komunikat, s.etap, s.wszystkie ? `${s.zrobione.toLocaleString("pl-PL")} / ${s.wszystkie.toLocaleString("pl-PL")}`
+      : s.zrobione ? s.zrobione.toLocaleString("pl-PL") + " plików" : "", s.eta ? `zostało ok. ${Math.ceil(s.eta / 60)} min` : "",
+      s.czeka || ""].filter(Boolean).join(" · ");
+  } else {
+    $("prz-stan").textContent = s.blad ? "Błąd: " + s.blad : (s.komunikat || (s.foldery.length ? "Kliknij „Skanuj”, żeby wczytać zdjęcia." : ""));
+  }
+}
+async function odswiezPrz() {
+  try {
+    const s = await api("/api/przegladarka");
+    const bylo = prz.trwa; rysujPrz(s);
+    if (s.trwa) {
+      if (++prz.licz % 4 === 0) wczytajLata(true).catch(() => {});  // zdjęcia pojawiają się w trakcie skanu
+      clearTimeout(prz.zegar); prz.zegar = setTimeout(odswiezPrz, 1000);
+    } else if (bylo) { g.punkty = null; start(); }
+  } catch (e) { $("prz-stan").textContent = e.message; }
+}
+$("prz-skanuj").onclick = async () => {
+  try { rysujPrz(await post("/api/przegladarka/skanuj")); odswiezPrz(); } catch (e) { $("prz-stan").textContent = e.message; }
+};
+$("prz-przerwij").onclick = () => post("/api/przegladarka/przerwij").catch(() => {});
+// wybór dysku / folderu
+const wyb = {sciezka: null};
+async function pokazWybor(sciezka) {
+  wyb.sciezka = sciezka;
+  const l = $("wyb-lista"); l.replaceChildren(); $("wyb-ok").disabled = !sciezka;
+  $("wyb-sciezka").textContent = sciezka || "Dyski";
+  $("wyb-gora").disabled = !sciezka;
+  try {
+    if (!sciezka) {
+      const r = await api("/api/dyski");
+      for (const d of r.dyski) {
+        const b = document.createElement("button");
+        b.textContent = `${d.siec ? "🌐" : "💽"} ${d.sciezka}${d.etykieta ? " — " + d.etykieta : ""}`;
+        b.disabled = d.dostepny === false; b.onclick = () => pokazWybor(d.sciezka); l.append(b);
+      }
+    } else {
+      const r = await api("/api/foldery", {sciezka});
+      if (r.blad) l.textContent = r.blad;
+      for (const f of r.foldery || []) {
+        const b = document.createElement("button"); const p = f.sciezka || f;
+        b.textContent = "📁 " + (f.nazwa || String(p).split(/[\\/]/).filter(Boolean).pop());
+        b.onclick = () => pokazWybor(p); l.append(b);
+      }
+      if (!(r.foldery || []).length && !r.blad) l.innerHTML = '<div class="info" style="padding:10px">Brak podfolderów — możesz wybrać ten folder.</div>';
+    }
+  } catch (e) { l.textContent = e.message; }
+}
+$("prz-dodaj").onclick = () => { $("wybierz").hidden = false; pokazWybor(null); };
+$("wyb-anuluj").onclick = () => { $("wybierz").hidden = true; };
+$("wyb-gora").onclick = () => {  // folder wyżej; z katalogu głównego dysku — lista dysków
+  const s = (wyb.sciezka || "").replace(/[\\/]+$/, "");
+  if (!s || /^[A-Za-z]:$/.test(s)) { pokazWybor(null); return; }
+  const i = Math.max(s.lastIndexOf("\\"), s.lastIndexOf("/"));
+  let nad = i < 0 ? null : i === 0 ? "/" : s.slice(0, i);
+  if (nad && /^[A-Za-z]:$/.test(nad)) nad += "\\";
+  if (nad && /^\\\\[^\\]*$/.test(nad)) nad = null;  // \\serwer — wracamy do dysków
+  pokazWybor(nad);
+};
+$("wyb-ok").onclick = async () => {
+  $("wybierz").hidden = true;
+  try {
+    rysujPrz(await post("/api/przegladarka/foldery", {foldery: [...prz.foldery, wyb.sciezka]}));
+    $("prz-skanuj").click();  // od razu wczytaj
+  } catch (e) { $("prz-stan").textContent = e.message; }
+};
 
 async function start() {
   try { await wczytajLata(); if (g.widok === "mapa") await pokazMape(); }

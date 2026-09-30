@@ -413,6 +413,7 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
   <h1><img src="/ui/ikona.png" alt=""><span class="logo-tekst">Katalogator</span></h1><span class="wersja" id="wersja"></span>
   <button class="projekt-btn" id="projekt-btn" title="Zmień projekt">📁 <span id="projekt-nazwa">…</span> ▾</button>
   <span class="odstep"></span>
+  <button id="przegladarka-btn" title="Oglądaj zdjęcia z dowolnych dysków na osi czasu i mapie — tylko odczyt, niezależnie od porządkowania">🔭 Przeglądarka</button>
   <button id="biblioteka-btn" title="Przeglądaj bibliotekę: oś czasu i mapa miejsc; także na telefonie">📚 Biblioteka</button>
   <button id="motyw-btn" title="Motyw: jasny / ciemny" aria-label="Przełącz motyw jasny / ciemny"></button>
   <div style="position:relative">
@@ -917,11 +918,13 @@ window.addEventListener("focus", () => { gotoweWTle = false; if (!stan.biezace) 
 $("pz-przerwij").onclick = () => api("/api/przerwij", {});
 
 // ---------- przeglądarka biblioteki (oś czasu + mapa) ----------
-$("biblioteka-btn").onclick = () => {
-  const z = stan.wykonanie ? "biblioteka" : "wszystko";  // przed porządkowaniem biblioteka bywa pusta
+function otworzGalerie(z) {
   $("galeria-ramka").src = `/galeria?t=${encodeURIComponent(TOKEN)}&app=1&z=${z}`;
   $("galeria-nakladka").hidden = false;
-};
+}
+// przed porządkowaniem biblioteka bywa pusta
+$("biblioteka-btn").onclick = () => otworzGalerie(stan.wykonanie ? "biblioteka" : "wszystko");
+$("przegladarka-btn").onclick = () => otworzGalerie("przegladarka");
 window.addEventListener("message", e => {
   if (e.data === "zamknij-galerie") { $("galeria-nakladka").hidden = true; $("galeria-ramka").src = "about:blank"; }
 });

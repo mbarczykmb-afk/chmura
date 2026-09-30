@@ -150,6 +150,10 @@ folderu („2004 Zakopane”), a na końcu „w domu”.
    - *📱 Na telefon*: kod QR + PIN — telefon w tej samej sieci Wi-Fi (albo z Tailscale — z każdego miejsca)
      ogląda bibliotekę w przeglądarce, tylko do odczytu; działa, dopóki Katalogator jest otwarty.
 
+10. **🔭 Przeglądarka** (przycisk u góry) — zwykła przeglądarka zdjęć, niezależna od porządkowania: *＋ Dysk lub
+    folder* → wybierz dyski/foldery → *Skanuj* (tylko odczyt, nic nie jest zmieniane). Zdjęcia z nich zobaczysz na
+    osi czasu z wykresem (słupek = miesiąc, kliknij, żeby go otworzyć) i na mapie; działa też *Na telefon*.
+
 Projekty (ustawienia, bazy, dziennik): `%LOCALAPPDATA%\Katalogator\projekty\`. Program działa lokalnie
 (127.0.0.1); do internetu łączy się tylko mapa (kafelki map OpenStreetMap — bez żadnych danych o zdjęciach)
 i sprawdzanie aktualizacji. Udostępnianie na telefon włączasz sam i wyłączasz jednym przyciskiem. Zamknięcie okna w trakcie zadania nie przerywa pracy —

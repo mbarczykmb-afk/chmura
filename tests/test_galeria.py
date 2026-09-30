@@ -109,3 +109,32 @@ def test_pusty_zakres_to_pusta_biblioteka(biblioteka):
     tmp, db, cel = biblioteka
     assert galeria.Galeria(tmp / "k.db", lambda: []).lata()["razem"] == 0
     assert galeria.Galeria(tmp / "k.db", lambda: None).lata()["razem"] == 3
+
+
+def test_przegladarka_dyskow(tmp_path):
+    """Przeglądarka: wybrane foldery tylko skanowane (osobna baza), oś czasu i mapa; usunięty z listy znika."""
+    import time
+    from katalogator import przegladarka
+    a, b = tmp_path / "dyskA", tmp_path / "dyskB"
+    a.mkdir(); b.mkdir()
+    _jpg_z_exif(a / "IMG_1.jpg", data="2021:05:01 10:00:00", gps=HEL)
+    _jpg_z_exif(b / "IMG_2.jpg", data="2019:02:01 10:00:00", gps=None)
+    przed = {p: p.stat().st_mtime for p in tmp_path.rglob("*.jpg")}
+    p = przegladarka.Przegladarka(tmp_path / "dane")
+    assert p.skanuj() == "Najpierw dodaj dysk albo folder."
+    assert p.ustaw_foldery([str(a), str(b), str(a)]) == sorted([str(a), str(b)], key=len)
+    assert p.skanuj() is None
+    for _ in range(200):
+        if not p.opis()["trwa"]:
+            break
+        time.sleep(0.05)
+    s = p.opis()
+    assert not s["trwa"] and s["komunikat"].startswith("Gotowe") and not s["blad"]
+    l = p.galeria.lata()
+    assert [(x["rok"], x["n"]) for x in l["lata"]] == [("2021", 1), ("2019", 1)] and l["z_gps"] == 1
+    assert len(p.galeria.mapa()["punkty"]) == 1
+    p.ustaw_foldery([str(a)])  # dysk B usunięty z przeglądarki — jego zdjęcia znikają z osi czasu
+    assert [x["rok"] for x in p.galeria.lata()["lata"]] == ["2021"]
+    assert {q: q.stat().st_mtime for q in tmp_path.rglob("*.jpg")} == przed  # nic nie zmienione
+    # projekt porządkowania nie jest dotknięty
+    assert not list((tmp_path / "dane").glob("projekty"))

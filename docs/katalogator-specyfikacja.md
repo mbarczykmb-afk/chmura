@@ -281,6 +281,15 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
       stan „już jest” z miejscem kopii z dziennika wykonania; „Uporządkuj pliki…” jest aktywne także, gdy zostały
       tylko oryginały do usunięcia (wcześniej przycisk był wyłączony — „nic się nie działo”); podsumowanie
       propozycji pokazuje „Oryginały do usunięcia”; kafelki galerii na starszych telefonach (bez aspect-ratio)
+29. **Wykres na osi czasu i Przeglądarka dysków 1.8** ✅:
+    - **wykres słupkowy** nad osią czasu (Biblioteka i Przeglądarka): słupek = liczba zdjęć i filmów w miesiącu,
+      ciągła oś lat (puste miesiące widać jako przerwy), podpisy lat pod wykresem (klik = cały rok), klik w słupek
+      = ten miesiąc, dymek z liczbą po najechaniu / fokusie, wybrany rok wyróżniony, wybrany miesiąc z obwódką;
+      skala liniowa od zera, „najwięcej: N w miesiącu”; na telefonie niższy i przewijany w poziomie;
+    - **🔭 Przeglądarka** (przycisk w nagłówku): dowolne dyski i foldery (okno wyboru: dyski → podfoldery) są tylko
+      skanowane — nic nie jest zmieniane — do osobnej bazy (`%LOCALAPPDATA%\Katalogator\przegladarka\`),
+      niezależnej od projektów; oś czasu z wykresem, mapa, podgląd, „Na telefon”; postęp i czas do końca,
+      *Przerwij*, zdjęcia pojawiają się już w trakcie skanu; usunięcie folderu z listy chowa jego zdjęcia
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

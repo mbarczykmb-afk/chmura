@@ -20,8 +20,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import (__version__, aktualizacje, analiza, duplikaty, dyski, galeria, logi, planista, projekty, przychodzace,
-               raport, kategorie, skaner, stabilnosc, wykonawca)
+from . import (__version__, aktualizacje, analiza, duplikaty, dyski, galeria, logi, planista, projekty, przegladarka,
+               przychodzace, raport, kategorie, skaner, stabilnosc, wykonawca)
 from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
@@ -47,12 +47,15 @@ class Stan:
         self._licze_podsumowania = threading.Lock()
         self.tempa: dict[str, stabilnosc.Tempo] = {}
         self._galerie: dict = {}
+        self.przegladarka = przegladarka.Przegladarka(katalog)  # dyski do oglądania, osobna baza
         self.serwer_tel = None
         pid = self.projekty.ostatni() or self.projekty.nowy("Mój projekt")
         self._otworz(pid)
 
     def galeria(self, zakres: str = "biblioteka") -> "galeria.Galeria":
         """Przeglądarka biblioteki: „biblioteka” = miejsce docelowe, „wszystko” = całe dane projektu."""
+        if zakres == "przegladarka":  # dowolne dyski, niezależnie od projektu
+            return self.przegladarka.galeria
         klucz = (str(self.baza), zakres)
         g = self._galerie.get(klucz)
         if g is None:
@@ -846,6 +849,8 @@ def _handler(stan: Stan, token: str, zamknij):
                       "kat": kat.get(w["id"])} for w in g] for g in wycinek]})
             if u.path == "/api/nieostre":
                 return self._wyslij({"pliki": stan.z_db(analiza.najmniej_ostre, min(_int(q, "ile", 120), 500))})
+            if u.path == "/api/przegladarka":
+                return self._wyslij(stan.przegladarka.opis())
             if u.path == "/api/dyski":
                 return self._wyslij({"dyski": dyski.lista_dyskow()})
             if u.path == "/api/foldery":
@@ -1002,6 +1007,16 @@ def _handler(stan: Stan, token: str, zamknij):
                     return self._wyslij({"blad": "Poczekaj, aż skończy się bieżące zadanie."}, kod=HTTPStatus.BAD_REQUEST)
                 w = stan.z_db(edycja[u.path])
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/przegladarka/foldery":
+                stan.przegladarka.ustaw_foldery([str(f) for f in dane.get("foldery") or []])
+                return self._wyslij(stan.przegladarka.opis())
+            if u.path == "/api/przegladarka/skanuj":
+                blad = stan.przegladarka.skanuj()
+                return self._wyslij({"blad": blad} if blad else stan.przegladarka.opis(),
+                                    kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
+            if u.path == "/api/przegladarka/przerwij":
+                stan.przegladarka.przerwij.set()
+                return self._wyslij({"ok": True})
             if u.path == "/api/przerwij":
                 stan.przerwij.set()
                 return self._wyslij({"ok": True})

@@ -75,6 +75,41 @@ main{flex:1;min-height:0;position:relative}
   #siatka{grid-template-columns:repeat(auto-fill,minmax(105px,1fr));padding:8px;gap:6px}
   .k .op{display:none}
 }
+
+/* --- wykres: ile zdjęć w każdym miesiącu (klik = ten miesiąc) --- */
+.wykres{flex:none;position:relative;border-bottom:1px solid var(--lin);padding:10px 14px 0;background:linear-gradient(180deg,color-mix(in srgb,var(--akc) 5%,transparent),transparent)}
+#wykres:not([hidden]) ~ #lata{display:none}  /* lata są podpisane pod wykresem */
+.w-tor{display:flex;gap:10px;overflow-x:auto;scrollbar-width:thin;padding-bottom:2px}
+.w-rok{flex:1 0 auto;min-width:84px;display:flex;flex-direction:column}
+.w-slupki{height:88px;display:flex;align-items:flex-end;gap:2px;border-bottom:1px solid color-mix(in srgb,var(--mut) 45%,transparent)}
+.w-s{flex:1 1 0;min-width:5px;height:100%;padding:0;border:0;border-radius:0;background:none;display:flex;align-items:flex-end;cursor:pointer}
+.w-s:disabled{cursor:default}
+.w-s i{display:block;width:100%;border-radius:3px 3px 0 0;background:color-mix(in srgb,var(--akc) 45%,transparent);transition:background .15s,height .35s ease}
+.w-rok.akt .w-s i{background:var(--akc)}
+.w-s:hover:not(:disabled) i,.w-s:focus-visible i{background:color-mix(in srgb,var(--akc) 75%,var(--fg))}
+.w-s.akt i{background:var(--akc);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--akc)}
+.w-s:focus-visible{outline:none}
+.w-et{border:0;background:none;padding:3px 0 6px;font-size:11.5px;color:var(--mut);font-variant-numeric:tabular-nums;text-align:left;border-radius:4px}
+.w-rok.akt .w-et{color:var(--fg);font-weight:700}
+.w-max{position:absolute;right:16px;top:6px;font-size:11px;color:var(--mut);pointer-events:none;background:var(--bg);padding:0 4px;border-radius:4px}
+#w-tip{position:fixed;z-index:4000;pointer-events:none;background:var(--panel);color:var(--fg);border:1px solid var(--lin);border-radius:8px;padding:6px 10px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.25);white-space:nowrap}
+#w-tip b{display:block;font-size:15px}
+#w-tip span{color:var(--mut)}
+/* --- przeglądarka dysków --- */
+.prz{flex:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--lin);background:var(--panel)}
+.prz-f{display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 10px;border:1px solid var(--lin);border-radius:999px;background:var(--bg);font-size:13px;max-width:320px}
+.prz-f span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.prz-f button{border:0;padding:0 6px;background:none;color:var(--mut)} .prz-f button:hover{color:var(--blad)}
+.prz .info{flex:1;min-width:160px}
+.prz-pasek{flex-basis:100%;height:4px;border-radius:4px;background:var(--lin);overflow:hidden}
+.prz-pasek i{display:block;height:100%;background:var(--akc);transition:width .5s}
+#wybierz{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2600;display:grid;place-items:center;padding:16px}
+#wybierz .okno{background:var(--bg);border-radius:14px;padding:18px;width:min(560px,100%);height:min(560px,90vh);display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+#wyb-sciezka{font-size:13px;color:var(--mut);word-break:break-all}
+#wyb-lista{flex:1;overflow:auto;border:1px solid var(--lin);border-radius:10px;padding:4px}
+#wyb-lista button{display:block;width:100%;text-align:left;border:0;border-radius:6px;padding:7px 10px;background:none}
+#wyb-lista button:hover{background:var(--akc-miekki)}
+@media (max-width:600px){.w-slupki{height:64px}.w-rok{min-width:72px}}
 </style>
 </head>
 <body>
@@ -87,10 +122,20 @@ main{flex:1;min-height:0;position:relative}
   <select id="zakres" hidden title="Które zdjęcia pokazać">
     <option value="biblioteka">Biblioteka (miejsce docelowe)</option>
     <option value="wszystko">Wszystko w projekcie</option>
+    <option value="przegladarka">🔭 Przeglądarka dysków</option>
   </select>
   <button id="na-telefon" hidden title="Oglądaj bibliotekę na telefonie (sieć domowa / Tailscale)">📱 Na telefon</button>
   <button id="zamknij" hidden title="Wróć do porządkowania">✕</button>
 </header>
+<div class="prz" id="prz" hidden>
+  <span id="prz-foldery" style="display:contents"></span>
+  <button id="prz-dodaj" title="Dodaj dysk lub folder do przeglądania">＋ Dysk lub folder</button>
+  <button id="prz-skanuj" class="akt" title="Tylko czyta: nic nie jest zmieniane ani przenoszone">⟳ Skanuj</button>
+  <button id="prz-przerwij" hidden>Przerwij</button>
+  <span class="info" id="prz-stan"></span>
+  <div class="prz-pasek" id="prz-pasek" hidden><i></i></div>
+</div>
+<div class="wykres" id="wykres" hidden></div>
 <div class="chipy" id="lata"></div>
 <div class="chipy" id="miesiace"></div>
 <main>
@@ -116,6 +161,19 @@ main{flex:1;min-height:0;position:relative}
     <button type="submit">Otwórz</button>
     <div class="bl" id="login-blad"></div>
   </form>
+</div>
+
+<div id="w-tip" hidden></div>
+<div id="wybierz" hidden>
+  <div class="okno">
+    <h2 style="margin:0">Dodaj dysk lub folder</h2>
+    <div id="wyb-sciezka">Dyski</div>
+    <div id="wyb-lista"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button id="wyb-gora">⬆ W górę</button><span style="flex:1"></span>
+      <button id="wyb-anuluj">Anuluj</button><button id="wyb-ok" class="akt" disabled>Wybierz ten folder</button>
+    </div>
+  </div>
 </div>
 
 <div id="telefon" hidden>
