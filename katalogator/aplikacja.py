@@ -21,7 +21,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, aktualizacje, analiza, duplikaty, dyski, galeria, logi, planista, projekty, przegladarka,
-               przychodzace, raport, kategorie, skaner, stabilnosc, wykonawca)
+               przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, wykonawca)
 from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
@@ -92,7 +92,8 @@ class Stan:
                      "blad": ""}
         self.dup = {"trwa": False, "etap": "", "zrobione": 0, "wszystkie": 0, "bajty": 0, "bajty_razem": 0,
                     "komunikat": "", "blad": ""}
-        self.zad = {n: self._pusty() for n in ("analiza", "plan", "wykonanie", "przychodzace", "aktualizacja")}
+        self.zad = {n: self._pusty() for n in ("analiza", "plan", "wykonanie", "przychodzace", "aktualizacja",
+                                               "usuwanie")}
         self.miniatury: dict[int, bytes] = {}
         self.projekty.ustaw_ostatni(pid)
         self.wersja_danych += 1
@@ -105,6 +106,36 @@ class Stan:
         except ValueError as e:
             return str(e)
         return None
+
+    def przelacz_tryb(self, tryb: str) -> str | None:
+        """Porządkowanie ↔ Sprzątanie: otwiera ostatni projekt danego rodzaju (albo zakłada nowy)."""
+        if tryb not in ("porzadkowanie", "sprzatanie"):
+            return "Nieznany tryb."
+        if self.projekt.get("typ", "porzadkowanie") == tryb:
+            return None
+        pid = next((p["id"] for p in self.projekty.lista() if p.get("typ", "porzadkowanie") == tryb), None)
+        if pid is None:
+            pid = self.projekty.nowy("Sprzątanie dysku" if tryb == "sprzatanie" else "Mój projekt", {"typ": tryb})
+        blad = self.otworz_projekt(pid)
+        if not blad:
+            self.projekty.ustaw_ostatni(pid)
+        return blad
+
+    def usun_odlozone(self, kategorie_: list[str] | None, puste: bool) -> str | None:
+        korzenie = [z["sciezka"] for z in self.ustawienia["zrodla"]]
+
+        def f(db, postep, przerwij):
+            w = sprzatanie.usun_odlozone(db, korzenie, kategorie_, postep, przerwij)
+            k = f"Usunięto na stałe {w['usuniete']} plików ({raport.rozmiar_txt(w['bajty'])})."
+            if puste:
+                n = sprzatanie.usun_puste_foldery(korzenie)
+                k += f" Usunięto pustych folderów: {n}." if n else ""
+            if w["bledy"]:
+                k += f" Nie udało się usunąć: {len(w['bledy'])} (np. {w['bledy'][0]})."
+            return k
+        wynik = self.uruchom("usuwanie", f)
+        self.przegladarka.zglos_zmiany()
+        return wynik
 
     def zmien_projekt(self, dane: dict) -> dict:
         pid = dane.get("id") or self.pid
@@ -178,7 +209,7 @@ class Stan:
             zad = {k: dict(v) for k, v in self.zad.items()}
         dane = {"wersja": __version__, "windows": dyski.WINDOWS, "sep": os.sep, **self.ustawienia, "skan": skan,
                 "projekt": {k: self.projekt.get(k) for k in ("id", "nazwa", "notatki", "przychodzace", "dom",
-                                                             "harmonogram")},
+                                                             "harmonogram", "typ")},
                 "dup": dup, "zad": zad, "ma_wyniki": ma, "duplikaty": None, "do_cofniecia": None,
                 "analiza": None, "plan": None, "wykonanie": None, "przychodzace": None}
         dane["biezace"] = self._biezace(skan, dup, zad)
@@ -239,7 +270,8 @@ class Stan:
 
     NAZWY_ZADAN = {"skan": "Skanowanie", "dup": "Szukanie duplikatów", "analiza": "Analiza zdjęć",
                    "plan": "Tworzenie propozycji", "wykonanie": "Porządkowanie plików",
-                   "przychodzace": "Folder przychodzący", "aktualizacja": "Aktualizacja"}
+                   "przychodzace": "Folder przychodzący", "aktualizacja": "Aktualizacja",
+                   "usuwanie": "Usuwanie odłożonych plików"}
 
     def _biezace(self, skan: dict, dup: dict, zad: dict) -> dict | None:
         """Jedno trwające zadanie w jednolitej postaci — dla paska postępu u góry okna."""
@@ -328,7 +360,7 @@ class Stan:
                 self.wersja_danych += 1
             self.dziennik(nazwa, komunikat + (" " + blad if blad else ""))
             LOG.info("Zadanie „%s”: %s %s", nazwa, komunikat, blad)
-            if nazwa in ("wykonanie", "cofanie", "przychodzace"):
+            if nazwa in ("wykonanie", "cofanie", "przychodzace", "usuwanie"):
                 self.przegladarka.zglos_zmiany()  # pliki zmieniły miejsce — Przeglądarka odświeży się sama
 
         threading.Thread(target=praca, daemon=True).start()
@@ -851,6 +883,10 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij({"razem": len(grupy), "grupy": [
                     [{**{k: w[k] for k in ("id", "sciezka", "wzgledna", "mtime", "rozmiar", "szer", "wys", "ostrosc")},
                       "kat": kat.get(w["id"])} for w in g] for g in wycinek]})
+            if u.path == "/api/smieci":
+                return self._wyslij({"pliki": stan.z_db(sprzatanie.lista_smieci)})
+            if u.path == "/api/odlozone":
+                return self._wyslij(sprzatanie.odlozone([z["sciezka"] for z in stan.ustawienia["zrodla"]]))
             if u.path == "/api/nieostre":
                 return self._wyslij({"pliki": stan.z_db(analiza.najmniej_ostre, min(_int(q, "ile", 120), 500))})
             if u.path == "/api/przegladarka":
@@ -934,8 +970,19 @@ def _handler(stan: Stan, token: str, zamknij):
                 blad = proste[u.path]()
                 return self._wyslij({"blad": blad} if blad else stan.stan(),
                                     kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
+            if u.path == "/api/tryb":
+                blad = stan.przelacz_tryb(str(dane.get("tryb", "")))
+                return self._wyslij({"blad": blad} if blad else stan.stan(),
+                                    kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
+            if u.path == "/api/odlozone/usun":
+                kat = dane.get("kategorie")
+                blad = stan.usun_odlozone([str(k) for k in kat] if isinstance(kat, list) else None,
+                                          bool(dane.get("puste", True)))
+                return self._wyslij({"blad": blad} if blad else stan.stan(),
+                                    kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
             if u.path == "/api/projekty/nowy":
-                pid = stan.projekty.nowy(str(dane.get("nazwa", "")))
+                pid = stan.projekty.nowy(str(dane.get("nazwa", "")),
+                                         {"typ": "sprzatanie" if dane.get("typ") == "sprzatanie" else "porzadkowanie"})
                 blad = stan.otworz_projekt(pid)
                 return self._wyslij({"blad": blad} if blad else stan.stan(),
                                     kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
@@ -1011,7 +1058,8 @@ def _handler(stan: Stan, token: str, zamknij):
                     **kategorie.zapisz(db, {int(k): str(v) for k, v in (dane.get("wybor") or {}).items()}),
                     "plan": planista.zastosuj_kategorie(db)},
                 "/api/odloz": lambda db: duplikaty.odloz(db, [int(i) for i in dane.get("ids") or []],
-                                                         "podobne" if dane.get("typ") == "podobne" else "nieostre"),
+                                                         dane.get("typ") if dane.get("typ") in ("podobne", "smieci")
+                                                         else "nieostre"),
             }
             if u.path in edycja:
                 if u.path == "/api/odloz" and stan.zajety():

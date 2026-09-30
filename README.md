@@ -150,6 +150,11 @@ folderu („2004 Zakopane”), a na końcu „w domu”.
    - *📱 Na telefon*: kod QR + PIN — telefon w tej samej sieci Wi-Fi (albo z Tailscale — z każdego miejsca)
      ogląda bibliotekę w przeglądarce, tylko do odczytu; działa, dopóki Katalogator jest otwarty.
 
+11. **🧹 Sprzątanie** (przełącznik trybów u góry: 🗂 Porządkowanie | 🧹 Sprzątanie | 🔭 Przeglądarka) — porządki
+    **na miejscu**, bez kopiowania i bez nowego drzewa: zaznacz foldery → *Skanuj* → *Szukaj duplikatów* →
+    zakładki **Duplikaty** i **🗑 Śmieci** (puste, tymczasowe, skróty, ikony, miniatury) → *Odłóż* (do `Odłożone`,
+    można cofnąć) → sekcja **Usuwanie** → *Usuń na stałe…* (tylko to, co odłożone; na My Cloud nie ma Kosza).
+
 10. **🔭 Przeglądarka** (przycisk u góry) — zwykła przeglądarka zdjęć, niezależna od porządkowania: *＋ Dysk lub
     folder* → wybierz dyski/foldery → *Skanuj* (tylko odczyt, nic nie jest zmieniane). Zdjęcia z nich zobaczysz na
     osi czasu z wykresem (słupek = miesiąc, kliknij, żeby go otworzyć) i na mapie; działa też *Na telefon*.

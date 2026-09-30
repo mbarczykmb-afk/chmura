@@ -68,7 +68,9 @@ async function rysujListeProjektow() {
   const l = $("lista-proj"); l.replaceChildren();
   for (const p of r.projekty) {
     const k = document.createElement("div"); k.className = "proj" + (p.id === r.biezacy ? " akt" : "");
-    const nz = document.createElement("div"); nz.className = "nz"; nz.textContent = p.nazwa;
+    const nz = document.createElement("div"); nz.className = "nz";
+    nz.textContent = (p.typ === "sprzatanie" ? "🧹 " : "🗂 ") + p.nazwa;
+    nz.title = p.typ === "sprzatanie" ? "Sprzątanie dysku" : "Porządkowanie";
     const s = p.statystyki || {};
     const inf = document.createElement("div"); inf.className = "inf";
     inf.textContent = [p.ostatnio ? "ostatnio " + czasPL(p.ostatnio) : "", s.pliki ? `${s.pliki} plików, ${rozmiar(s.rozmiar)}` : "bez skanu",
@@ -107,7 +109,7 @@ $("okno-proj").onclick = e => { if (e.target === $("okno-proj")) $("okno-proj").
 $("nowy-proj-ok").onclick = async () => {
   const n = $("nowy-proj").value.trim();
   if (!n) { $("nowy-proj").focus(); return; }
-  try { stan = await api("/api/projekty/nowy", {nazwa: n}); $("nowy-proj").value = ""; $("okno-proj").hidden = true; rysuj(); toast("Utworzono projekt: " + n); }
+  try { stan = await api("/api/projekty/nowy", {nazwa: n, typ: sprzatanie() ? "sprzatanie" : "porzadkowanie"}); $("nowy-proj").value = ""; $("okno-proj").hidden = true; rysuj(); toast("Utworzono projekt: " + n); }
   catch (e) { toast(e.message); }
 };
 $("nowy-proj").onkeydown = e => { if (e.key === "Enter") $("nowy-proj-ok").click(); };

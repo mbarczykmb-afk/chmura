@@ -404,6 +404,26 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
 .toast{font-size:14px;padding:12px 18px;border-left:4px solid var(--ok)}
 .oryg{display:flex;gap:8px;align-items:flex-start;margin:8px 0;padding:8px 10px;border-radius:10px;background:var(--akc-miekki);font-size:13px}
 .oryg input{margin-top:3px}
+
+/* --- tryby pracy: Porządkowanie / Sprzątanie / Przeglądarka --- */
+.tryby{display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:var(--hover);border:1px solid var(--lin);margin-left:8px}
+.tryby button{border:0;background:none;border-radius:9px;padding:6px 14px;font-weight:600;color:var(--mut);white-space:nowrap}
+.tryby button:hover:not(.akt){color:var(--fg);background:color-mix(in srgb,var(--akc) 8%,transparent)}
+.tryby button.akt{background:var(--grad);color:#fff;box-shadow:var(--poswiata)}
+body:not(.tryb-sprzatanie) .tylko-sprz{display:none!important}
+body.tryb-sprzatanie .tylko-porz{display:none!important}
+body.tryb-sprzatanie .legenda,body.tryb-sprzatanie .drzewo-nagl .p,body.tryb-sprzatanie .wezel-w input.p,
+body.tryb-sprzatanie #zrodla .tryb{display:none!important}
+button.niebezp{background:linear-gradient(135deg,#dc2626,#b91c1c)!important;box-shadow:0 4px 14px rgba(220,38,38,.3)!important}
+.odl{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--lin);border-radius:10px;background:var(--bg);font-size:13px}
+.odl span{flex:1}
+.smieci-gr{border:1px solid var(--lin);border-radius:12px;background:var(--bg)}
+.smieci-gr summary{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;font-weight:600}
+.smieci-gr summary .info{margin-left:auto;font-weight:400}
+.smieci-w{display:grid;grid-template-columns:18px 44px 1fr auto;gap:10px;align-items:center;padding:5px 12px;font-size:13px;border-top:1px solid var(--lin)}
+.smieci-w img,.smieci-w .ik{width:44px;height:33px;object-fit:cover;border-radius:4px;background:var(--lin);display:grid;place-items:center;font-size:16px}
+.smieci-w .sc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+@media (max-width:1300px){.tryby button{padding:6px 10px}}
 </style>
 </head>
 <body>
@@ -411,10 +431,14 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
   <div class="start-dol"><div class="start-pasek"><i></i></div>Uruchamianie…</div></div>
 <header>
   <h1><img src="/ui/ikona.png" alt=""><span class="logo-tekst">Katalogator</span></h1><span class="wersja" id="wersja"></span>
+  <nav class="tryby" role="tablist" aria-label="Tryb pracy">
+    <button role="tab" data-tryb="porzadkowanie" title="Porządkowanie: kopiuje lub przenosi pliki do uporządkowanej biblioteki (Rok → Miesiąc → Miejsce)">🗂 Porządkowanie</button>
+    <button role="tab" data-tryb="sprzatanie" title="Sprzątanie na miejscu: duplikaty i śmieci w istniejących folderach — bez kopiowania i bez nowego drzewa">🧹 Sprzątanie</button>
+    <button role="tab" data-tryb="przegladarka" id="przegladarka-btn" title="Przeglądarka: zdjęcia z dowolnych dysków na osi czasu i mapie — tylko oglądanie">🔭 Przeglądarka</button>
+  </nav>
   <button class="projekt-btn" id="projekt-btn" title="Zmień projekt">📁 <span id="projekt-nazwa">…</span> ▾</button>
   <span class="odstep"></span>
-  <button id="przegladarka-btn" title="Oglądaj zdjęcia z dowolnych dysków na osi czasu i mapie — tylko odczyt, niezależnie od porządkowania">🔭 Przeglądarka</button>
-  <button id="biblioteka-btn" title="Przeglądaj bibliotekę: oś czasu i mapa miejsc; także na telefonie">📚 Biblioteka</button>
+  <button id="biblioteka-btn" class="tylko-porz" title="Przeglądaj bibliotekę: oś czasu i mapa miejsc; także na telefonie">📚 Biblioteka</button>
   <button id="motyw-btn" title="Motyw: jasny / ciemny" aria-label="Przełącz motyw jasny / ciemny"></button>
   <div style="position:relative">
     <button id="pomoc-btn" title="Pomoc, zgłaszanie problemów, aktualizacje">?</button>
@@ -466,8 +490,9 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
     </section>
 
     <section>
-      <h2>Co porządkujemy?</h2>
-      <p class="opis">Rozwiń dysk i zaznacz ✓ przy folderze, co zrobić z jego plikami.
+      <h2 id="zrodla-tytul">Co porządkujemy?</h2>
+      <p class="opis"><span class="tylko-porz">Rozwiń dysk i zaznacz ✓ przy folderze, co zrobić z jego plikami.</span>
+        <span class="tylko-sprz">Rozwiń dysk i zaznacz ✓ foldery do posprzątania — pliki zostają na swoich miejscach.</span>
         Zaznaczony folder obejmuje wszystkie swoje podfoldery.</p>
       <div class="legenda"><span><b class="k">K — Kopiuj</b>: oryginały zostają</span>
         <span><b class="p">P — Przenieś</b>: po sprawdzeniu kopii oryginały znikają ze źródła</span></div>
@@ -482,7 +507,7 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
       </details>
     </section>
 
-    <section>
+    <section class="tylko-porz">
       <h2>Dokąd?</h2>
       <p class="opis">Miejsce docelowe. Jeśli są tam już pliki, też je przeskanuję, żeby pokazać wynikowe drzewo.</p>
       <div class="lista" id="cel"></div>
@@ -541,7 +566,7 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
       <div class="podsum" id="podsum-analiza" hidden></div>
     </section>
 
-    <section>
+    <section class="tylko-porz">
       <h2>Propozycja i porządkowanie</h2>
       <p class="opis">Układa pliki według zasad: <i>Zdjęcia z 2023 → Marzec w Olkuszu</i>, muzyka wg wykonawców
         i albumów, pozostałe z dotychczasowymi nazwami folderów. Najpierw możesz wszystko poprawić w zakładce
@@ -555,7 +580,7 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
       </div>
     </section>
 
-    <section>
+    <section class="tylko-porz">
       <h2>Nowe pliki (folder przychodzący)</h2>
       <p class="opis">Np. folder, do którego zrzucasz zdjęcia z telefonu. Nowe pliki zostaną <b>przeniesione</b>
         do biblioteki (<i>Dokąd?</i>) według tych samych zasad. Pliki z niepewną datą zostają do ręcznego przejrzenia.</p>
@@ -578,6 +603,17 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
       </div>
       <p class="opis" id="przych-harm-opis" style="margin-top:6px"></p>
     </section>
+
+    <section class="tylko-sprz">
+      <h2>Usuwanie</h2>
+      <p class="opis">Odłożone pliki czekają w folderze <code>Odłożone</code> w każdym sprzątanym folderze — możesz je
+        jeszcze obejrzeć albo przywrócić (<i>Cofnij</i> w Duplikatach). Tu usuniesz je <b>na stałe</b>.</p>
+      <div class="lista" id="odl-lista"><div class="pusto">Nic jeszcze nie odłożono.</div></div>
+      <label class="opis" style="display:flex;gap:6px;align-items:center;margin:4px 0 10px">
+        <input type="checkbox" id="odl-puste" checked> Usuń też puste foldery (zostają same wybrane foldery)</label>
+      <button class="glowny niebezp" id="odl-usun" disabled title="Usuwa na stałe zaznaczone rodzaje odłożonych plików">🗑 Usuń na stałe…</button>
+      <div id="zad-usuwanie"></div>
+    </section>
   </div>
 
   <section class="raport">
@@ -585,10 +621,11 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
       <div class="zakladki">
         <button class="zakladka akt" id="tab-raport">Raport</button>
         <button class="zakladka" id="tab-dup">Duplikaty<span class="licz" id="licz-dup" hidden></span></button>
-        <button class="zakladka" id="tab-dok">Dokumenty<span class="licz" id="licz-dok" hidden></span></button>
+        <button class="zakladka tylko-sprz" id="tab-smieci" title="Puste pliki, pliki tymczasowe, skróty, ikony i miniatury">🗑 Śmieci<span class="licz" id="licz-smieci" hidden></span></button>
+        <button class="zakladka tylko-porz" id="tab-dok">Dokumenty<span class="licz" id="licz-dok" hidden></span></button>
         <button class="zakladka" id="tab-pod">Podobne<span class="licz" id="licz-pod" hidden></span></button>
-        <button class="zakladka" id="tab-inne" title="Obrazy, które chyba nie są zdjęciami z aparatu — zdecyduj, co z nimi zrobić">Nie z aparatu<span class="licz" id="licz-inne" hidden></span></button>
-        <button class="zakladka glowna" id="tab-drzewo" title="Wynikowe drzewo folderów — tu sprawdzasz i poprawiasz, zanim cokolwiek zostanie przeniesione">🌳 Drzewo<span class="licz" id="licz-drzewo" hidden></span></button>
+        <button class="zakladka tylko-porz" id="tab-inne" title="Obrazy, które chyba nie są zdjęciami z aparatu — zdecyduj, co z nimi zrobić">Nie z aparatu<span class="licz" id="licz-inne" hidden></span></button>
+        <button class="zakladka glowna tylko-porz" id="tab-drzewo" title="Wynikowe drzewo folderów — tu sprawdzasz i poprawiasz, zanim cokolwiek zostanie przeniesione">🌳 Drzewo<span class="licz" id="licz-drzewo" hidden></span></button>
       </div>
       <button class="maly" id="odswiez" hidden>Odśwież</button>
     </div>
@@ -656,6 +693,17 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
       </div>
       <div class="siatka" id="dok-siatka"></div>
       <div class="stopka"><span id="dok-stopka"></span><button class="glowny" id="dok-zapisz" title="Zapisuje propozycję programu (przerywana ramka) dla zdjęć jeszcze bez decyzji (można cofnąć)">Zatwierdź propozycje</button></div>
+    </div>
+    <div id="widok-smieci" class="widok" hidden>
+      <div class="filtry">
+        <span class="info" style="margin-left:0;flex:1">Pliki, które wyglądają na <b>śmieci</b>: puste, tymczasowe
+          i niedokończone pobrania, skróty, ikony, miniatury i pamięć podręczna. Zdjęcia z aparatu (EXIF, GPS) nigdy tu nie trafiają.
+          Zaznacz i kliknij <b>Odłóż</b> — trafią do <b>Odłożone/Śmieci</b> (można cofnąć).</span>
+        <button class="maly" id="smieci-wsz">Zaznacz wszystko</button>
+        <button class="maly" id="smieci-zadne">Odznacz</button>
+      </div>
+      <div class="lista-dup" id="smieci-lista"></div>
+      <div class="stopka"><span id="smieci-stopka"></span><button class="glowny" id="smieci-odloz" disabled>Odłóż zaznaczone</button></div>
     </div>
     <div id="widok-inne" class="widok" hidden>
       <div class="filtry">
@@ -1158,7 +1206,7 @@ function kopie(n) { const d = n % 10, s = n % 100; return (d >= 2 && d <= 4 && (
 function data(mtime) { return new Date(mtime * 1000).toLocaleDateString("pl-PL"); }
 
 const ZAKLADKI = {raport: "widok-raport", dup: "widok-dup", drzewo: "widok-drzewo", dok: "widok-dok", pod: "widok-pod",
-                  inne: "widok-inne"};
+                  inne: "widok-inne", smieci: "widok-smieci"};
 const przyPokazaniu = {};   // zakładka -> funkcja wywoływana przy wejściu
 const naStan = [];          // funkcje wywoływane po każdym odświeżeniu stanu
 function pokazZakladke(z) {
@@ -1361,6 +1409,7 @@ function rysujDup() {
 <script src="/ui/analiza.js"></script>
 <script src="/ui/projekt.js"></script>
 <script src="/ui/przewodnik.js"></script>
+<script src="/ui/sprzatanie.js"></script>
 <script src="/ui/pomoc.js"></script>
 </body>
 </html>

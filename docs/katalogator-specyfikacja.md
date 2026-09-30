@@ -328,6 +328,18 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
       porządkowaniu / odłożeniu / cofnięciu odświeża się sama; w pasku informacja, gdy Katalogator pracuje;
     - plik chwilowo otwarty (WinError 32/33: film w Przeglądarce, antywirus) — porządkowanie czeka i ponawia;
     - „Otwórz w programie” tylko dla zdjęć i filmów; miniatury na dysku do ~1,5 GB (najdawniej używane usuwane)
+34. **Tryb Sprzątanie 1.10** ✅: przełącznik trybów na górze okna — **🗂 Porządkowanie | 🧹 Sprzątanie |
+    🔭 Przeglądarka** (Przeglądarka otwiera się nad bieżącym trybem, ✕ wraca). Sprzątanie to osobny rodzaj projektu
+    (lista projektów: 🗂 / 🧹; przełączenie otwiera ostatni projekt danego rodzaju albo zakłada „Sprzątanie dysku”):
+    - kroki: 1 Foldery (bez K/P i bez „Dokąd?”) → 2 Skan → 3 Duplikaty i śmieci → 4 Usuwanie;
+    - zakładki: Raport, Duplikaty, **🗑 Śmieci** (nowa: puste pliki, tymczasowe i niedokończone pobrania, skróty,
+      ikony, miniatury i pamięć podręczna — pogrupowane wg powodu, z miniaturami; zdjęcia z EXIF/GPS nigdy),
+      Podobne/Nieostre; bez Dokumentów, „Nie z aparatu” i Drzewa;
+    - wszystko najpierw **odkładane** na miejscu do `<folder>/Odłożone/{Duplikaty,Śmieci,Podobne,Nieostre}`
+      (Cofnij); sekcja **Usuwanie** pokazuje, co tam czeka (liczba i rozmiar, wybór kategorii — Podobne/Nieostre
+      domyślnie odznaczone) i **usuwa na stałe** po potwierdzeniu (bez Kosza na dysku sieciowym), opcjonalnie
+      z pustymi folderami (tylko w wybranych folderach, nigdy same wybrane foldery); usuwać można wyłącznie
+      z folderów `Odłożone` — nigdzie indziej
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

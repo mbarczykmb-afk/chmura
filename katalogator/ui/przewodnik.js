@@ -2,7 +2,8 @@
 "use strict";
 
 // ---------- 1. lewa kolumna jako przewodnik ----------
-const PRZEW_KLUCZE = ["projekt", "zrodla", "cel", "skan", "dup", "analiza", "plan", "przych"];
+const PRZEW_KLUCZE = ["projekt", "zrodla", "cel", "skan", "dup", "analiza", "plan", "przych", "usun"];
+const sprzatanie = () => !!(stan && stan.projekt && stan.projekt.typ === "sprzatanie");
 const przew = {sekcje: {}, krok: null, reczne: new Map()};
 
 (function budujPrzewodnik() {
@@ -31,6 +32,12 @@ function krokBiezacy() {
   if (stan.skan && stan.skan.trwa) return ["skan"];
   if (stan.dup && stan.dup.trwa) return ["dup"];
   if (z.analiza && z.analiza.trwa) return ["analiza"];
+  if (z.usuwanie && z.usuwanie.trwa) return ["usun"];
+  if (sprzatanie()) {  // Sprzątanie: foldery → skan → duplikaty i śmieci → usuwanie
+    if (!stan.zrodla || !stan.zrodla.length) return ["zrodla"];
+    if (!stan.ma_wyniki) return ["skan"];
+    return ["dup", "usun"];
+  }
   if (!stan.zrodla || !stan.zrodla.length || !stan.cel) return ["zrodla", "cel"];
   if (!stan.ma_wyniki) return ["skan"];
   if (!stan.plan) return ["dup", "analiza", "plan"];
@@ -44,7 +51,7 @@ function streszczenia() {
   const s = stan, o = {};
   o.projekt = $("proj-postep-opis") ? $("proj-postep-opis").textContent : "";
   o.zrodla = s.zrodla && s.zrodla.length
-    ? "✓ " + s.zrodla.map(z => `${nazwaFolderu(z.sciezka)} (${z.tryb === "przenies" ? "P" : "K"})`).join(", ")
+    ? "✓ " + s.zrodla.map(z => nazwaFolderu(z.sciezka) + (sprzatanie() ? "" : ` (${z.tryb === "przenies" ? "P" : "K"})`)).join(", ")
     : "Nie wybrano folderów";
   o.cel = s.cel ? "✓ " + nazwaFolderu(s.cel) : "Nie wybrano miejsca docelowego";
   o.skan = s.skan && s.skan.trwa ? "⏳ Trwa skanowanie…" :
@@ -60,6 +67,8 @@ function streszczenia() {
   o.plan = p ? (p.zrobione ? `✓ Uporządkowano ${liczba(p.zrobione)} plików` + (zostalo ? ` · zostało ${liczba(zostalo)}` : "")
                            : `✓ Propozycja: ${liczba(zostalo)} plików do uporządkowania`)
              : "Propozycja jeszcze nie utworzona";
+  const odl = window.odlozoneStan;
+  o.usun = odl && odl.plikow ? `${liczba(odl.plikow)} odłożonych · ${rozmiar(odl.bajty)} do usunięcia` : "Nic nie odłożono";
   const pr = (s.projekt && s.projekt.przychodzace) || [];
   o.przych = pr.length ? `${pr.length} folder(y) przychodzące` + (s.projekt.harmonogram ? " · codziennie automatycznie" : "")
                        : "Opcjonalnie — np. zrzuty z telefonu";
@@ -87,11 +96,15 @@ function otworzSekcje(klucze) {
   const s = przew.sekcje[klucze[0]];
   if (s) s.scrollIntoView({behavior: "smooth", block: "start"});
 }
-$("k1").classList.add("klik"); $("k1").onclick = () => otworzSekcje(["zrodla", "cel"]);
+$("k1").classList.add("klik"); $("k1").onclick = () => otworzSekcje(sprzatanie() ? ["zrodla"] : ["zrodla", "cel"]);
 $("k2").classList.add("klik"); $("k2").onclick = () => { otworzSekcje(["skan", "dup", "analiza"]); pokazZakladke("raport"); };
 {
-  const stary3 = $("k3").onclick;
-  $("k3").onclick = e => { otworzSekcje(["plan"]); if (stary3) stary3(e); };
+  const stary3 = $("k3").onclick, stary4 = $("k4").onclick;
+  $("k3").onclick = e => {
+    if (sprzatanie()) { otworzSekcje(["dup"]); pokazZakladke("dup"); return; }
+    otworzSekcje(["plan"]); if (stary3) stary3(e);
+  };
+  $("k4").onclick = e => { if (sprzatanie()) { otworzSekcje(["usun"]); return; } if (stary4) stary4(e); };
 }
 
 // ---------- 2. przeglądanie z klawiatury ----------

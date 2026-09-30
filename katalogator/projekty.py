@@ -19,7 +19,8 @@ import unicodedata
 from pathlib import Path
 
 DOMYSLNE = {"nazwa": "Mój projekt", "notatki": "", "zrodla": [], "cel": "", "przychodzace": [],
-            "dom": "", "harmonogram": ""}
+            "dom": "", "harmonogram": "",
+            "typ": "porzadkowanie"}  # „sprzatanie” — duplikaty i śmieci na miejscu, bez kopiowania i drzewa
 
 SCHEMAT_DZIENNIKA = """
 CREATE TABLE IF NOT EXISTS dziennik (czas REAL NOT NULL, typ TEXT NOT NULL, opis TEXT NOT NULL);
