@@ -212,6 +212,10 @@ function pokazPowitanie() {
     <div class="pw-hero" aria-hidden="true"></div>
     <h2>👋 Witaj w Katalogatorze</h2>
     <p class="opis">Uporządkuję zdjęcia, filmy, muzykę i pliki. <b>Nic nie przeniosę bez Twojej zgody</b> — najpierw pokażę propozycję.</p>
+    <p class="opis">U góry wybierasz tryb: <b>🗂 Porządkowanie</b> (kroki poniżej — nowa, uporządkowana biblioteka),
+      <b>🧹 Sprzątanie</b> (duplikaty i śmieci w istniejących folderach, bez kopiowania) albo <b>🔭 Przeglądarka</b>
+      (zdjęcia z dowolnych dysków na osi czasu i mapie). Każdy plik czytam z dysku raz — wszystkie tryby
+      korzystają z tego samego indeksu.</p>
     <div class="pw-kroki">
       <div><span>1</span><b>📁 Wybierz foldery</b>Zaznacz <b>K</b> (kopiuj — oryginały zostają) albo <b>P</b> (przenieś) i wskaż, dokąd.</div>
       <div><span>2</span><b>🔍 Skanuj</b>Tylko odczyt. Zobaczysz raport: ile zdjęć, z jakich lat, ile z miejscem (GPS).</div>

@@ -17,6 +17,7 @@ import sqlite3
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+from . import indeks
 from .skaner import Przerwano, Zatwierdzanie
 
 BLOK = 1 << 20
@@ -110,9 +111,15 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
         razem[0] = sum(w["rozmiar"] if pelny else min(w["rozmiar"], 2 * BLOK) for w in wiersze)
         zglos(etap, 0, len(wiersze))
 
+        # wspólny indeks: odcisk policzony wcześniej (inny tryb / projekt) — bez czytania pliku
+        gotowe = {s: r[kol] for s, r in indeks.pobierz("odciski", [(w["sciezka"], w["rozmiar"], w["mtime"])
+                                                                   for w in wiersze]).items() if r[kol]}
+
         def zadanie(w):
             if przerwij is not None and przerwij.is_set():
                 raise Przerwano(w["sciezka"])
+            if w["sciezka"] in gotowe:
+                return w, gotowe[w["sciezka"]]
             try:
                 return w, straznik.wykonaj(_odcisk, w["sciezka"], w["sciezka"], w["rozmiar"], pelny, przerwij, licz)
             except Przerwano:
@@ -121,6 +128,7 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
                 return w, None  # plik zniknął / brak dostępu — pomijamy
 
         zatwierdz = Zatwierdzanie(db)
+        nowe_do_indeksu: list = []
         with ThreadPoolExecutor(max_workers=watki) as pula:
             for i, (w, odc) in enumerate(pula.map(zadanie, wiersze), 1):
                 if odc is not None:
@@ -133,6 +141,8 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
                         (w["sciezka"], w["rozmiar"], w["mtime"]),
                     )
                     db.execute(f"UPDATE odciski SET {kol}=? WHERE sciezka=?", (odc, w["sciezka"]))
+                    if w["sciezka"] not in gotowe:
+                        nowe_do_indeksu.append((w, odc))
                     # mały plik przeczytany w całości: szybki odcisk = pełny
                     if not pelny and w["rozmiar"] <= 2 * BLOK:
                         db.execute("UPDATE odciski SET pelny=? WHERE sciezka=?", (odc, w["sciezka"]))
@@ -140,6 +150,18 @@ def szukaj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4) -
                 if i % 20 == 0:
                     zglos(etap, i, len(wiersze))
         db.commit()
+        if nowe_do_indeksu and indeks.wlaczony():
+            znane = indeks.pobierz("odciski", [(w["sciezka"], w["rozmiar"], w["mtime"]) for w, _ in nowe_do_indeksu])
+            wpisy = []
+            for w, odc in nowe_do_indeksu:
+                stare = znane.get(w["sciezka"], {})
+                d = {"sciezka": w["sciezka"], "rozmiar": w["rozmiar"], "mtime": w["mtime"],
+                     "szybki": stare.get("szybki"), "pelny": stare.get("pelny")}
+                d[kol] = odc
+                if not pelny and w["rozmiar"] <= 2 * BLOK:
+                    d["pelny"] = odc  # mały plik przeczytany w całości
+                wpisy.append(d)
+            indeks.zapisz("odciski", wpisy)
         zglos(etap, len(wiersze), len(wiersze))
 
     aktualny = "o.rozmiar = p.rozmiar AND o.mtime = p.mtime"

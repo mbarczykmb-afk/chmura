@@ -1382,8 +1382,9 @@ function rysujDup() {
   $("dup-bajty").textContent = d.bajty ? "przeczytano " + rozmiar(d.bajty) : "";
   const k = $("komunikat-dup");
   k.className = "komunikat" + (d.blad ? " blad" : (!d.trwa && d.komunikat ? " ok" : ""));
-  k.textContent = d.trwa ? "" : (d.blad ? d.komunikat + " " + d.blad : (d.komunikat || ""));
   const p = stan.duplikaty;
+  // wynik ostatniego szukania chowamy, gdy jest aktualne podsumowanie (po odłożeniu kopii mówiłby nieprawdę)
+  k.textContent = d.trwa || (p && !d.blad) ? "" : (d.blad ? d.komunikat + " " + d.blad : (d.komunikat || ""));
   $("podsum-dup").hidden = !p || d.trwa;
   if (p) {
     $("podsum-dup").innerHTML = p.nadmiar

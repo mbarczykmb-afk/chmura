@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import (__version__, aktualizacje, analiza, duplikaty, dyski, galeria, logi, planista, projekty, przegladarka,
+from . import (__version__, aktualizacje, analiza, duplikaty, dyski, galeria, indeks, logi, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, wykonawca)
 from .logi import LOG
 
@@ -47,6 +47,8 @@ class Stan:
         self._licze_podsumowania = threading.Lock()
         self.tempa: dict[str, stabilnosc.Tempo] = {}
         self._galerie: dict = {}
+        # wspólny indeks odczytów: Porządkowanie, Sprzątanie i Przeglądarka czytają każdy plik z dysku raz
+        indeks.ustaw(Path(katalog) / "wspolny_indeks.db")
         self.przegladarka = przegladarka.Przegladarka(katalog)  # dyski do oglądania, osobna baza
         self.serwer_tel = None
         pid = self.projekty.ostatni() or self.projekty.nowy("Mój projekt")

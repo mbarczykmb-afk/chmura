@@ -340,6 +340,12 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
       domyślnie odznaczone) i **usuwa na stałe** po potwierdzeniu (bez Kosza na dysku sieciowym), opcjonalnie
       z pustymi folderami (tylko w wybranych folderach, nigdy same wybrane foldery); usuwać można wyłącznie
       z folderów `Odłożone` — nigdzie indziej
+35. **Wspólny indeks 1.11** ✅: `%LOCALAPPDATA%\Katalogator\wspolny_indeks.db` — metadane (data, GPS, aparat),
+    odciski zawartości (duplikaty) i analiza zdjęć (dokumenty, podobne, nieostre), klucz: ścieżka + rozmiar + data
+    modyfikacji. Porządkowanie, Sprzątanie, Przeglądarka i każdy projekt najpierw sprawdzają indeks — plik czytany
+    z dysku jest raz (przez sieć to największy koszt); zmieniony plik czytany od nowa; pliki z .json/.xmp obok
+    zawsze świeżo; pliki, których już nie ma, znikają z indeksu przy skanie. Indeks to tylko pamięć podręczna —
+    jego błąd = zwykły odczyt. Projekty nadal mają własne bazy (decyzje, plany, odłożenia są osobne).
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

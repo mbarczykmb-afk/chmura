@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from PIL import Image, ImageChops, ImageFilter, ImageOps, ImageStat
 
+from . import indeks
 from .skaner import Przerwano
 
 SCHEMAT = """
@@ -279,9 +280,17 @@ def analizuj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4)
     straznik = Straznik([r[0] for r in db.execute("SELECT DISTINCT korzen FROM pliki")], przerwij,
                         getattr(postep, "czeka", None))
 
+    # wspólny indeks: zdjęcia przeanalizowane w innym trybie / projekcie — bez czytania z dysku
+    z_indeksu = indeks.pobierz("analiza", [(w["sciezka"], w["rozmiar"], w["mtime"]) for w in wiersze],
+                               WERSJA_DOKUMENTOW)
+    _KOL = ("sciezka", "rozmiar", "mtime", "dhash", "dokument", "ostrosc", "szer", "wys", "blad", "podpis", "tekst")
+
     def zadanie(w):
         if przerwij is not None and przerwij.is_set():
             raise Przerwano(w["sciezka"])
+        zi = z_indeksu.get(w["sciezka"])
+        if zi and (zi["podpis"] or zi["blad"]):
+            return tuple(zi[k] for k in _KOL)
         try:
             return straznik.wykonaj(_analizuj_plik, w["sciezka"], w)
         except Przerwano:
@@ -291,16 +300,22 @@ def analizuj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4)
 
     if postep:
         postep("analiza zdjęć", 0, len(wiersze), 0)
+    nowe: list[dict] = []
     with ThreadPoolExecutor(max_workers=watki) as pula:
         for i, wynik in enumerate(pula.map(zadanie, wiersze), 1):
             if wynik is None:
                 continue
             db.execute("INSERT OR REPLACE INTO analiza(sciezka, rozmiar, mtime, dhash, dokument, ostrosc, szer, wys, "
                        "blad, podpis, tekst) VALUES (?,?,?,?,?,?,?,?,?,?,?)", wynik)
+            if wynik[0] not in z_indeksu:
+                nowe.append({**dict(zip(_KOL, wynik)), "wersja": WERSJA_DOKUMENTOW})
+                if len(nowe) >= 200:
+                    indeks.zapisz("analiza", nowe); nowe = []
             zatwierdz()
             if postep and i % 20 == 0:
                 postep("analiza zdjęć", i, len(wiersze), 0)
     zatwierdz(wymus=True)
+    indeks.zapisz("analiza", nowe)
 
     kandydaci = db.execute(
         f"""SELECT a.sciezka FROM analiza a JOIN pliki p ON {_AKTUALNE}
@@ -321,6 +336,7 @@ def analizuj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4)
     with ThreadPoolExecutor(max_workers=watki) as pula:
         for i, (sc, t) in enumerate(pula.map(tekst, kandydaci), 1):
             db.execute("UPDATE analiza SET tekst=? WHERE sciezka=?", (t, sc))
+            indeks.uzupelnij("analiza", sc, tekst=t)
             zatwierdz()
             if postep and i % 5 == 0:
                 postep("szukanie tekstu (dokumenty)", i, len(kandydaci), 0)

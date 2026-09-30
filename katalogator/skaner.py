@@ -9,8 +9,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import typy
-from .metadane import boczne_nazwy, odczytaj
+from . import indeks, typy
+from .metadane import Metadane, boczne_nazwy, odczytaj
 
 SCHEMAT = """
 CREATE TABLE IF NOT EXISTS pliki (
@@ -173,6 +173,9 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
             raise Przerwano(korzen)
         zglos(stat["wszystkie"], os.path.dirname(sciezka), etap="liczenie plików")
     stat["nowe_lub_zmienione"] = len(do_odczytu)
+    # wspólny indeks: pliki już przeczytane w innym trybie / projekcie nie są czytane z dysku drugi raz
+    z_indeksu = indeks.pobierz("meta", [(e[0], e[2].st_size, e[2].st_mtime) for e in do_odczytu], WERSJA_ODCZYTU)
+    do_indeksu: list[dict] = []
 
     def zadanie(el):
         sciezka, nazwa, st = el
@@ -180,6 +183,15 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
             return None
         rodz = typy.rodzaj(nazwa)
         b = [boczne[k] for k in (os.path.normcase(x) for x in boczne_nazwy(sciezka)) if k in boczne] if boczne else None
+        zi = z_indeksu.get(sciezka) if not b else None  # z plikami .json/.xmp obok — zawsze świeży odczyt
+        if zi:
+            m = Metadane()
+            for k in ("zrodlo_daty", "lat", "lon", "aparat", "wykonawca", "album", "tytul"):
+                setattr(m, k, zi[k])
+            if zi["data"]:
+                from datetime import datetime
+                m.data = datetime.fromisoformat(zi["data"])
+            return sciezka, st, rodz, m
         m = odczytaj(sciezka, rodz, st.st_mtime, b)
         if m.blad and not os.path.exists(sciezka) and straznik.korzen(sciezka):
             # błąd odczytu, bo zniknął dysk? poczekaj na niego i spróbuj jeszcze raz
@@ -189,6 +201,11 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
 
     def zapisz(wynik):
         sciezka, st, rodz, m = wynik
+        if not m.blad and sciezka not in z_indeksu and indeks.wlaczony():
+            do_indeksu.append({"sciezka": sciezka, "rozmiar": st.st_size, "mtime": st.st_mtime, "wersja": WERSJA_ODCZYTU,
+                               "data": m.data.isoformat(timespec="seconds") if m.data else None,
+                               "zrodlo_daty": m.zrodlo_daty, "lat": m.lat, "lon": m.lon, "aparat": m.aparat,
+                               "wykonawca": m.wykonawca, "album": m.album, "tytul": m.tytul})
         db.execute(
             "INSERT OR REPLACE INTO pliki VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
@@ -210,6 +227,8 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
                     zapisz(wynik)
                     zrobione += 1
             db.commit()
+            indeks.zapisz("meta", do_indeksu)
+            do_indeksu.clear()
             if przerwij is not None and przerwij.is_set():
                 raise Przerwano(korzen)
             zglos(zrobione, os.path.dirname(paczka[-1][0]), len(do_odczytu), "odczyt metadanych")
@@ -227,6 +246,9 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
         pref = f.rstrip("\\/") + os.sep
         db.execute("UPDATE pliki SET skan = ? WHERE korzen = ? AND substr(sciezka, 1, ?) = ?",
                    (skan_id, korzen, len(pref), pref))
+    if indeks.wlaczony():  # plików, których już nie ma, nie trzymamy też we wspólnym indeksie
+        indeks.usun([r[0] for r in db.execute("SELECT sciezka FROM pliki WHERE korzen = ? AND skan != ?",
+                                              (korzen, skan_id))])
     usuniete = db.execute(
         "DELETE FROM pliki WHERE korzen = ? AND skan != ?", (korzen, skan_id)
     ).rowcount
