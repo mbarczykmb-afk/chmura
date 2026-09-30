@@ -309,6 +309,11 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
       mapy; **„Tego dnia lata temu”** — przycisk nad osią czasu, gdy są zdjęcia z dzisiejszej daty z lat ubiegłych;
     - **samoczynne odświeżanie** Przeglądarki: przy starcie programu i co 6 h wczytuje nowe i zmienione pliki
       (pole *odświeżaj samo co 6 h*, domyślnie włączone)
+31. **Stabilny start 1.9.1** ✅: instalator instaluje wersję „folder” (Katalogator.exe + `_internal`), a nie
+    jednoplikowy exe — program nie rozpakowuje się już przy każdym starcie do `%TEMP%\_MEI…`, więc znika błąd
+    „Failed to load Python DLL … python312.dll” (antywirus/sprzątanie Temp usuwały świeżo rozpakowaną bibliotekę);
+    start jest szybszy. Aktualizacja usuwa stare `_internal` przed wgraniem nowych. Jednoplikowy `Katalogator.exe`
+    zostaje jako wersja przenośna. CI sprawdza start obu wersji i zainstalowanego programu.
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

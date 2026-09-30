@@ -39,8 +39,13 @@ Name: "polish"; MessagesFile: "compiler:Languages\Polish.isl"
 [Tasks]
 Name: "pulpit"; Description: "Utwórz skrót na pulpicie"; GroupDescription: "Skróty:"
 
+[InstallDelete]
+; aktualizacja: stare biblioteki poprzedniej wersji znikają, zanim wgramy nowe (bez mieszania wersji)
+Type: filesandordirs; Name: "{app}\_internal"
+
 [Files]
-Source: "..\dist\Katalogator.exe"; DestDir: "{app}"; Flags: ignoreversion
+; wersja „folder”: Katalogator.exe + _internal (Python i biblioteki) — nic nie jest rozpakowywane do %TEMP%
+Source: "..\dist\instalacja\Katalogator\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\Katalogator"; Filename: "{app}\Katalogator.exe"; Comment: "Porządkowanie zdjęć, filmów i plików"
@@ -48,6 +53,9 @@ Name: "{autodesktop}\Katalogator"; Filename: "{app}\Katalogator.exe"; Tasks: pul
 
 [Run]
 Filename: "{app}\Katalogator.exe"; Description: "Uruchom Katalogator"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}\_internal"
 
 [UninstallRun]
 Filename: "{app}\Katalogator.exe"; Parameters: "--usun-harmonogramy"; Flags: runhidden waituntilterminated; RunOnceId: "UsunHarmonogramy"

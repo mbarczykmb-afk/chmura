@@ -45,9 +45,23 @@ jobs:
             throw "Tag ${{ github.ref_name }} nie zgadza się z wersją programu $w"
           }
 
-      - name: Budowanie Katalogator.exe
+      # Instalator dostaje wersję „folder” (onedir): program startuje z własnego folderu, bez rozpakowywania
+      # python312.dll do %TEMP%\_MEI… przy każdym starcie — to rozpakowywanie (antywirus, sprzątanie Temp)
+      # dawało czasem „Failed to load Python DLL”. Jednoplikowy Katalogator.exe zostaje jako wersja przenośna.
+      - name: Budowanie (folder dla instalatora)
+        run: >
+          pyinstaller --noconfirm --onedir --windowed --name Katalogator
+          --distpath dist\instalacja --workpath build\instalacja
+          --icon katalogator/dane/ikona.ico
+          --add-data "katalogator/ui;katalogator/ui"
+          --add-data "katalogator/dane;katalogator/dane"
+          --collect-all pillow_heif
+          uruchom.py
+
+      - name: Budowanie Katalogator.exe (wersja przenośna, jeden plik)
         run: >
           pyinstaller --noconfirm --onefile --windowed --name Katalogator
+          --workpath build\przenosna
           --icon katalogator/dane/ikona.ico
           --add-data "katalogator/ui;katalogator/ui"
           --add-data "katalogator/dane;katalogator/dane"
@@ -57,10 +71,17 @@ jobs:
       - name: Test uruchomienia exe (serwer startuje)
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath dist\Katalogator.exe -PassThru
+          $p = Start-Process -FilePath dist\instalacja\Katalogator\Katalogator.exe -PassThru
           Start-Sleep -Seconds 8
           if ($p.HasExited) { throw "Katalogator.exe zakonczyl sie od razu (kod $($p.ExitCode))" }
           taskkill /PID $p.Id /T /F 2>&1 | Out-Null  # proces Edge bywa nie do zabicia — to nie błąd programu
+          $global:LASTEXITCODE = 0
+          Get-Process msedge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          $p = Start-Process -FilePath dist\Katalogator.exe -PassThru  # wersja przenośna też musi wstać
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) { throw "Przenosny Katalogator.exe zakonczyl sie od razu (kod $($p.ExitCode))" }
+          taskkill /PID $p.Id /T /F 2>&1 | Out-Null
           $global:LASTEXITCODE = 0
           Get-Process msedge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 2
@@ -69,7 +90,7 @@ jobs:
       - name: Test trybu automatycznego (--auto, bez okna)
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath dist\Katalogator.exe -ArgumentList "--auto","nie-ma-takiego" -PassThru
+          $p = Start-Process -FilePath dist\instalacja\Katalogator\Katalogator.exe -ArgumentList "--auto","nie-ma-takiego" -PassThru
           if (-not $p.WaitForExit(90000)) { taskkill /PID $p.Id /T /F | Out-Null; throw "--auto nie zakonczyl sie w 90 s" }
           if ($p.ExitCode -ne 0) { throw "--auto zwrocil kod $($p.ExitCode)" }
 
@@ -88,12 +109,21 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "Instalacja zwrocila kod $($p.ExitCode)" }
           $exe = "$env:LOCALAPPDATA\Programs\Katalogator\Katalogator.exe"
           if (-not (Test-Path $exe)) { throw "Brak zainstalowanego programu: $exe" }
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Katalogator\_internal")) { throw "Brak folderu _internal (wersja folder)" }
+          $p = Start-Process -FilePath $exe -PassThru  # zainstalowany program wstaje
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) { throw "Zainstalowany Katalogator.exe zakonczyl sie od razu (kod $($p.ExitCode))" }
+          taskkill /PID $p.Id /T /F 2>&1 | Out-Null
+          $global:LASTEXITCODE = 0
+          Get-Process msedge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 3
           $skrot = Get-ChildItem "$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Filter "Katalogator.lnk" -Recurse
           if (-not $skrot) { throw "Brak skrotu w menu Start" }
           if (-not (Test-Path "$([Environment]::GetFolderPath('Desktop'))\Katalogator.lnk")) { throw "Brak skrotu na pulpicie" }
           $u = Start-Process -FilePath "$env:LOCALAPPDATA\Programs\Katalogator\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES" -PassThru -Wait
           Start-Sleep -Seconds 3
           if (Test-Path $exe) { throw "Program nie zostal odinstalowany" }
+          if (Test-Path "$env:LOCALAPPDATA\Programs\Katalogator\_internal") { throw "Zostal folder _internal po odinstalowaniu" }
           if (-not (Test-Path "$env:LOCALAPPDATA\Katalogator")) { throw "Odinstalowanie usunelo dane uzytkownika" }
 
       - name: Dziennik błędów (diagnostyka)
@@ -137,6 +167,7 @@ jobs:
           body: |
             **Instalacja:** pobierz `Katalogator-Setup-${{ steps.wersja.outputs.wersja }}.exe` i uruchom
             (instaluje się bez uprawnień administratora, tworzy skrót w menu Start).
-            `Katalogator.exe` to wersja przenośna — bez instalacji.
+            `Katalogator.exe` to wersja przenośna — bez instalacji (przy każdym starcie rozpakowuje się do folderu
+            tymczasowego; jeśli czasem pokazuje „Failed to load Python DLL”, użyj instalatora).
 
             Program sam powiadomi o kolejnych wersjach.
