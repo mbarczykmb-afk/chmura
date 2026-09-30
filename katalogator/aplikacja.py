@@ -328,6 +328,8 @@ class Stan:
                 self.wersja_danych += 1
             self.dziennik(nazwa, komunikat + (" " + blad if blad else ""))
             LOG.info("Zadanie „%s”: %s %s", nazwa, komunikat, blad)
+            if nazwa in ("wykonanie", "cofanie", "przychodzace"):
+                self.przegladarka.zglos_zmiany()  # pliki zmieniły miejsce — Przeglądarka odświeży się sama
 
         threading.Thread(target=praca, daemon=True).start()
         return None
@@ -459,6 +461,7 @@ class Stan:
             return duplikaty.przenies(db, decyzje)
         finally:
             db.close()
+            self.przegladarka.zglos_zmiany()
 
     def cofnij(self) -> dict:
         if self.zajety():
@@ -468,6 +471,7 @@ class Stan:
             return duplikaty.cofnij(db)
         finally:
             db.close()
+            self.przegladarka.zglos_zmiany()
 
     def miniatura(self, id_: int, srednia: bool = False) -> bytes | None:
         klucz = ("s", id_) if srednia else id_
@@ -850,7 +854,7 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/nieostre":
                 return self._wyslij({"pliki": stan.z_db(analiza.najmniej_ostre, min(_int(q, "ile", 120), 500))})
             if u.path == "/api/przegladarka":
-                return self._wyslij(stan.przegladarka.opis())
+                return self._wyslij({**stan.przegladarka.opis(), "katalogator_pracuje": stan.zajety()})
             if u.path == "/api/dyski":
                 return self._wyslij({"dyski": dyski.lista_dyskow()})
             if u.path == "/api/foldery":
@@ -1013,6 +1017,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 if u.path == "/api/odloz" and stan.zajety():
                     return self._wyslij({"blad": "Poczekaj, aż skończy się bieżące zadanie."}, kod=HTTPStatus.BAD_REQUEST)
                 w = stan.z_db(edycja[u.path])
+                if u.path == "/api/odloz":
+                    stan.przegladarka.zglos_zmiany()
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/przegladarka/foldery":
                 stan.przegladarka.ustaw_foldery([str(f) for f in dane.get("foldery") or []])
@@ -1114,7 +1120,8 @@ def main(otworz: bool = True) -> None:
         return
     LOG.info("Start Katalogatora %s — %s", __version__, logi.system())
     serwer, url, stan = uruchom_serwer(katalog)
-    stan.przegladarka.uruchom_auto()  # Przeglądarka: nowe zdjęcia z dysków same się dopisują
+    # Przeglądarka: nowe zdjęcia z dysków same się dopisują — ale nie w trakcie zadań Katalogatora (ten sam dysk)
+    stan.przegladarka.uruchom_auto(zajety=stan.zajety)
     plik_instancji = katalog / "instancja.json"
     try:
         plik_instancji.write_text(json.dumps({"url": url, "pid": os.getpid()}), encoding="utf-8")

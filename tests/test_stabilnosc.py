@@ -260,3 +260,41 @@ def test_ten_sam_plik_rozpoznany():
         open(p, "wb").write(b"x")
         assert wykonawca._ten_sam_plik(p, os.path.join(d, ".", "a.jpg"))
         assert not wykonawca._ten_sam_plik(p, os.path.join(d, "b.jpg"))
+
+
+def test_plik_chwilowo_otwarty_ponawiany(tmp_path, monkeypatch):
+    """Windows: plik otwarty przez inny program (WinError 32) — porządkowanie czeka i próbuje jeszcze raz."""
+    zr, cel = tmp_path / "nas", tmp_path / "cel"
+    zr.mkdir()
+    cel.mkdir()
+    (zr / "umowa.pdf").write_bytes(b"%PDF" * 50)
+    db = skaner.otworz_baze(":memory:")
+    skaner.skanuj(str(zr), db, wypisz=lambda *_: None)
+    planista.generuj(db, [{"sciezka": str(zr), "tryb": "przenies"}], str(cel))
+    prawdziwe, licznik = wykonawca._wykonaj_plik, {"n": 0}
+
+    def zajety(*a, **kw):
+        licznik["n"] += 1
+        if licznik["n"] == 1:
+            e = PermissionError(13, "Proces nie może uzyskać dostępu do pliku")
+            e.winerror = 32
+            raise e
+        return prawdziwe(*a, **kw)
+    monkeypatch.setattr(wykonawca, "_wykonaj_plik", zajety)
+    monkeypatch.setattr(wykonawca.time, "sleep", lambda s: None)
+    w = wykonawca.wykonaj(db)
+    assert w["zrobione"] == 1 and w["bledy"] == 0 and licznik["n"] == 2
+
+
+def test_pamiec_miniatur_przycinana(tmp_path):
+    from katalogator import galeria
+    g = galeria.Galeria(tmp_path / "k.db", pamiec_min=tmp_path / "min")
+    (tmp_path / "min" / "00").mkdir(parents=True)
+    for i in range(10):
+        p = tmp_path / "min" / "00" / f"{i}.jpg"
+        p.write_bytes(b"x" * 1000)
+        os.utime(p, (1000 + i, 1000 + i))
+    g.MAKS_PAMIEC_MIN = 5000
+    g._przytnij_pamiec()
+    zostaly = sorted(p.name for p in (tmp_path / "min").rglob("*.jpg"))
+    assert len(zostaly) == 4 and "9.jpg" in zostaly and "0.jpg" not in zostaly  # najdawniej używane poszły

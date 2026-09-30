@@ -328,6 +328,10 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
                 raise
             except OSError as e:
                 dst = os.path.join(cel_root, *w["cel"].split("/"))
+                if proba < 2 and getattr(e, "winerror", None) in (32, 33):
+                    # plik akurat otwarty (Przeglądarka odtwarza film, antywirus, podgląd Eksploratora) — chwila i znowu
+                    time.sleep(2 + 3 * proba)
+                    continue
                 if proba < 2 and straznik.utracono(w["sciezka"], dst):
                     continue  # dysk wrócił — ten sam plik jeszcze raz (kopia ruszy od miejsca przerwania)
                 _zapamietaj_tmp(db, cel_root, w)

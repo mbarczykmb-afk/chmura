@@ -319,6 +319,15 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     i zdjęcia zostają); oś czasu, mapa, szukanie i „tego dnia” pokazują aktywny zestaw; jedna wspólna baza (dysk
     w dwóch zestawach skanuje się raz), ulubione i albumy wspólne; samoczynne odświeżanie obejmuje dyski
     wszystkich zestawów; dotychczasowa lista przechodzi do zestawu „Moje dyski”
+33. **Audyt 1.9.3 — Przeglądarka i Katalogator razem** ✅:
+    - osobne bazy (projekt / Przeglądarka) — brak wzajemnych blokad; test: Przeglądarka skanuje 6× w trakcie
+      przenoszenia 3000 zdjęć przez Katalogator — 0 błędów, zawartość identyczna, po odświeżeniu komplet;
+    - ulubione i albumy pamiętają nazwę|rozmiar|datę — po przeniesieniu (Katalogator, Odłożone, ręcznie)
+      odnajdują zdjęcia w nowym miejscu;
+    - samoczynne odświeżanie Przeglądarki nie rusza w trakcie zadań Katalogatora (ten sam dysk), a po
+      porządkowaniu / odłożeniu / cofnięciu odświeża się sama; w pasku informacja, gdy Katalogator pracuje;
+    - plik chwilowo otwarty (WinError 32/33: film w Przeglądarce, antywirus) — porządkowanie czeka i ponawia;
+    - „Otwórz w programie” tylko dla zdjęć i filmów; miniatury na dysku do ~1,5 GB (najdawniej używane usuwane)
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

@@ -257,3 +257,42 @@ def test_przegladarka_zestawy_dyskow(tmp_path):
     assert p.zestaw("nazwa", 1, "Rodzina")["zestawy"][0]["nazwa"] == "Rodzina"
     assert p.zestaw("usun", 1)["aktywny"] == 2 and p.zestaw("usun", 2)["blad"]
     assert (a / "IMG_1.jpg").exists()
+
+
+def test_ulubione_po_przeniesieniu_przez_katalogator(biblioteka):
+    """Ulubione/album w Przeglądarce, potem Katalogator przenosi pliki — kolekcje odnajdują je w nowym miejscu."""
+    tmp, db, cel = biblioteka
+    g = galeria.Galeria(tmp / "k.db")
+    hel = next(p["id"] for p in g.szukaj("Hel")["pliki"])
+    g.ulubione(hel)
+    a = g.album_nowy("Morze", [hel])["id"]
+    planista.generuj(db, [{"sciezka": str(tmp / "dysk"), "tryb": "przenies"}], str(cel), dom="Olkusz")
+    wykonawca.wykonaj(db)
+    assert not (tmp / "dysk" / "IMG_20230711.jpg").exists()
+    ul = g.kolekcja("ulubione")["pliki"]
+    assert [p["nazwa"] for p in ul] == ["IMG_20230711.jpg"]
+    assert g.sciezka(ul[0]["id"]).startswith(str(cel))            # nowe miejsce w bibliotece
+    assert g.albumy()["albumy"][0]["n"] == 1 and g.kolekcja("album", a)["razem"] == 1
+    assert g.plik(ul[0]["id"])["ulubione"]
+
+
+def test_otworz_tylko_zdjecia_i_filmy(tmp_path):
+    k = tmp_path / "d"
+    k.mkdir()
+    (k / "program.exe").write_bytes(b"MZ" + b"\0" * 100)
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    exe = db.execute("SELECT rowid FROM pliki").fetchone()[0]
+    assert galeria.Galeria(tmp_path / "k.db").otworz(exe) == {"blad": "nie ma pliku"}
+
+
+def test_przegladarka_czeka_na_katalogator(tmp_path):
+    from katalogator import przegladarka
+    (tmp_path / "a").mkdir()
+    p = przegladarka.Przegladarka(tmp_path / "dane")
+    p.ustaw_foldery([str(tmp_path / "a")])
+    assert p.teraz_odswiezyc() and not p.teraz_odswiezyc(zajety=lambda: True)  # Katalogator pracuje: czekamy
+    p._zapisz_ust(ostatni_skan=__import__("time").time())
+    assert not p.teraz_odswiezyc()
+    p.zglos_zmiany()                                                  # Katalogator przeniósł pliki
+    assert p.teraz_odswiezyc() and not p.teraz_odswiezyc(zajety=lambda: True)

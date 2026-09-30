@@ -31,6 +31,7 @@ class Przegladarka:
                      "blad": "", "czeka": ""}
         self.tempo = stabilnosc.Tempo()
         self._auto_watek: threading.Thread | None = None
+        self._zmiany = False  # Katalogator przeniósł/odłożył pliki — odświeżyć przy najbliższej okazji
         # galeria widzi tylko aktualnie wybrane foldery (usunięty z listy znika od razu, bez kasowania bazy)
         self.galeria = galeria.Galeria(self.baza, lambda: self.foldery(), pamiec_min=self.katalog / "miniatury",
                                        tylko_zdjecia_ludzi=True)
@@ -135,8 +136,18 @@ class Przegladarka:
             return False
         return (teraz or time.time()) - float(u.get("ostatni_skan", 0)) >= float(u.get("co_godzin", 6)) * 3600
 
-    def uruchom_auto(self, pierwsze_po: float = 30, sprawdzaj_co: float = 600) -> None:
-        """Wątek w tle: po starcie programu i potem co `sprawdzaj_co` s — skan, gdy minął ustawiony czas."""
+    def zglos_zmiany(self) -> None:
+        """Katalogator przeniósł, odłożył albo przywrócił pliki — Przeglądarka odświeży się, gdy skończy."""
+        self._zmiany = True
+
+    def teraz_odswiezyc(self, zajety=lambda: False) -> bool:
+        if self.stan["trwa"] or zajety():  # w trakcie zadań Katalogatora nie obciążamy tego samego dysku
+            return False
+        return self.do_odswiezenia() or (self._zmiany and self._ust().get("auto", True) and bool(self.wszystkie_foldery()))
+
+    def uruchom_auto(self, pierwsze_po: float = 30, sprawdzaj_co: float = 60, zajety=lambda: False) -> None:
+        """Wątek w tle: po starcie programu i potem co `sprawdzaj_co` s — skan, gdy minął ustawiony czas
+        albo Katalogator zmienił pliki (i akurat nic nie robi)."""
         if self._auto_watek:
             return
 
@@ -144,8 +155,9 @@ class Przegladarka:
             time.sleep(pierwsze_po)
             while True:
                 try:
-                    if self.do_odswiezenia() and not self.stan["trwa"]:
+                    if self.teraz_odswiezyc(zajety):
                         LOG.info("Przeglądarka: samoczynne odświeżanie")
+                        self._zmiany = False
                         self.skanuj(auto=True)
                 except Exception:  # noqa: BLE001
                     LOG.exception("Przeglądarka: odświeżanie")

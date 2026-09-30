@@ -75,8 +75,40 @@ class Galeria:
         db = skaner.otworz_baze(self.baza)
         if not getattr(self, "_schemat", False):
             db.executescript(SCHEMAT_KOLEKCJI)
+            for t in ("g_ulubione", "g_album_pliki"):  # od 1.9.3: nazwa|rozmiar|data — odnajdywanie po przeniesieniu
+                if "klucz" not in {r[1] for r in db.execute(f"PRAGMA table_info({t})")}:
+                    db.execute(f"ALTER TABLE {t} ADD COLUMN klucz TEXT")
+            db.commit()
             self._schemat = True
         return db
+
+    @staticmethod
+    def _klucz_sql() -> str:  # nazwa pliku (małe litery) | rozmiar | data zdjęcia
+        return ("lower(replace(wzgledna, rtrim(wzgledna, replace(replace(wzgledna, '\\', '/'), '/', '')), '')) "
+                "|| '|' || rozmiar || '|' || coalesce(data, '')")
+
+    def _napraw_kolekcje(self, db) -> int:
+        """Zdjęcia z ulubionych/albumów przeniesione (Katalogator, Odłożone, ręcznie) — odnajdujemy je po nazwie,
+        rozmiarze i dacie i poprawiamy ścieżkę. Zwraca liczbę naprawionych."""
+        k = self._klucz_sql()
+        brak = {t: db.execute(f"SELECT rowid, sciezka, klucz FROM {t} WHERE klucz IS NOT NULL AND sciezka NOT IN "
+                              f"(SELECT sciezka FROM pliki)").fetchall() for t in ("g_ulubione", "g_album_pliki")}
+        if not any(brak.values()):
+            return 0
+        potrzebne = {r["klucz"] for w in brak.values() for r in w}
+        gdzie: dict[str, str] = {}
+        for r in db.execute(f"SELECT sciezka, {k} klucz FROM pliki WHERE rodzaj IN ('zdjecie','film')"):
+            if r["klucz"] in potrzebne and r["klucz"] not in gdzie:
+                gdzie[r["klucz"]] = r["sciezka"]
+        n = 0
+        for t, wiersze in brak.items():
+            for r in wiersze:
+                nowa = gdzie.get(r["klucz"])
+                if nowa:
+                    db.execute(f"UPDATE OR IGNORE {t} SET sciezka=? WHERE rowid=?", (nowa, r["rowid"]))
+                    n += 1
+        db.commit()
+        return n
 
     def _warunek(self, obszar: tuple | None = None) -> tuple[str, list]:
         w, arg = self._zakres()
@@ -233,6 +265,9 @@ class Galeria:
                 try:
                     plik_cache.parent.mkdir(parents=True, exist_ok=True)
                     plik_cache.write_bytes(dane)
+                    self._zapisanych = getattr(self, "_zapisanych", 0) + 1
+                    if self._zapisanych % 500 == 0:
+                        threading.Thread(target=self._przytnij_pamiec, daemon=True).start()
                 except OSError:
                     pass
         with self._blokada:
@@ -332,27 +367,29 @@ class Galeria:
                 "pliki": [_nazwa(r) for r in wiersze]}
 
     # --- ulubione i albumy ----------------------------------------------------------------------------
-    def _sciezki(self, db, ids) -> list[str]:
+    def _sciezki(self, db, ids, z_kluczem: bool = False) -> list:
         w, arg = self._warunek()
         wynik = []
         for i in ids[:5000]:
-            r = db.execute(f"SELECT sciezka FROM pliki WHERE rowid=? {w}", [int(i)] + arg).fetchone()
+            r = db.execute(f"SELECT sciezka, {self._klucz_sql()} klucz FROM pliki WHERE rowid=? {w}",
+                           [int(i)] + arg).fetchone()
             if r:
-                wynik.append(r[0])
+                wynik.append((r[0], r[1]) if z_kluczem else r[0])
         return wynik
 
     def ulubione(self, id_: int, wlacz: bool | None = None) -> dict:
         db = self._db()
         try:
-            s = self._sciezki(db, [id_])
+            s = self._sciezki(db, [id_], z_kluczem=True)
             if not s:
                 return {"blad": "nie ma takiego pliku"}
-            jest = db.execute("SELECT 1 FROM g_ulubione WHERE sciezka=?", (s[0],)).fetchone() is not None
+            (sc, klucz), = s
+            jest = db.execute("SELECT 1 FROM g_ulubione WHERE sciezka=?", (sc,)).fetchone() is not None
             nowe = (not jest) if wlacz is None else bool(wlacz)
             if nowe:
-                db.execute("INSERT OR IGNORE INTO g_ulubione VALUES (?,?)", (s[0], time.time()))
+                db.execute("INSERT OR IGNORE INTO g_ulubione(sciezka, czas, klucz) VALUES (?,?,?)", (sc, time.time(), klucz))
             else:
-                db.execute("DELETE FROM g_ulubione WHERE sciezka=?", (s[0],))
+                db.execute("DELETE FROM g_ulubione WHERE sciezka=?", (sc,))
             db.commit()
             return {"ulubione": nowe}
         finally:
@@ -362,6 +399,7 @@ class Galeria:
         w, arg = self._warunek()
         db = self._db()
         try:
+            self._napraw_kolekcje(db)
             wynik = []
             for a in db.execute("SELECT id, nazwa FROM g_albumy ORDER BY czas DESC").fetchall():
                 r = db.execute(f"""SELECT COUNT(*) n, MIN(rowid) okladka FROM pliki WHERE rodzaj IN ('zdjecie','film')
@@ -389,8 +427,9 @@ class Galeria:
         try:
             if not db.execute("SELECT 1 FROM g_albumy WHERE id=?", (int(album),)).fetchone():
                 return {"blad": "nie ma takiego albumu"}
-            s = self._sciezki(db, list(ids or []))
-            db.executemany("INSERT OR IGNORE INTO g_album_pliki VALUES (?,?,?)", [(int(album), x, time.time()) for x in s])
+            s = self._sciezki(db, list(ids or []), z_kluczem=True)
+            db.executemany("INSERT OR IGNORE INTO g_album_pliki(album, sciezka, czas, klucz) VALUES (?,?,?,?)",
+                           [(int(album), x, time.time(), k) for x, k in s])
             db.commit()
             return {"dodane": len(s)}
         finally:
@@ -441,6 +480,7 @@ class Galeria:
                 if not r:
                     return {"blad": "nie ma takiego albumu"}
                 nazwa = r[0]
+            self._napraw_kolekcje(db)
             sql = f"FROM pliki WHERE rodzaj IN ('zdjecie','film') AND sciezka IN ({pod}) {w}"
             razem = db.execute(f"SELECT COUNT(*) {sql}", a + arg).fetchone()[0]
             wiersze = [dict(r) for r in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data, wzgledna LIMIT ? OFFSET ?",
@@ -467,7 +507,7 @@ class Galeria:
         return {"ok": True}
 
     def otworz(self, id_: int) -> dict:
-        sc = self.sciezka(id_)
+        sc = self.sciezka(id_, "film") or self.sciezka(id_, "zdjecie")  # tylko zdjęcia i filmy — nigdy programy
         if not sc or not os.path.isfile(sc):
             return {"blad": "nie ma pliku"}
         try:
@@ -479,6 +519,25 @@ class Galeria:
         except OSError as e:
             return {"blad": str(e)}
         return {"ok": True}
+
+    MAKS_PAMIEC_MIN = 1_500_000_000  # ~1,5 GB miniatur na dysku; potem usuwamy najdawniej używane
+
+    def _przytnij_pamiec(self) -> None:
+        try:
+            pliki = [(p.stat().st_atime, p.stat().st_size, p) for p in Path(self.pamiec_min).rglob("*.jpg")]
+        except OSError:
+            return
+        razem = sum(r for _, r, _ in pliki)
+        if razem <= self.MAKS_PAMIEC_MIN:
+            return
+        for _, r, p in sorted(pliki):
+            try:
+                p.unlink()
+            except OSError:
+                continue
+            razem -= r
+            if razem <= self.MAKS_PAMIEC_MIN * 0.8:
+                break
 
     def podglad(self, id_: int) -> bytes | None:
         sc = self.sciezka(id_, "zdjecie")
