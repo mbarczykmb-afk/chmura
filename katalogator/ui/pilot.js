@@ -134,10 +134,37 @@ $("przerwij").onclick = () => { if (confirm("Przerwać bieżące zadanie? Postę
 $("projekt").onchange = e => akcja("projekt", {id: e.target.value}, "Otwarto projekt");
 $("prz-skanuj").onclick = () => akcja("przegladarka", {}, "Skanuję dyski Przeglądarki");
 
+// ---------- tego dnia w poprzednich latach (raz na wejście i przy zmianie projektu) ----------
+let dzienDla = null;
+async function tegoDnia() {
+  const klucz = S.projekt.id + "|" + new Date().toDateString();
+  if (dzienDla === klucz) return;
+  dzienDla = klucz;
+  for (const z of ["biblioteka", "wszystko", "przegladarka"]) {  // pierwszy zbiór, który ma zdjęcia z tego dnia
+    let r;
+    try { r = await api(`/api/g/tego-dnia?z=${z}`); } catch (e) { continue; }
+    if (!r.razem) continue;
+    const lata = r.lata.map(x => x.rok);
+    $("dzien-o").textContent = `${r.razem} zdjęć i filmów z ${lata.length === 1 ? "roku" : "lat"}: ${lata.slice(0, 6).join(", ")}`;
+    const m = $("dzien-min"); m.replaceChildren();
+    const link = `/galeria?z=${z}&pilot=1&dzien=1`;
+    r.pliki.filter(p => p.rodzaj === "zdjecie").slice(0, 8).forEach(p => {
+      const a = el("a"); a.href = link;
+      const im = new Image(); im.loading = "lazy"; im.alt = "";
+      im.src = `/api/g/miniatura?id=${p.id}&z=${z}&t=${encodeURIComponent(TOKEN)}`;
+      a.append(im, el("span", "", p.data.slice(0, 4))); m.append(a);
+    });
+    $("dzien-link").href = link;
+    $("dzien-k").hidden = false;
+    return;
+  }
+  $("dzien-k").hidden = true;
+}
+
 // ---------- odświeżanie ----------
 async function odswiez() {
   clearTimeout(zegar);
-  try { S = await api("/api/pilot"); $("brak").hidden = true; rysuj(); }
+  try { S = await api("/api/pilot"); $("brak").hidden = true; rysuj(); tegoDnia(); }
   catch (e) { if (e.message !== "Podaj PIN") $("brak").hidden = false; }
   planuj();
 }

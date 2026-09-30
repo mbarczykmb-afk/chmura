@@ -164,8 +164,18 @@ def test_obszar_z_mapy_i_tego_dnia(biblioteka):
     assert [(x["rok"], x["n"]) for x in g.lata(hel)["lata"]] == [("2023", 1)]
     assert [p["nazwa"] for p in g.pliki("2023", None, obszar=hel)["pliki"]] == ["IMG_20230711.jpg"]
     t = g.tego_dnia("07-11")
-    assert t["razem"] == 1 and t["lata"] == [{"rok": "2023", "n": 1}]
-    assert g.tego_dnia("12-24")["razem"] == 0
+    assert t["razem"] == 1 and [(x["rok"], x["n"]) for x in t["lata"]] == [("2023", 1)] and t["lata"][0]["lat_temu"] >= 1
+    assert t["najblizszy"] is None
+    # ± kilka dni; lata od najnowszych
+    assert g.tego_dnia("07-13")["razem"] == 0 and g.tego_dnia("07-13", dni=3)["razem"] == 1
+    assert [x["rok"] for x in g.tego_dnia("01-01", dni=10)["lata"]] == ["2022"]
+    # przełom roku: 30 grudnia ± 7 dni obejmuje 5 stycznia
+    assert g.tego_dnia("12-30", dni=7)["razem"] == 1
+    # pusto — podpowiedź najbliższego dnia ze zdjęciami (także przez przełom roku)
+    n = g.tego_dnia("12-24")
+    assert n["razem"] == 0 and n["najblizszy"] == {"md": "01-05", "n": 1, "dni": 12}
+    assert g.tego_dnia("07-20")["najblizszy"]["md"] == "07-11"
+    assert g.tego_dnia("xx")["md"] and g.tego_dnia("02-30")["razem"] >= 0  # zła data — dziś
 
 
 def test_ulubione_i_albumy(biblioteka):

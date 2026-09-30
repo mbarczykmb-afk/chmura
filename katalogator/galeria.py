@@ -7,6 +7,7 @@ z komputera (sieć domowa / Tailscale, z PIN-em) albo 24/7 z Raspberry Pi:
 
 from __future__ import annotations
 
+import datetime
 import io
 import json
 import os
@@ -350,21 +351,48 @@ class Galeria:
         return {"razem": razem, "pliki": [_nazwa(r) for r in wiersze], "opis": " · ".join(opis)}
 
     # --- ten dzień lata temu ------------------------------------------------------------------------------
-    def tego_dnia(self, md: str | None = None) -> dict:
+    def tego_dnia(self, md: str | None = None, dni: int = 0) -> dict:
+        """Zdjęcia i filmy z tego samego dnia (± `dni`) w poprzednich latach, od najnowszych — pogrupowane latami.
+        Gdy nic nie ma, podpowiada najbliższy dzień roku, z którego są zdjęcia."""
         md = md if md and re.fullmatch(r"\d\d-\d\d", md) else time.strftime("%m-%d")
+        dni = max(0, min(int(dni or 0), 15))
+        try:
+            srodek = datetime.date(2024, int(md[:2]), int(md[3:]))  # rok przestępny: 29 lutego też istnieje
+        except ValueError:
+            md, srodek = time.strftime("%m-%d"), datetime.date(2024, *map(int, time.strftime("%m-%d").split("-")))
+        dni_md = sorted({(srodek + datetime.timedelta(days=d)).strftime("%m-%d") for d in range(-dni, dni + 1)})
         w, arg = self._warunek()
+        teraz = time.strftime("%Y")
         db = self._db()
         try:
             wiersze = [dict(r) for r in db.execute(
-                f"""SELECT {_KOLUMNY} FROM pliki WHERE rodzaj IN ('zdjecie','film') AND substr(data, 6, 5) = ?
-                    AND substr(data, 1, 4) < ? {w} ORDER BY data DESC LIMIT 500""", [md, time.strftime("%Y")] + arg)]
+                f"""SELECT {_KOLUMNY} FROM pliki WHERE rodzaj IN ('zdjecie','film')
+                    AND substr(data, 6, 5) IN ({','.join('?' * len(dni_md))}) AND substr(data, 1, 4) < ? {w}
+                    ORDER BY substr(data, 1, 4) DESC, data LIMIT 2000""", dni_md + [teraz] + arg)]
+            najblizszy = None
+            if not wiersze:  # podpowiedź: najbliższy dzień roku ze zdjęciami z poprzednich lat
+                dzien_roku = srodek.timetuple().tm_yday
+                kandydaci = []
+                for r in db.execute(f"""SELECT substr(data, 6, 5) md, COUNT(*) n FROM pliki
+                                        WHERE rodzaj IN ('zdjecie','film') AND data IS NOT NULL
+                                        AND substr(data, 1, 4) < ? {w} GROUP BY 1""", [teraz] + arg):
+                    try:
+                        d = datetime.date(2024, int(r["md"][:2]), int(r["md"][3:])).timetuple().tm_yday
+                    except ValueError:
+                        continue
+                    odl = min(abs(d - dzien_roku), 366 - abs(d - dzien_roku))
+                    kandydaci.append((odl, r["md"], r["n"]))
+                if kandydaci:
+                    odl, n_md, n = min(kandydaci)
+                    najblizszy = {"md": n_md, "n": n, "dni": odl}
         finally:
             db.close()
         lata: dict[str, int] = {}
         for r in wiersze:
             lata[r["data"][:4]] = lata.get(r["data"][:4], 0) + 1
-        return {"md": md, "razem": len(wiersze), "lata": [{"rok": k, "n": v} for k, v in lata.items()],
-                "pliki": [_nazwa(r) for r in wiersze]}
+        return {"md": md, "dni": dni, "razem": len(wiersze),
+                "lata": [{"rok": k, "n": v, "lat_temu": int(teraz) - int(k)} for k, v in lata.items()],
+                "pliki": [_nazwa(r) for r in wiersze], "najblizszy": najblizszy}
 
     # --- ulubione i albumy ----------------------------------------------------------------------------
     def _sciezki(self, db, ids, z_kluczem: bool = False) -> list:
@@ -617,7 +645,7 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict):
     if sciezka == "/api/g/szukaj":
         return g.szukaj(q.get("q", [""])[0][:200], i("od"), min(i("ile", 200), 500)), None
     if sciezka == "/api/g/tego-dnia":
-        return g.tego_dnia(q.get("md", [""])[0]), None
+        return g.tego_dnia(q.get("md", [""])[0], i("dni")), None
     if sciezka == "/api/g/albumy":
         return g.albumy(), None
     if sciezka == "/api/g/kolekcja":

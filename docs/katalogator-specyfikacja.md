@@ -350,6 +350,9 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     (`ui/pilot.html`, `katalogator/pilot.py`): stan bieżącego zadania, kroki projektu (następny wyróżniony) z
     uruchamianiem, Przerwij, przełączanie projektu, skan Przeglądarki; galeria z wyborem zakresu (`?z=`). Kroki
     zmieniające pliki wymagają potwierdzenia; sterowanie można wyłączyć (tylko podgląd). Decyzje — na komputerze.
+37. **Tego dnia 1.13** ✅: widok 🕰 w galerii (`/api/g/tego-dnia?md=MM-DD&dni=0..15`): poprzednie lata od najnowszych
+    z nagłówkami lat, nawigacja po dniach, zakres ± dni (także przez przełom roku), gdy pusto — najbliższy dzień
+    roku ze zdjęciami; karta z miniaturami na pilocie w telefonie (pierwszy zbiór z wynikami).
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

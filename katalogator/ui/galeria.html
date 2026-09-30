@@ -146,6 +146,11 @@ main{flex:1;min-height:0;position:relative}
 .zestaw select{border:0;border-radius:0;font-weight:700;max-width:220px;background:none}
 .zestaw button{border:0;border-left:1px solid var(--lin);border-radius:0;padding:6px 9px;background:none}
 .zestaw button:hover{background:var(--akc-miekki)}
+.rok-nagl{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;margin:14px 2px 2px;font-weight:700;font-size:17px}
+.rok-nagl:first-child{margin-top:2px}
+.rok-nagl small{color:var(--mut);font-weight:500;font-size:13px}
+.dzien-nav{display:inline-flex;align-items:center;gap:4px}
+.dzien-nav b{min-width:120px;text-align:center}
 </style>
 </head>
 <body>
@@ -154,6 +159,7 @@ main{flex:1;min-height:0;position:relative}
   <button id="w-os" class="akt">📅 Oś czasu</button>
   <button id="w-mapa">🗺 Mapa</button>
   <button id="w-kolekcje" title="Ulubione i albumy">⭐ Kolekcje</button>
+  <button id="w-dzien" title="Zdjęcia z tego samego dnia w poprzednich latach">🕰 Tego dnia</button>
   <input id="szukaj" type="search" placeholder="🔍 Szukaj: Hel, lipiec 2019, Włochy, nazwa…" autocomplete="off"
          title="Miejsce (miejscowość, kraj), rok, miesiąc, fragment nazwy pliku lub folderu, aparat — można łączyć">
   <span class="info" id="licznik"></span>

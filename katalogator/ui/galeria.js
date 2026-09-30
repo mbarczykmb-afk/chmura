@@ -33,6 +33,14 @@ async function api(sciezka, param) {
   return j;
 }
 const miniatura = (id, srednia = true) => url("/api/g/miniatura", srednia ? {id, srednia: 1} : {id});
+// dzień roku jako "MM-DD" (bez roku) — do „Tego dnia”
+const mdDzis = () => { const d = new Date(); return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+function mdPrzesun(md, o) {
+  const d = new Date(2024, +md.slice(0, 2) - 1, +md.slice(3) + o);  // rok przestępny: 29 lutego istnieje
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+const mdTxt = md => new Date(2024, +md.slice(0, 2) - 1, +md.slice(3)).toLocaleDateString("pl-PL", {day: "numeric", month: "long"});
+const latTemu = n => n === 1 ? "rok temu" : `${n} ${n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "lata" : "lat"} temu`;
 const dataTxt = d => d ? new Date(d).toLocaleDateString("pl-PL", {day: "numeric", month: "long", year: "numeric"}) : "bez daty";
 
 // ---------- logowanie (telefon) ----------
@@ -160,17 +168,27 @@ async function wczytajPliki(wiecej = false) {
   const od = wiecej ? g.pliki.length : 0, z = g.zrodlo;
   const r = z.typ === "szukaj" ? await api("/api/g/szukaj", {q: z.q, od, ile: 200})
     : z.typ === "kolekcja" ? await api("/api/g/kolekcja", {typ: z.kol, album: z.album || 0, od, ile: 200})
-    : z.typ === "dzien" ? await api("/api/g/tego-dnia")
+    : z.typ === "dzien" ? await api("/api/g/tego-dnia", {md: z.md || mdDzis(), dni: z.dni || 0})
     : await api("/api/g/pliki", {rok: g.rok, miesiac: g.mies || 0, od, ile: 200, ...obszarParam()});
   if (z !== g.zrodlo) return;  // w międzyczasie wybrano coś innego
   g.pliki = wiecej ? g.pliki.concat(r.pliki) : r.pliki; g.razem = r.razem;
   if (r.opis !== undefined) z.opis = r.opis;
   if (r.nazwa) z.nazwa = r.nazwa;
+  if (z.typ === "dzien") { z.md = r.md; z.lata = r.lata; z.najblizszy = r.najblizszy; }
   rysujSiatke(); rysujFiltr();
 }
 function rysujSiatke() {
   const s = $("siatka"); s.replaceChildren();
+  const dzien = g.zrodlo.typ === "dzien";
+  let rok = null;
   g.pliki.forEach((p, i) => {
+    if (dzien && p.data && p.data.slice(0, 4) !== rok) {  // „Tego dnia”: nagłówek każdego roku
+      rok = p.data.slice(0, 4);
+      const n = (g.zrodlo.lata || []).find(x => x.rok === rok);
+      const h = document.createElement("div"); h.className = "rok-nagl";
+      h.append(rok); const sm = document.createElement("small");
+      sm.textContent = (n ? latTemu(n.lat_temu) + " · " + liczbaZdjec(n.n) : ""); h.append(sm); s.append(h);
+    }
     const k = document.createElement("div"); k.className = "k"; k.title = p.nazwa;
     const ob = document.createElement("div"); ob.className = "ob";
     if (p.rodzaj === "zdjecie") {
@@ -192,7 +210,13 @@ function rysujSiatke() {
   }
   if (!g.pliki.length) s.innerHTML = `<div class="pusto">${g.zrodlo.typ === "szukaj" ? "Nic nie znaleziono. Spróbuj: miejscowość, kraj, rok, miesiąc albo fragment nazwy."
     : g.zrodlo.typ === "kolekcja" ? (g.zrodlo.kol === "ulubione" ? "Brak ulubionych — otwórz zdjęcie i kliknij ☆ Ulubione (albo F)." : "Album jest pusty — otwórz zdjęcie i kliknij ＋ Album.")
+    : g.zrodlo.typ === "dzien" ? `Brak zdjęć z ${mdTxt(g.zrodlo.md || mdDzis())}${g.zrodlo.dni ? " (± " + g.zrodlo.dni + " dni)" : ""} z poprzednich lat.`
     : "Brak zdjęć w tym okresie."}</div>`;
+  if (!g.pliki.length && g.zrodlo.typ === "dzien" && g.zrodlo.najblizszy) {
+    const nb = g.zrodlo.najblizszy;
+    s.firstElementChild.append(document.createElement("br"), przycisk(`Najbliższy dzień ze zdjęciami: ${mdTxt(nb.md)} (${liczbaZdjec(nb.n)}) →`,
+      () => pokazWyniki({...g.zrodlo, md: nb.md}), "", "akt"));
+  }
 }
 
 // ---------- podgląd na cały ekran ----------
@@ -374,6 +398,7 @@ function uklad() {  // co widać: oś czasu (wykres, miesiące), wyniki/kolekcja
   const w = g.widok, os = w === "os" && g.zrodlo.typ === "os";
   $("w-os").classList.toggle("akt", os); $("w-mapa").classList.toggle("akt", w === "mapa");
   $("w-kolekcje").classList.toggle("akt", w === "kolekcje" || (w === "os" && g.zrodlo.typ === "kolekcja"));
+  $("w-dzien").classList.toggle("akt", w === "os" && g.zrodlo.typ === "dzien");
   $("os").hidden = w === "mapa"; $("lata").hidden = !os; $("miesiace").hidden = !os; tip(null);
   $("wykres").hidden = !os || !$("wykres").childElementCount;
   $("mapa").hidden = w !== "mapa"; $("mapa-info").hidden = w !== "mapa"; $("mapa-os").hidden = w !== "mapa";
@@ -394,6 +419,7 @@ function pokazWyniki(zrodlo) {  // wyniki szukania, ulubione, album, tego dnia �
 $("w-os").onclick = () => widok("os");
 $("w-mapa").onclick = () => widok("mapa");
 $("w-kolekcje").onclick = () => widok("kolekcje");
+$("w-dzien").onclick = () => { g.widok = "os"; pokazWyniki({typ: "dzien", md: mdDzis(), dni: 0}); };
 
 // ---------- w oknie programu: zakres, zamykanie, udostępnianie na telefon ----------
 if (W_PROGRAMIE) {
@@ -497,14 +523,26 @@ function rysujFiltr() {
       }));
     }
   } else if (g.widok === "os" && z.typ === "dzien") {
-    f.append(znacznik("📅 Tego dnia lata temu", () => widok("os")), inf(ile(g.razem)));
+    const md = z.md || mdDzis();
+    const nav = document.createElement("span"); nav.className = "dzien-nav";
+    const b = document.createElement("b"); b.textContent = mdTxt(md) + (md === mdDzis() ? " (dziś)" : "");
+    nav.append(przycisk("‹", () => pokazWyniki({...z, md: mdPrzesun(md, -1)}), "Dzień wcześniej"), b,
+               przycisk("›", () => pokazWyniki({...z, md: mdPrzesun(md, 1)}), "Dzień później"));
+    f.append(znacznik("🕰 Tego dnia w poprzednich latach", () => widok("os")), nav);
+    if (md !== mdDzis()) f.append(przycisk("Dziś", () => pokazWyniki({...z, md: mdDzis()})));
+    const sel = document.createElement("select"); sel.title = "Ile dni wokół tej daty";
+    for (const [v, t] of [[0, "tylko ten dzień"], [3, "± 3 dni"], [7, "± tydzień"]]) {
+      const o = document.createElement("option"); o.value = v; o.textContent = t; sel.append(o);
+    }
+    sel.value = z.dni || 0; sel.onchange = () => pokazWyniki({...z, dni: +sel.value}); f.append(sel);
+    if (g.razem) f.append(inf(ile(g.razem) + " · z " + (z.lata || []).length + ((z.lata || []).length === 1 ? " roku" : " lat")));
     const p = pokaz(); if (p) f.append(p);
   } else if (g.widok === "os") {
     if (g.obszar) f.append(znacznik("📍 Obszar z mapy", () => { g.obszar = null; g.rok = null; wczytajLata(); rysujFiltr(); },
                                     "Pokaż wszystkie miejsca"));
     if (g.dzien && g.dzien.razem && !g.obszar) {
       const lata = g.dzien.lata.map(x => x.rok).slice(0, 4).join(", ");
-      f.append(przycisk(`📅 Tego dnia lata temu: ${lata} (${g.dzien.razem})`, () => pokazWyniki({typ: "dzien"}),
+      f.append(przycisk(`📅 Tego dnia lata temu: ${lata} (${g.dzien.razem})`, () => pokazWyniki({typ: "dzien", md: mdDzis(), dni: 0}),
                         "Zdjęcia zrobione tego samego dnia w poprzednich latach", "dzien"));
     }
     const p = pokaz(); if (p && f.childElementCount) f.append(p);
@@ -817,6 +855,7 @@ async function start() {
     if (g.widok === "mapa") await pokazMape();
     try { g.dzien = await api("/api/g/tego-dnia"); } catch (e) { g.dzien = null; }
     if (g.widok === "kolekcje") rysujKolekcje();
+    if (P.get("dzien") && !start.byl) { start.byl = true; pokazWyniki({typ: "dzien", md: mdDzis(), dni: 0}); return; }
     uklad();
   }
   catch (e) { if (e.message !== "Podaj PIN") $("siatka").innerHTML = `<div class="pusto">${e.message}</div>`; }

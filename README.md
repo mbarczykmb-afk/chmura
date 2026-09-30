@@ -164,7 +164,9 @@ folderu („2004 Zakopane”), a na końcu „w domu”.
     folder* → wybierz dyski/foldery → *Skanuj* (tylko odczyt, nic nie jest zmieniane). Zdjęcia z nich zobaczysz na
     osi czasu z wykresem (słupek = miesiąc, kliknij, żeby go otworzyć) i na mapie; działa też *Na telefon*.
     **🔍 Szukaj**: „Hel”, „Włochy 2022”, „lipiec 2019”, fragment nazwy. **⭐ Kolekcje**: ulubione (☆ albo F w podglądzie)
-    i albumy; **▶ Pokaz** slajdów; **📅 Oś czasu tego obszaru** na mapie; „Tego dnia lata temu”. W podglądzie kółko
+    i albumy; **▶ Pokaz** slajdów; **📅 Oś czasu tego obszaru** na mapie; **🕰 Tego dnia** — zdjęcia z tego samego dnia
+    w poprzednich latach, pogrupowane latami („5 lat temu”), ‹ › poprzedni/następny dzień, ± 3 dni / ± tydzień,
+    podpowiedź najbliższego dnia ze zdjęciami; na pilocie w telefonie — karta z miniaturami. W podglądzie kółko
     myszy powiększa. Nowe zdjęcia z dysków dopisują się same (przy starcie i co 6 h).
     **Zestawy dysków** (lista 📂 na pasku, ＋ nowy): np. „Rodzina” i „Praca” — każdy z własnymi dyskami.
 
