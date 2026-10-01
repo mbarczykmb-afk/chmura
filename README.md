@@ -155,6 +155,12 @@ folderu („2004 Zakopane”), a na końcu „w domu”.
      wtedy telefon tylko ogląda. *✎ Ustaw swój PIN* — stały PIN (4–12 cyfr), a telefon zostaje zalogowany
      także po ponownym uruchomieniu programu. Działa, dopóki Katalogator jest otwarty.
 
+**🗑 Kosz i szybkie przeglądanie**: w Duplikatach (200 grup na stronę) i Podobnych *Odłóż zaznaczone kopie i pokaż
+kolejne* — kopie od razu trafiają do kosza (folder `Odłożone`), przejrzane grupy znikają, a grupy *zostaw wszystkie*
+są zapamiętane jako przejrzane (*↺ pokaż przejrzane* przywraca je). Opcja *od razu usuń na stałe* (identyczne kopie,
+oryginał zostaje) kasuje tylko tę partię. Przycisk **🗑** w nagłówku (w obu trybach) pokazuje, ile leży w koszu,
+i opróżnia wybrane kategorie.
+
 **📍 Lokalizacja — dodaj, zmień, usuń**: na mapie **przeciągnij pinezkę** w nowe miejsce (dymek pinezki:
 *✖ Usuń lokalizację*); w podglądzie zdjęcia **📍 Dodaj / Zmień miejsce** (klawisz *L*) — kliknij na mapie albo wyszukaj
 miejscowość, opcjonalnie *także pozostałe zdjęcia z tego dnia bez lokalizacji* (aparat bez GPS na wycieczce).

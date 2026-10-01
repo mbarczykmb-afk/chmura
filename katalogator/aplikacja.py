@@ -164,8 +164,25 @@ class Stan:
             self.projekty.ustaw_ostatni(pid)
         return blad
 
+    def korzenie_kosza(self) -> list[str]:
+        """Foldery, w których może leżeć kosz (Odłożone): wybrane foldery i miejsce docelowe."""
+        k = [z["sciezka"] for z in self.ustawienia["zrodla"]]
+        cel = self.ustawienia.get("cel")
+        if cel and os.path.isdir(cel) and not any(dyski.zawiera(z, cel) for z in k):
+            k.append(cel)
+        return k
+
+    def usun_partie(self, partia: int) -> str | None:
+        def f(db, postep, przerwij):
+            w = sprzatanie.usun_partie(db, partia, postep, przerwij)
+            k = f"Usunięto na stałe {w['usuniete']} plików ({raport.rozmiar_txt(w['bajty'])})."
+            if w["bledy"]:
+                k += f" Nie udało się usunąć: {len(w['bledy'])} (np. {w['bledy'][0]})."
+            return k
+        return self.uruchom("usuwanie", f)
+
     def usun_odlozone(self, kategorie_: list[str] | None, puste: bool) -> str | None:
-        korzenie = [z["sciezka"] for z in self.ustawienia["zrodla"]]
+        korzenie = self.korzenie_kosza()
 
         def f(db, postep, przerwij):
             w = sprzatanie.usun_odlozone(db, korzenie, kategorie_, postep, przerwij)
@@ -526,7 +543,8 @@ class Stan:
             kat = kategorie.kategorie_plikow(db, [f["id"] for g in grupy for f in g["pliki"]])
             for g in grupy:
                 g["kat"] = next((kat[f["id"]] for f in g["pliki"] if f["id"] in kat), None)
-            return {"grupy": grupy, "podsumowanie": duplikaty.podsumowanie(db)}
+            return {"grupy": grupy, "podsumowanie": duplikaty.podsumowanie(db),
+                    "przejrzane": duplikaty.ile_przejrzanych(db, "dup")}
         finally:
             db.close()
 
@@ -921,17 +939,19 @@ def _handler(stan: Stan, token: str, zamknij):
                     k["kat"] = kat.get(k["id"])
                 return self._wyslij({"kandydaci": kand})
             if u.path == "/api/podobne":
-                grupy = stan.z_db(analiza.grupy_podobnych)
+                przejrz = stan.z_db(duplikaty.przejrzane_klucze, "podobne")
+                grupy = [g for g in stan.z_db(analiza.grupy_podobnych)
+                         if "|".join(sorted(w["sciezka"] for w in g)) not in przejrz]
                 od, ile = _int(q, "od", 0), min(_int(q, "ile", 30), 200)
                 wycinek = grupy[od:od + ile]
                 kat = stan.z_db(kategorie.kategorie_plikow, [w["id"] for g in wycinek for w in g])
-                return self._wyslij({"razem": len(grupy), "grupy": [
+                return self._wyslij({"razem": len(grupy), "przejrzane": len(przejrz), "grupy": [
                     [{**{k: w[k] for k in ("id", "sciezka", "wzgledna", "mtime", "rozmiar", "szer", "wys", "ostrosc")},
                       "kat": kat.get(w["id"])} for w in g] for g in wycinek]})
             if u.path == "/api/smieci":
                 return self._wyslij({"pliki": stan.z_db(sprzatanie.lista_smieci)})
             if u.path == "/api/odlozone":
-                return self._wyslij(sprzatanie.odlozone([z["sciezka"] for z in stan.ustawienia["zrodla"]]))
+                return self._wyslij(sprzatanie.odlozone(stan.korzenie_kosza()))
             if u.path == "/api/nieostre":
                 return self._wyslij({"pliki": stan.z_db(analiza.najmniej_ostre, min(_int(q, "ile", 120), 500))})
             if u.path == "/api/przegladarka":
@@ -1031,6 +1051,10 @@ def _handler(stan: Stan, token: str, zamknij):
                 blad = stan.przelacz_tryb(str(dane.get("tryb", "")))
                 return self._wyslij({"blad": blad} if blad else stan.stan(),
                                     kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
+            if u.path == "/api/odlozone/usun" and dane.get("partia"):  # tylko ta jedna operacja odłożenia
+                blad = stan.usun_partie(int(dane["partia"]))
+                return self._wyslij({"blad": blad} if blad else stan.stan(),
+                                    kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
             if u.path == "/api/odlozone/usun":
                 kat = dane.get("kategorie")
                 blad = stan.usun_odlozone([str(k) for k in kat] if isinstance(kat, list) else None,
@@ -1125,6 +1149,13 @@ def _handler(stan: Stan, token: str, zamknij):
                 if u.path == "/api/odloz":
                     stan.przegladarka.zglos_zmiany()
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/przejrzane":  # „zostaw wszystkie” — grupa znika z Duplikatów / Podobnych
+                rodzaj = "podobne" if dane.get("rodzaj") == "podobne" else "dup"
+                w = stan.z_db(duplikaty.oznacz_przejrzane, rodzaj, [str(k) for k in dane.get("klucze") or []],
+                              bool(dane.get("wartosc", True)))
+                with stan.blokada:
+                    stan.wersja_danych += 1
+                return self._wyslij(w)
             if u.path in ("/api/usun", "/api/usun/cofnij"):  # 🗑 w zakładkach projektu
                 if stan.zajety():
                     return self._wyslij({"blad": "Poczekaj, aż skończy się bieżące zadanie."}, kod=HTTPStatus.CONFLICT)

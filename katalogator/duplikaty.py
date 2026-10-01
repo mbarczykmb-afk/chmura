@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS operacje (
     cofnieta INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS dup_meta (klucz TEXT PRIMARY KEY, wartosc TEXT);
+CREATE TABLE IF NOT EXISTS dup_przejrzane (rodzaj TEXT NOT NULL, klucz TEXT NOT NULL, PRIMARY KEY (rodzaj, klucz));
 """
 
 # Ścieżki, które zwykle są kopiami — plik z nich zostawiamy tylko w ostateczności.
@@ -63,6 +64,12 @@ _PODEJRZANE = re.compile(
 
 def przygotuj(db: sqlite3.Connection) -> None:
     db.executescript(SCHEMAT)
+
+
+def nowa_partia(db: sqlite3.Connection) -> int:
+    """Numer operacji (czas w ms) — zawsze większy od poprzedniego, także przy dwóch operacjach w tej samej ms."""
+    ost = db.execute("SELECT MAX(partia) FROM operacje").fetchone()[0] or 0
+    return max(int(time.time() * 1000), ost + 1)
 
 
 def _odcisk(sciezka: str, rozmiar: int, pelny: bool, przerwij=None, licz=None) -> str:
@@ -239,8 +246,32 @@ def szukano(db: sqlite3.Connection) -> bool:
 _GRUPY = """
     SELECT o.pelny h, p.rozmiar, COUNT(*) n FROM pliki p
     JOIN odciski o ON o.sciezka = p.sciezka AND o.rozmiar = p.rozmiar AND o.mtime = p.mtime
-    WHERE o.pelny IS NOT NULL GROUP BY o.pelny HAVING COUNT(*) > 1
+    WHERE o.pelny IS NOT NULL AND o.pelny NOT IN (SELECT klucz FROM dup_przejrzane WHERE rodzaj = 'dup')
+    GROUP BY o.pelny HAVING COUNT(*) > 1
 """
+
+
+# „Zostaw wszystkie” po przejrzeniu: grupa znika z listy (duplikaty: klucz = odcisk, podobne: ścieżki grupy)
+def oznacz_przejrzane(db: sqlite3.Connection, rodzaj: str, klucze: list[str], wartosc: bool = True) -> dict:
+    przygotuj(db)
+    if wartosc:
+        db.executemany("INSERT OR IGNORE INTO dup_przejrzane VALUES (?, ?)", [(rodzaj, str(k)) for k in klucze])
+    elif klucze:
+        db.executemany("DELETE FROM dup_przejrzane WHERE rodzaj=? AND klucz=?", [(rodzaj, str(k)) for k in klucze])
+    else:
+        db.execute("DELETE FROM dup_przejrzane WHERE rodzaj=?", (rodzaj,))
+    db.commit()
+    return {"przejrzane": ile_przejrzanych(db, rodzaj)}
+
+
+def ile_przejrzanych(db: sqlite3.Connection, rodzaj: str) -> int:
+    przygotuj(db)
+    return db.execute("SELECT COUNT(*) FROM dup_przejrzane WHERE rodzaj=?", (rodzaj,)).fetchone()[0]
+
+
+def przejrzane_klucze(db: sqlite3.Connection, rodzaj: str) -> set[str]:
+    przygotuj(db)
+    return {r[0] for r in db.execute("SELECT klucz FROM dup_przejrzane WHERE rodzaj=?", (rodzaj,))}
 
 
 def podsumowanie(db: sqlite3.Connection) -> dict:
@@ -272,7 +303,8 @@ def _odcisk_stanu(db: sqlite3.Connection) -> tuple:
     plik = next((r[2] for r in db.execute("PRAGMA database_list") if r[1] == "main"), "")
     return (plik or id(db),
             *db.execute("SELECT COUNT(*), MAX(rowid), TOTAL(rowid), TOTAL(mtime), TOTAL(rozmiar) FROM pliki").fetchone(),
-            *db.execute("SELECT COUNT(*), TOTAL(rowid), COUNT(pelny), MAX(pelny), MIN(pelny) FROM odciski").fetchone())
+            *db.execute("SELECT COUNT(*), TOTAL(rowid), COUNT(pelny), MAX(pelny), MIN(pelny) FROM odciski").fetchone(),
+            *db.execute("SELECT COUNT(*), MAX(klucz) FROM dup_przejrzane WHERE rodzaj='dup'").fetchone())
 
 
 def grupy(db: sqlite3.Connection, rodzaj: str | None = None, od: int = 0, ile: int = 50,
@@ -319,7 +351,7 @@ def _cel_przeniesienia(korzen: str, wzgledna: str, typ: str = "duplikat") -> str
 def przenies(db: sqlite3.Connection, decyzje: list[dict]) -> dict:
     """decyzje: [{"zostaw": id, "usun": [id, ...]}]. Przenosi do <korzeń>/Odłożone/Duplikaty/."""
     przygotuj(db)
-    partia = int(time.time() * 1000)
+    partia = nowa_partia(db)
     przeniesione, pominiete, bajty = 0, [], 0
     for d in decyzje:
         ids = [d["zostaw"], *d.get("usun", [])]
@@ -384,7 +416,7 @@ def _odloz_wiersz(db: sqlite3.Connection, w, partia: int, typ: str) -> str | Non
 def odloz(db: sqlite3.Connection, ids: list[int], typ: str) -> dict:
     """Odkłada wskazane pliki (np. podobne / nieostre zdjęcia) — bez wymogu identyczności."""
     przygotuj(db)
-    partia = int(time.time() * 1000)
+    partia = nowa_partia(db)
     przeniesione, pominiete, bajty = 0, [], 0
     for i in dict.fromkeys(int(x) for x in ids):
         w = db.execute("SELECT rowid, * FROM pliki WHERE rowid=?", (i,)).fetchone()

@@ -189,7 +189,7 @@ przyPokazaniu.pod = async () => { if (!an.podWczytane) await wczytajPodobne(); }
 async function wczytajPodobne(wiecej) {
   if (an.tryb === "podobne") {
     const r = await api(`/api/podobne?od=${wiecej ? an.grupy.length : 0}&ile=30`);
-    an.grupy = wiecej ? an.grupy.concat(r.grupy) : r.grupy; an.razem = r.razem;
+    an.grupy = wiecej ? an.grupy.concat(r.grupy) : r.grupy; an.razem = r.razem; an.przejrzane = r.przejrzane || 0;
   } else {
     const r = await api("/api/nieostre?ile=150");
     an.nieostre = r.pliki;
@@ -212,6 +212,12 @@ function rysujPodobne() {
   if (!stan.analiza) { l.innerHTML = BRAK_ANALIZY(); }
   else if (an.tryb === "podobne") {
     $("pod-info").textContent = `${an.razem} grup · ★ = najwyższa rozdzielczość i ostrość · kliknij, żeby zostawić więcej · dwuklik na miniaturze = powiększenie`;
+    if (an.przejrzane) {
+      const a = document.createElement("button"); a.className = "maly"; a.style.marginLeft = "8px";
+      a.textContent = `↺ pokaż ${an.przejrzane} przejrzanych`;
+      a.onclick = async () => { await api("/api/przejrzane", {rodzaj: "podobne", klucze: [], wartosc: false}); an.podWczytane = false; wczytajPodobne(); };
+      $("pod-info").append(a);
+    }
     if (!an.grupy.length) l.innerHTML = '<div class="pusto">Nie znaleziono podobnych zdjęć.</div>';
     for (const g of an.grupy) {
       const d = an.decyzje.get(g.map(w => w.id).join("-"));
@@ -271,8 +277,9 @@ function rysujPodobne() {
   $("pod-stopka").textContent = doOdl.length
     ? `Do odłożenia: ${doOdl.length} zdjęć${bajty ? ` (${rozmiar(bajty)})` : ""} — trafią do folderu Odłożone (można cofnąć)`
     : (an.tryb === "podobne" ? "Nic do odłożenia — wszystkie zdjęcia zostają." : "Zaznacz zdjęcia, które chcesz odłożyć.");
-  $("pod-odloz").disabled = !doOdl.length;
-  $("pod-odloz").textContent = an.tryb === "podobne" ? "Odłóż zaznaczone kopie" : "Odłóż zaznaczone";
+  const pomPod = an.tryb === "podobne" ? an.grupy.filter(g => (an.decyzje.get(g.map(w => w.id).join("-")) || {}).pomin).length : 0;
+  $("pod-odloz").disabled = !doOdl.length && !pomPod;
+  $("pod-odloz").textContent = an.tryb === "podobne" ? (doOdl.length ? "Odłóż zaznaczone kopie i pokaż kolejne" : "Oznacz jako przejrzane i pokaż kolejne") : "Odłóż zaznaczone";
 }
 function doOdlozenia() {
   if (an.tryb !== "podobne") return [...an.odloz];
@@ -321,7 +328,12 @@ $("pod-filtry").onclick = e => {
 };
 $("pod-odloz").onclick = async () => {
   const ids = doOdlozenia();
-  if (!confirm(`Odłożyć ${ids.length} zdjęć do folderu Odłożone?\n\nNic nie jest kasowane — operację można cofnąć w sekcji „Duplikaty”.`)) return;
+  // podobne: grupy „zostaw wszystkie” znikają jako przejrzane
+  const przejrzane = an.tryb === "podobne" ? an.grupy.filter(g => (an.decyzje.get(g.map(w => w.id).join("-")) || {}).pomin)
+    .map(g => g.map(w => w.sciezka).sort().join("|")) : [];
+  if (przejrzane.length) await api("/api/przejrzane", {rodzaj: "podobne", klucze: przejrzane});
+  if (!ids.length) { toast(`Przejrzane: ${przejrzane.length} grup zostaje bez zmian.`); an.podWczytane = false; wczytajPodobne(); return; }
+  if (!confirm(`Odłożyć ${ids.length} zdjęć do kosza (folder Odłożone)?\n\nNic nie jest kasowane — operację można cofnąć.`)) return;
   try {
     const w = await api("/api/odloz", {ids, typ: an.tryb});
     toast(`Odłożono ${w.przeniesione} zdjęć.` + (w.pominiete.length ? ` Pominięto: ${w.pominiete.length}.` : ""), async () => {

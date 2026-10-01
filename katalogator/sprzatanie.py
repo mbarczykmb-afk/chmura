@@ -104,6 +104,46 @@ def usun_odlozone(db: sqlite3.Connection, korzenie: list[str], kategorie_: list[
     return {"usuniete": usuniete, "bajty": bajty, "bledy": bledy[:50]}
 
 
+def usun_partie(db: sqlite3.Connection, partia: int, postep=None, przerwij=None) -> dict:
+    """Usuwa NA STAŁE tylko pliki odłożone w jednej operacji (np. „od razu usuń na stałe” w Duplikatach)."""
+    duplikaty.przygotuj(db)
+    ops = db.execute("SELECT id, do_ FROM operacje WHERE partia=? AND cofnieta=0", (int(partia),)).fetchall()
+    usuniete, bajty, bledy, foldery = 0, 0, [], set()
+    for i, op in enumerate(ops, 1):
+        if przerwij is not None and przerwij.is_set():
+            raise Przerwano(op["do_"])
+        p = op["do_"]
+        if duplikaty.FOLDER_ODLOZONE not in p.replace("\\", "/").split("/"):
+            continue  # bezpiecznik: kasujemy wyłącznie w folderach Odłożone
+        try:
+            r = os.path.getsize(p)
+            os.remove(p)
+            usuniete += 1
+            bajty += r
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            bledy.append(f"{p}: {e.strerror or e}")
+            continue
+        foldery.add(os.path.dirname(p))
+        db.execute("DELETE FROM operacje WHERE id=?", (op["id"],))
+        if postep and i % 50 == 0:
+            postep("usuwanie", i, len(ops), bajty)
+    db.commit()
+    for f in sorted(foldery, key=len, reverse=True):  # puste podfoldery w Odłożone — aż do samego „Odłożone”
+        while duplikaty.FOLDER_ODLOZONE in f.replace("\\", "/").split("/"):
+            try:
+                os.rmdir(f)
+            except OSError:
+                break
+            if os.path.basename(f) == duplikaty.FOLDER_ODLOZONE:
+                break
+            f = os.path.dirname(f)
+    if postep:
+        postep("gotowe", usuniete, len(ops), bajty)
+    return {"usuniete": usuniete, "bajty": bajty, "bledy": bledy[:50]}
+
+
 def usun_puste_foldery(korzenie: list[str]) -> int:
     """Puste foldery (albo z samymi śmieciami systemu: Thumbs.db, desktop.ini, .DS_Store…) w wybranych
     folderach — same wybrane foldery i „Odłożone” zostają."""

@@ -192,6 +192,10 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 .folder-nagl b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .akcje-zazn{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--akc-miekki);flex-wrap:wrap;font-size:13px}
 .siatka{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));grid-auto-rows:max-content;gap:10px;padding:12px;overflow:auto;align-content:start;max-height:calc(100vh - 340px)}
+#kosz-btn{position:relative}
+.kosz-licz{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center}
+#kosz-lista label{display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--lin);border-radius:10px;margin-bottom:6px}
+#kosz-lista label b{margin-left:auto}
 .kosz{border:0;border-radius:999px;width:30px;height:30px;padding:0;display:inline-grid;place-items:center;font-size:14px;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;flex:none}
 .kosz:hover{background:#dc2626}
 .ob .kosz,.zdj .kosz.na-zdj{position:absolute;right:6px;bottom:6px;z-index:2;opacity:0;transition:opacity .15s}
@@ -453,6 +457,7 @@ header .wersja,#biblioteka-btn,.tryby button{white-space:nowrap}
   <button class="projekt-btn" id="projekt-btn" title="Zmień projekt">📁 <span id="projekt-nazwa">…</span> ▾</button>
   <span class="odstep"></span>
   <button id="biblioteka-btn" class="tylko-porz" title="Przeglądaj bibliotekę: oś czasu i mapa miejsc; także na telefonie">📚<span class="t"> Biblioteka</span></button>
+  <button id="kosz-btn" title="Kosz: odłożone i usunięte pliki (folder Odłożone) — przywróć albo opróżnij">🗑<span class="kosz-licz" id="kosz-licz" hidden></span></button>
   <button id="telefon-btn" title="Telefon jako pilot: co robi program, uruchamianie kolejnych kroków, przeglądanie zdjęć">📱</button>
   <button id="motyw-btn" title="Motyw: jasny / ciemny" aria-label="Przełącz motyw jasny / ciemny"></button>
   <div style="position:relative">
@@ -752,7 +757,8 @@ header .wersja,#biblioteka-btn,.tryby button{white-space:nowrap}
       <div class="lista-dup" id="lista-dup"></div>
       <div class="stopka" id="stopka-dup" hidden>
         <span id="stopka-opis"></span>
-        <button class="glowny" id="odloz" title="Odłóż = przenieś kopie do folderu Odłożone\Duplikaty; nic nie jest kasowane (można cofnąć)">Odłóż zaznaczone kopie</button>
+        <label class="info" title="To identyczne kopie (sprawdzone bajt w bajt) — oryginał zawsze zostaje"><input type="checkbox" id="dup-trwale"> od razu usuń na stałe (bez kosza)</label>
+        <button class="glowny" id="odloz" title="Odłóż = przenieś kopie do kosza (folder Odłożone\Duplikaty) — można cofnąć; potem pokażą się kolejne grupy">Odłóż zaznaczone kopie</button>
       </div>
     </div>
   </section>
@@ -1220,7 +1226,8 @@ $("zamknij").onclick = async () => {
 
 // ---------- duplikaty ----------
 const IKONY = {zdjecie: "🖼️", film: "🎬", muzyka: "🎵", towarzyszacy: "📎", inne: "📄"};
-const DUP_NA_STRONE = 100;
+const DUP_NA_STRONE = 200;
+let dupPrzejrzane = 0;
 let dupGrupy = [], dupDecyzje = {}, dupFiltr = "", dupKoniec = false, bylDup = false, zakladka = "raport";
 
 function rozmiar(b) {
@@ -1312,6 +1319,7 @@ async function wczytajGrupy(odNowa) {
   const r = await api(`/api/duplikaty?rodzaj=${dupFiltr}&od=${dupGrupy.length}&ile=${DUP_NA_STRONE}`);
   r.grupy.forEach(g => { dupDecyzje[g.h] = {zostaw: g.zostaw, pomin: false}; });
   dupGrupy = dupGrupy.concat(r.grupy);
+  dupPrzejrzane = r.przejrzane || 0;
   dupKoniec = r.grupy.length < DUP_NA_STRONE;
   rysujGrupy();
 }
@@ -1320,6 +1328,12 @@ function rysujGrupy() {
   const l = $("lista-dup"); l.replaceChildren();
   const p = stan.duplikaty;
   $("dup-info").textContent = p ? `${p.nadmiar} zbędnych kopii · ${rozmiar(p.bajty)}` : "";
+  if (dupPrzejrzane) {  // grupy „zostaw wszystkie” — schowane po przejrzeniu
+    const a = document.createElement("button"); a.className = "maly"; a.style.marginLeft = "8px";
+    a.textContent = `↺ pokaż ${dupPrzejrzane} przejrzanych`; a.title = "Grupy, w których zostawiono wszystkie kopie";
+    a.onclick = async () => { await api("/api/przejrzane", {rodzaj: "dup", klucze: [], wartosc: false}); await odswiez(); wczytajGrupy(true); };
+    $("dup-info").append(a);
+  }
   if (!dupGrupy.length) {
     l.innerHTML = `<div class="zachęta"><div><strong>${p ? "Brak duplikatów w tej kategorii" : "Jeszcze nie szukano duplikatów"}</strong>
       ${p ? "" : `<button class="glowny" style="width:auto;margin-top:12px" ${zajety() || !stan.ma_wyniki ? "disabled" : ""}
@@ -1373,8 +1387,12 @@ function rysujGrupy() {
   let n = 0, b = 0;
   for (const g of dupGrupy) { const d = dupDecyzje[g.h]; if (!d.pomin) { n += g.n - 1; b += (g.n - 1) * g.rozmiar; } }
   $("stopka-dup").hidden = false;
-  $("stopka-opis").textContent = `Do odłożenia: ${n} plików (${rozmiar(b)}) z ${dupGrupy.length} wyświetlonych grup.`;
-  $("odloz").disabled = !n;
+  const pom = dupGrupy.filter(g => dupDecyzje[g.h].pomin).length;
+  $("stopka-opis").textContent = `Do odłożenia: ${n} plików (${rozmiar(b)}) z ${dupGrupy.length} wyświetlonych grup` +
+    (pom ? ` · ${pom} grup zostaje w całości (zniknie jako przejrzane)` : "") + ".";
+  $("odloz").disabled = !n && !pom;
+  $("odloz").textContent = n ? (trwaleDup() ? "🗑 Usuń zaznaczone kopie i pokaż kolejne" : "Odłóż zaznaczone kopie i pokaż kolejne")
+                             : "Oznacz jako przejrzane i pokaż kolejne";
 }
 
 for (const k of Object.keys(ZAKLADKI)) $("tab-" + k).onclick = () => pokazZakladke(k);
@@ -1388,23 +1406,42 @@ $("szukaj-dup").onclick = async () => {
   catch (e) { $("komunikat-dup").className = "komunikat blad"; $("komunikat-dup").textContent = e.message; }
 };
 $("przerwij-dup").onclick = () => api("/api/przerwij", {});
+const trwaleDup = () => $("dup-trwale").checked;
+try { $("dup-trwale").checked = localStorage.getItem("katalogator_dup_trwale") === "1"; } catch (e) { /* bez pamięci */ }
+$("dup-trwale").onchange = () => {
+  try { localStorage.setItem("katalogator_dup_trwale", trwaleDup() ? "1" : "0"); } catch (e) { /* bez pamięci */ }
+  rysujGrupy();
+};
 $("odloz").onclick = async () => {
   const decyzje = dupGrupy.filter(g => !dupDecyzje[g.h].pomin).map(g => ({
     zostaw: dupDecyzje[g.h].zostaw,
     usun: g.pliki.map(f => f.id).filter(id => id !== dupDecyzje[g.h].zostaw),
   }));
+  const przejrzane = dupGrupy.filter(g => dupDecyzje[g.h].pomin).map(g => g.h);
   const n = decyzje.reduce((s, d) => s + d.usun.length, 0);
-  if (!confirm(`Przenieść ${n} kopii do folderu Odłożone\\Duplikaty?\n\nOryginały zostają na miejscu. Operację można cofnąć.`)) return;
+  const trwale = trwaleDup() && n;
+  if (n && !confirm(trwale
+      ? `Usunąć NA STAŁE ${n} identycznych kopii?\n\nOryginały zostają. Tego nie da się cofnąć (na dysku sieciowym nie ma Kosza Windows).`
+      : `Przenieść ${n} kopii do kosza (folder Odłożone\\Duplikaty)?\n\nOryginały zostają na miejscu. Operację można cofnąć.`)) return;
   $("odloz").disabled = true;
   try {
-    const w = await api("/api/duplikaty/przenies", {decyzje});
-    if (w.pominiete.length) alert(`Pominięto ${w.pominiete.length}:\n` + w.pominiete.slice(0, 8).join("\n"));
-    toast(`Odłożono ${w.przeniesione} plików (${rozmiar(w.bajty)}) do Odłożone\\Duplikaty.`, async () => {
-      const c = await api("/api/duplikaty/cofnij", {});
-      toast(`Przywrócono ${c.przywrocone} plików.`); await odswiez(); wczytajGrupy(true);
-    });
+    if (przejrzane.length) await api("/api/przejrzane", {rodzaj: "dup", klucze: przejrzane});
+    if (n) {
+      const w = await api("/api/duplikaty/przenies", {decyzje});
+      if (w.pominiete.length) alert(`Pominięto ${w.pominiete.length}:\n` + w.pominiete.slice(0, 8).join("\n"));
+      if (trwale) {
+        stan = await api("/api/odlozone/usun", {partia: w.partia});
+        toast(`🗑 Usuwam na stałe ${w.przeniesione} kopii (${rozmiar(w.bajty)}) — postęp u góry okna.`);
+      } else {
+        toast(`Odłożono ${w.przeniesione} plików (${rozmiar(w.bajty)}) do kosza — Odłożone\\Duplikaty.`, async () => {
+          const c = await api("/api/duplikaty/cofnij", {});
+          toast(`Przywrócono ${c.przywrocone} plików.`); await odswiez(); wczytajGrupy(true);
+        });
+      }
+    } else toast(`Przejrzane: ${przejrzane.length} grup zostaje bez zmian.`);
   } catch (e) { alert(e.message); }
-  await odswiez(); wczytajGrupy(true);
+  await odswiez(); await wczytajGrupy(true);
+  $("lista-dup").scrollTop = 0; $("lista-dup").scrollIntoView({block: "nearest"});
 };
 $("cofnij").onclick = async () => {
   if (!confirm("Przywrócić pliki z ostatniego odłożenia na ich miejsce?")) return;
@@ -1458,6 +1495,20 @@ function rysujDup() {
 <script src="/ui/analiza.js"></script>
 <script src="/ui/projekt.js"></script>
 <script src="/ui/przewodnik.js"></script>
+<div class="nakladka" id="okno-kosz" hidden>
+  <div class="okno" role="dialog" aria-labelledby="kosz-tytul" style="max-width:560px;min-height:0;height:auto">
+    <h2 id="kosz-tytul">🗑 Kosz</h2>
+    <div class="info">Odłożone i usunięte pliki leżą w folderze <b>Odłożone</b> w każdym wybranym folderze
+      (np. <code>\\MyCloud\Zdjęcia\Odłożone\Duplikaty</code>). Dopóki tu są — możesz je przywrócić
+      (↶ Cofnij przy odkładaniu albo ręcznie w Eksploratorze).</div>
+    <div id="kosz-lista" style="margin:12px 0"></div>
+    <label class="info"><input type="checkbox" id="kosz-puste" checked> usuń też puste foldery po plikach</label>
+    <div class="przyciski" style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button id="kosz-zamknij">Zamknij</button>
+      <button class="glowny" id="kosz-oproznij" style="width:auto">🗑 Opróżnij zaznaczone…</button>
+    </div>
+  </div>
+</div>
 <script src="/ui/sprzatanie.js"></script>
 <script src="/ui/pomoc.js"></script>
 </body>

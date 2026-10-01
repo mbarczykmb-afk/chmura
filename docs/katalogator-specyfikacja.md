@@ -363,6 +363,10 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     wygrywa z GPS z pliku i z .json Google; cudzego .xmp nie nadpisujemy. Baza: lat/lon/rozmiar/mtime, kasowany
     odcisk (duplikaty) i wpis wspólnego indeksu; zmiana rozsyłana do baz innych projektów i Przeglądarki.
     `/api/g/lokalizacja` {ids, lat, lon|null}, `/api/g/miejsce?q=` (Polska offline; dalej Nominatim w oknie).
+40. **Kosz i przejrzane 1.16** ✅: tabela `dup_przejrzane(rodzaj, klucz)` (dup: odcisk, podobne: ścieżki grupy) —
+    pomijana w grupach i podsumowaniu, `/api/przejrzane`; Duplikaty po 200 grup, po odłożeniu lista od początku
+    (= kolejne); kosz = `Odłożone` w źródłach i w miejscu docelowym (`korzenie_kosza`), 🗑 w nagłówku;
+    „od razu na stałe” = `sprzatanie.usun_partie` (tylko pliki tej operacji); numery partii zawsze rosnące.
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

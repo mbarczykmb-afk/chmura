@@ -163,12 +163,62 @@ naStan.push(() => {
   bylaPracaUsuwania = !!z.trwa;
   przyciskUsun();
 });
+// ---------- 🗑 Kosz w nagłówku (oba tryby): co leży w folderach Odłożone, opróżnianie ----------
+const IKONY_KOSZA = {"Duplikaty": "📑", "Śmieci": "🗑", "Podobne": "🖼", "Nieostre": "🌫", "Usunięte": "🗑"};
+const koszZazn = new Map();
+let koszStan = null;
+async function odswiezKosz() {
+  try { koszStan = await api("/api/odlozone"); } catch (e) { return; }
+  const n = koszStan.plikow;
+  $("kosz-licz").hidden = !n; $("kosz-licz").textContent = n > 999 ? "999+" : n;
+  $("kosz-btn").title = n ? `Kosz: ${plikow(n)} (${rozmiar(koszStan.bajty)}) w folderach Odłożone — przywróć albo opróżnij`
+                          : "Kosz jest pusty";
+  if (!$("okno-kosz").hidden) rysujKosz();
+}
+function rysujKosz() {
+  const l = $("kosz-lista"); l.replaceChildren();
+  const o = koszStan || {kategorie: [], plikow: 0};
+  if (!o.plikow) l.innerHTML = '<div class="pusto">Kosz jest pusty.</div>';
+  for (const k of o.kategorie) {
+    if (!koszZazn.has(k.nazwa)) koszZazn.set(k.nazwa, k.nazwa !== "Podobne" && k.nazwa !== "Nieostre");
+    const w = document.createElement("label");
+    const c = document.createElement("input"); c.type = "checkbox"; c.checked = koszZazn.get(k.nazwa);
+    c.onchange = () => { koszZazn.set(k.nazwa, c.checked); rysujKosz(); };
+    const b = document.createElement("b"); b.textContent = `${plikow(k.plikow)} · ${rozmiar(k.bajty)}`;
+    w.append(c, `${IKONY_KOSZA[k.nazwa] || "📦"} ${k.nazwa}`, b); l.append(w);
+  }
+  const wyb = o.kategorie.filter(k => koszZazn.get(k.nazwa));
+  const bt = $("kosz-oproznij");
+  bt.disabled = !wyb.length || zajety();
+  bt.textContent = wyb.length ? `🗑 Usuń na stałe ${plikow(wyb.reduce((a, k) => a + k.plikow, 0))} (${rozmiar(wyb.reduce((a, k) => a + k.bajty, 0))})…` : "🗑 Opróżnij zaznaczone…";
+}
+$("kosz-btn").onclick = async () => { $("okno-kosz").hidden = false; rysujKosz(); await odswiezKosz(); rysujKosz(); };
+$("kosz-zamknij").onclick = () => { $("okno-kosz").hidden = true; };
+$("okno-kosz").onclick = e => { if (e.target.id === "okno-kosz") $("okno-kosz").hidden = true; };
+$("kosz-oproznij").onclick = async () => {
+  const wyb = (koszStan || {kategorie: []}).kategorie.filter(k => koszZazn.get(k.nazwa));
+  const n = wyb.reduce((a, k) => a + k.plikow, 0), b = wyb.reduce((a, k) => a + k.bajty, 0);
+  if (!confirm(`Usunąć NA STAŁE ${plikow(n)} (${rozmiar(b)}) z kosza: ${wyb.map(k => k.nazwa).join(", ")}?\n\n` +
+               "Tego NIE da się cofnąć. Na dysku sieciowym (My Cloud) nie ma Kosza Windows — pliki znikną od razu.")) return;
+  try { stan = await api("/api/odlozone/usun", {kategorie: wyb.map(k => k.nazwa), puste: $("kosz-puste").checked}); rysuj(); }
+  catch (e) { toast(e.message); }
+  $("okno-kosz").hidden = true;
+};
+let bylaPracaKosza = false;
+naStan.push(() => {  // po zakończeniu usuwania na stałe — odśwież licznik
+  const z = (stan.zad || {}).usuwanie || {};
+  if (bylaPracaKosza && !z.trwa) odswiezKosz();
+  bylaPracaKosza = !!z.trwa;
+});
+setTimeout(odswiezKosz, 1500);
+
 // odkładanie w Duplikatach/Podobnych też zmienia Odłożone
 {
   const staryFetch = window.api;
   window.api = async (sciezka, dane) => {
     const w = await staryFetch(sciezka, dane);
-    if (sprzatanie() && /^\/api\/(odloz|duplikaty\/(przenies|cofnij))/.test(sciezka)) setTimeout(odswiezOdlozone, 300);
+    if (/^\/api\/(odloz|usun|duplikaty\/(przenies|cofnij)|projekty\/otworz|tryb|ustawienia)/.test(sciezka)) setTimeout(odswiezKosz, 300);
+    if (sprzatanie() && /^\/api\/(odloz|usun|duplikaty\/(przenies|cofnij))/.test(sciezka)) setTimeout(odswiezOdlozone, 300);
     if (sprzatanie() && sciezka === "/api/skanuj") smieci.wczytane = false;
     return w;
   };

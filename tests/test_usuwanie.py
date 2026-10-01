@@ -86,3 +86,42 @@ def test_usuwanie_z_telefonu_tylko_ze_sterowaniem(tmp_path):
         assert post("/api/g/usun/cofnij?z=wszystko", {"partia": w["partia"]}, t)["przywrocone"] == 1
     finally:
         s.stop()
+
+
+def test_przejrzane_grupy_znikaja(tmp_path):
+    from katalogator import duplikaty
+    k = tmp_path / "d"
+    k.mkdir()
+    for i in range(3):
+        for j in range(2):
+            (k / f"p{i}_{j}.bin").write_bytes(bytes([i]) * (1000 + i))
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    duplikaty.szukaj(db)
+    g = duplikaty.grupy(db, None, 0, 10)
+    assert len(g) == 3 and duplikaty.podsumowanie(db)["nadmiar"] == 3
+    duplikaty.oznacz_przejrzane(db, "dup", [g[0]["h"]])
+    assert [x["h"] for x in duplikaty.grupy(db, None, 0, 10)] == [g[1]["h"], g[2]["h"]]  # bez starej pamięci listy
+    assert duplikaty.podsumowanie(db)["nadmiar"] == 2 and duplikaty.ile_przejrzanych(db, "dup") == 1
+    duplikaty.oznacz_przejrzane(db, "dup", [], False)  # „pokaż przejrzane”
+    assert len(duplikaty.grupy(db, None, 0, 10)) == 3
+
+
+def test_od_razu_na_stale_tylko_ta_partia(tmp_path):
+    from katalogator import duplikaty
+    k = tmp_path / "d"
+    k.mkdir()
+    for i in range(2):
+        for j in range(2):
+            (k / f"p{i}_{j}.bin").write_bytes(bytes([i]) * (1000 + i))
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    duplikaty.szukaj(db)
+    g = duplikaty.grupy(db, None, 0, 10)
+    dec = [{"zostaw": x["zostaw"], "usun": [p["id"] for p in x["pliki"] if p["id"] != x["zostaw"]]} for x in g]
+    duplikaty.przenies(db, dec[:1])                     # do kosza (zostaje)
+    w = duplikaty.przenies(db, dec[1:])                 # „od razu na stałe”
+    r = sprzatanie.usun_partie(db, w["partia"])
+    assert r["usuniete"] == 1
+    assert sprzatanie.odlozone([str(k)])["plikow"] == 1  # wcześniejsza partia nadal w koszu
+    assert len([f for f in os.listdir(k) if f.endswith(".bin")]) == 2  # oryginały zostały
