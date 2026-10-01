@@ -30,7 +30,8 @@ function rysujAnalizeLewa() {
   }
   an.bylaAnaliza = !!a;
 }
-const BRAK_ANALIZY = () => stan.wczytuje ? '<div class="pusto">Wczytuję wyniki projektu…</div>'
+const BRAK_ANALIZY = () => stan.wczytuje ? '<div class="pusto">Wczytuję wyniki projektu… (duży projekt — to może potrwać do minuty)</div>'
+  : stan.blad_wczytania ? `<div class="pusto">Nie udało się wczytać wyników: ${stan.blad_wczytania}</div>`
   : `<div class="pusto">Zdjęcia nie są jeszcze przeanalizowane.<br><button class="glowny" style="width:auto;margin-top:12px"
      ${zajety() || !stan.ma_wyniki ? "disabled" : ""} onclick="document.getElementById('analizuj').click()">Analizuj zdjęcia</button></div>`;
 naStan.push(rysujAnalizeLewa);

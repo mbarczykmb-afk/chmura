@@ -291,8 +291,10 @@ class Stan:
                 def licz():
                     try:
                         wynik.update(self._przelicz_podsumowania(wersja))
-                    except Exception:
+                        self._blad_podsumowan = None
+                    except Exception as e:
                         LOG.exception("Nie udało się policzyć podsumowań")
+                        self._blad_podsumowan = f"{type(e).__name__}: {e}"
                     finally:
                         self._licze_podsumowania.release()
                 w = threading.Thread(target=licz, daemon=True)
@@ -301,6 +303,7 @@ class Stan:
                 if not w.is_alive():
                     cache = wynik
             dane["wczytuje"] = self._licze_podsumowania.locked() and w_cache < 0
+            dane["blad_wczytania"] = getattr(self, "_blad_podsumowan", None) if w_cache < 0 else None
             dane.update(cache)
         return dane
 

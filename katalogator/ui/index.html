@@ -1335,6 +1335,11 @@ function rysujGrupy() {
     $("dup-info").append(a);
   }
   if (!dupGrupy.length) {
+    if (!p && (stan.wczytuje || stan.blad_wczytania)) {  // duży projekt: wyniki liczą się chwilę po starcie
+      l.innerHTML = `<div class="pusto">${stan.blad_wczytania ? "Nie udało się wczytać wyników: " + stan.blad_wczytania
+        : "Wczytuję wyniki projektu… (duży projekt — to może potrwać do minuty)"}</div>`;
+      $("stopka-dup").hidden = true; return;
+    }
     l.innerHTML = `<div class="zachęta"><div><strong>${p ? "Brak duplikatów w tej kategorii" : "Jeszcze nie szukano duplikatów"}</strong>
       ${p ? "" : `<button class="glowny" style="width:auto;margin-top:12px" ${zajety() || !stan.ma_wyniki ? "disabled" : ""}
         onclick="document.getElementById('szukaj-dup').click()">Szukaj duplikatów</button>`}</div></div>`;
@@ -1480,6 +1485,11 @@ function rysujDup() {
   $("cofnij-box").hidden = !c;
   if (c) $("cofnij-opis").textContent = `Ostatnio odłożono ${c.n} plików.`;
   if (bylDup && !d.trwa) { bylDup = false; if (zakladka === "dup") wczytajGrupy(true); else dupGrupy = []; }
+  // wyniki doszły po otwarciu okna (duży projekt liczy je chwilę) — przerysuj, zamiast „nie szukano”
+  if (!!stan.duplikaty !== rysujDup.bylyWyniki) {
+    rysujDup.bylyWyniki = !!stan.duplikaty;
+    if (zakladka === "dup") wczytajGrupy(true);
+  }
   if (d.trwa) bylDup = true;
 }
 
