@@ -475,7 +475,20 @@ class Stan:
                     with self.blokada:
                         self.skan["przejrzano"] = razem
                     nieczytelne += w.get("nieczytelne") or []
+            # foldery odznaczone od poprzedniego skanu: ich pliki znikają z listy projektu (decyzje zostają
+            # zapamiętane — po ponownym zaznaczeniu folderu wrócą)
+            wybrane = [os.path.abspath(f) for f in foldery]  # tak zapisuje je skaner
+            stare = [r[0] for r in db.execute(
+                f"SELECT DISTINCT korzen FROM pliki WHERE korzen NOT IN ({','.join('?' * len(wybrane))})", wybrane)]
+            usuniete = 0
+            for k in stare:
+                usuniete += db.execute("DELETE FROM pliki WHERE korzen = ?", (k,)).rowcount
+            db.commit()
             komunikat, blad = f"Gotowe — przejrzano {razem} plików.", ""
+            if usuniete:
+                komunikat += (f" Z listy zniknęło {usuniete} plików z folderów, których już nie wybrano "
+                              f"({', '.join(stare[:3])}{'…' if len(stare) > 3 else ''}).")
+                LOG.info("Usunięto z projektu %s plików z niewybranych folderów: %s", usuniete, stare)
             if nieczytelne:
                 komunikat += (f" Nie udało się otworzyć {len(nieczytelne)} folderów (np. {nieczytelne[0]}) — "
                               "ich wcześniejsze wyniki zostały zachowane.")

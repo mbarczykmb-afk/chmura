@@ -70,3 +70,23 @@ def test_przelaczanie_trybow(tmp_path):
     assert stan.przelacz_tryb("porzadkowanie") is None and stan.pid == porz  # wraca do ostatniego projektu
     assert stan.przelacz_tryb("sprzatanie") is None and stan.pid == sprz  # i do tego samego sprzątania
     assert stan.przelacz_tryb("xyz")
+
+
+def test_odznaczony_folder_znika_z_listy_po_skanie(tmp_path):
+    import time
+    a, b = tmp_path / "A", tmp_path / "B"
+    a.mkdir(); b.mkdir()
+    _jpg_z_exif(a / "a.jpg", data="2021:01:01 12:00:00", gps=None)
+    _jpg_z_exif(b / "b.jpg", data="2022:01:01 12:00:00", gps=None)
+    stan = aplikacja.Stan(tmp_path / "dane")
+
+    def skan(*foldery):
+        stan.zapisz_ustawienia({"zrodla": [{"sciezka": str(f), "tryb": "kopiuj"} for f in foldery], "cel": ""})
+        assert stan.rozpocznij_skan() is None
+        while stan.zajety():
+            time.sleep(0.05)
+        return sorted(os.path.basename(r[0]) for r in stan.z_db(lambda db: db.execute("SELECT sciezka FROM pliki").fetchall()))
+    assert skan(a) == ["a.jpg"]
+    assert skan(a, b) == ["a.jpg", "b.jpg"]
+    assert skan(b) == ["b.jpg"] and "zniknęło 1 plików" in stan.skan["komunikat"]
+    assert (a / "a.jpg").exists()  # na dysku nic się nie zmienia
