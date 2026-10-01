@@ -155,6 +155,13 @@ folderu („2004 Zakopane”), a na końcu „w domu”.
      wtedy telefon tylko ogląda. *✎ Ustaw swój PIN* — stały PIN (4–12 cyfr), a telefon zostaje zalogowany
      także po ponownym uruchomieniu programu. Działa, dopóki Katalogator jest otwarty.
 
+**📍 Lokalizacja — dodaj, zmień, usuń**: na mapie **przeciągnij pinezkę** w nowe miejsce (dymek pinezki:
+*✖ Usuń lokalizację*); w podglądzie zdjęcia **📍 Dodaj / Zmień miejsce** (klawisz *L*) — kliknij na mapie albo wyszukaj
+miejscowość, opcjonalnie *także pozostałe zdjęcia z tego dnia bez lokalizacji* (aparat bez GPS na wycieczce).
+Zapis w samym pliku: **JPEG** — GPS w EXIF (obraz bajt w bajt bez zmian, data modyfikacji zachowana; widzą to
+Windows, Google Zdjęcia, telefony), **HEIC/PNG/RAW/filmy** — plik `.xmp` obok (Lightroom, darktable, digiKam).
+Zawsze z **↶ Cofnij**; zmiana od razu widoczna w innych projektach i w Przeglądarce.
+
 **🗑 Usuń — wszędzie, gdzie widać plik**: kafelki i podgląd w Bibliotece i Przeglądarce (także klawisz *Delete*),
 zakładki Duplikaty, Dokumenty, Podobne, Nie z aparatu, Śmieci, 🌳 Drzewo, duży podgląd oraz telefon (pilot, gdy
 pozwolono sterować). Plik trafia do kosza programu `<folder>/Odłożone/Usunięte/…` — działa też na dyskach sieciowych,

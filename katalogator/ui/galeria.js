@@ -327,7 +327,9 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowRight" && zoom.s === 1) krokRecznie(1);
   if (e.key === "p" || e.key === "P") przelaczPokaz();
   if ((e.key === "f" || e.key === "F") && W_PROGRAMIE) $("p-ulub").click();
+  if (!$("lok").hidden) { if (e.key === "Escape") zamknijLok(); return; }
   if (e.key === "Delete" && MOZE_USUWAC) $("p-usun").click();
+  if ((e.key === "l" || e.key === "L") && MOZE_USUWAC) $("p-miejsce").click();
   if (e.key === "+" || e.key === "=") zoomUstaw(zoom.s * 1.4);
   if (e.key === "-") zoomUstaw(zoom.s / 1.4);
   if (e.key === "0") zoomUstaw(1);
@@ -360,8 +362,14 @@ async function pokazMape() {
   if (g.klaster) g.mapa.removeLayer(g.klaster);
   g.klaster = L.markerClusterGroup({chunkedLoading: true, maxClusterRadius: 50, showCoverageOnHover: false});
   const markery = g.punkty.map(([id, lat, lon, film]) => {
-    const m = L.marker([lat, lon], {title: film ? "film" : "zdjęcie"});
+    const m = L.marker([lat, lon], {title: film ? "film" : "zdjęcie", draggable: MOZE_USUWAC, autoPan: true});
     m.on("click", () => otworzPinezke(m, id, film));
+    if (MOZE_USUWAC) m.on("dragend", () => {  // 📍 przesunięta pinezka = nowe miejsce zdjęcia
+      const ll = m.getLatLng(), stare = [lat, lon];
+      ustawLokalizacje([id], ll.lat, ll.lng, {[id]: stare}).then(ok => {
+        if (ok) { lat = ll.lat; lon = ll.lng; } else m.setLatLng(stare);
+      });
+    });
     m.on("dblclick", e => { L.DomEvent.stop(e); pelnyZPinezki(id, film); });
     return m;
   });
@@ -369,7 +377,8 @@ async function pokazMape() {
   g.mapa.addLayer(g.klaster);
   if (markery.length) g.mapa.fitBounds(g.klaster.getBounds(), {padding: [30, 30], maxZoom: 14});
   info(markery.length
-    ? `${markery.length.toLocaleString("pl-PL")} zdjęć i filmów na mapie · kliknij pinezkę = miniatura, dwa razy = całe zdjęcie`
+    ? `${markery.length.toLocaleString("pl-PL")} zdjęć i filmów na mapie · kliknij pinezkę = miniatura, dwa razy = całe zdjęcie` +
+      (MOZE_USUWAC ? " · przeciągnij pinezkę = zmień miejsce" : "")
     : "Brak zdjęć z zapisanym miejscem (GPS).");
 }
 function info(t) { $("mapa-info").hidden = !t; $("mapa-info").textContent = t || ""; }
@@ -385,6 +394,14 @@ async function otworzPinezke(m, id, film) {
   const b = document.createElement("button"); b.textContent = film ? "▶ Odtwórz" : "🔍 Całe zdjęcie";
   b.onclick = () => pelnyZPinezki(id, film);
   div.append(n, d, b);
+  if (MOZE_USUWAC) {
+    const u = document.createElement("button"); u.textContent = "✖ Usuń lokalizację"; u.className = "lok-usun";
+    u.onclick = async () => {
+      const ll = m.getLatLng();
+      if (await ustawLokalizacje([id], null, null, {[id]: [ll.lat, ll.lng]})) { g.klaster.removeLayer(m); }
+    };
+    div.append(u);
+  }
   m.bindPopup(div, {maxWidth: 260}).openPopup();
   try {
     const p = await api("/api/g/plik", {id});
@@ -602,6 +619,112 @@ async function rysujKolekcje() {
   if (!W_PROGRAMIE && !r.albumy.length && !r.ulubione.n) s.innerHTML = '<div class="pusto">Brak ulubionych i albumów — tworzy się je w programie na komputerze.</div>';
 }
 
+// ---------- 📍 lokalizacja: dodaj / zmień / usuń (w pliku: JPEG — EXIF, inne — .xmp obok) ----------
+// poprzednie: {id: [lat, lon] | [null, null]} — do „Cofnij”
+async function ustawLokalizacje(ids, lat, lon, poprzednie, cicho = false) {
+  let w;
+  try { w = await post("/api/g/lokalizacja", {ids, lat, lon}); }
+  catch (e) { toastG("Nie zapisano lokalizacji: " + e.message); return false; }
+  if (!w.zmienione) { toastG("Nie zapisano lokalizacji: " + (w.bledy[0] || "")); return false; }
+  for (const tab of [g.pliki, g.lista]) for (const p of tab || []) if (ids.includes(p.id) && w.poprzednie[p.id]) {
+    p.lat = lat; p.lon = lon;
+  }
+  if (g.widok !== "mapa") g.punkty = null;  // mapa wczyta się na nowo
+  wczytajLata(true).catch(() => {});
+  if (!$("pelny").hidden) narzedziaPelnego(biezacy());
+  if (cicho) return true;
+  const n = w.zmienione, co = n === 1 ? "zdjęcia" : `${n} zdjęć`;
+  toastG((lat === null ? `📍 Usunięto lokalizację ${co}` : `📍 Zapisano lokalizację ${co}`) +
+         (w.bledy.length ? ` · nie udało się: ${w.bledy.length} (${w.bledy[0]})` : ""), async () => {
+    // cofnięcie: każdemu przywracamy jego poprzednie miejsce (grupami)
+    const grupy = new Map();
+    for (const [id, [la, lo]] of Object.entries(poprzednie || w.poprzednie)) {
+      if (!(id in w.poprzednie)) continue;
+      const k = la === null ? "brak" : `${la},${lo}`;
+      if (!grupy.has(k)) grupy.set(k, {la, lo, ids: []});
+      grupy.get(k).ids.push(+id);
+    }
+    for (const x of grupy.values()) await ustawLokalizacje(x.ids, x.la, x.lo, null, true);
+    g.punkty = null; if (g.widok === "mapa") pokazMape().catch(() => {});
+    toastG("↶ Przywrócono poprzednią lokalizację");
+  });
+  return true;
+}
+
+// okno wyboru miejsca: kliknij na mapie / przeciągnij pinezkę / wyszukaj miejscowość
+const lok = {mapa: null, znacznik: null, p: null};
+function oknoLokalizacji(p) {
+  lok.p = p; stopPokaz();
+  $("lok").hidden = false;
+  $("lok-tyt").textContent = `📍 ${p.nazwa || "Lokalizacja"}`;
+  $("lok-szukaj").value = ""; $("lok-wyniki").replaceChildren();
+  // „także inne zdjęcia z tego dnia bez lokalizacji” — najczęstszy przypadek: aparat bez GPS na wycieczce
+  const dzien = (p.data || "").slice(0, 10);
+  const inne = dzien ? (g.lista || []).filter(x => x.id !== p.id && x.lat == null && (x.data || "").slice(0, 10) === dzien) : [];
+  $("lok-inne").hidden = !inne.length; $("lok-inne-cb").checked = false;
+  $("lok-inne-t").textContent = `także ${liczbaZdjec(inne.length)} z tego dnia bez lokalizacji`;
+  lok.inne = inne;
+  $("lok-usun").hidden = p.lat == null;
+  if (!lok.mapa) {
+    lok.mapa = L.map("lok-mapa", {doubleClickZoom: false}).setView([52, 19], 6);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'}).addTo(lok.mapa);
+    lok.mapa.on("click", e => ustawZnacznik(e.latlng.lat, e.latlng.lng));
+  }
+  if (lok.znacznik) { lok.mapa.removeLayer(lok.znacznik); lok.znacznik = null; }
+  setTimeout(() => {
+    lok.mapa.invalidateSize();
+    if (p.lat != null) { ustawZnacznik(p.lat, p.lon); lok.mapa.setView([p.lat, p.lon], 14); }
+    else lok.mapa.setView(lok.ostatnie || [52, 19], lok.ostatnie ? 12 : 6);
+  }, 30);
+  $("lok-zapisz").disabled = true;
+  $("lok-pomoc").textContent = p.lat == null ? "Kliknij na mapie, gdzie zrobiono zdjęcie — albo wyszukaj miejscowość."
+                                              : "Przeciągnij pinezkę albo kliknij w nowe miejsce.";
+}
+function ustawZnacznik(la, lo) {
+  if (!lok.znacznik) {
+    lok.znacznik = L.marker([la, lo], {draggable: true}).addTo(lok.mapa);
+    lok.znacznik.on("dragend", () => { $("lok-zapisz").disabled = false; });
+  } else lok.znacznik.setLatLng([la, lo]);
+  $("lok-zapisz").disabled = false;
+}
+function zamknijLok() { $("lok").hidden = true; }
+$("lok-anuluj").onclick = zamknijLok;
+$("lok").onclick = e => { if (e.target.id === "lok") zamknijLok(); };
+$("lok-zapisz").onclick = async () => {
+  if (!lok.znacznik) return;
+  const ll = lok.znacznik.getLatLng(), p = lok.p;
+  const cele = [p, ...($("lok-inne-cb").checked ? lok.inne : [])];
+  const pop = Object.fromEntries(cele.map(x => [x.id, [x.lat ?? null, x.lon ?? null]]));
+  if (await ustawLokalizacje(cele.map(x => x.id), ll.lat, ll.lng, pop)) { lok.ostatnie = [ll.lat, ll.lng]; zamknijLok(); }
+};
+$("lok-usun").onclick = async () => {
+  const p = lok.p;
+  if (await ustawLokalizacje([p.id], null, null, {[p.id]: [p.lat, p.lon]})) zamknijLok();
+};
+let lokZegar = null;
+$("lok-szukaj").oninput = () => {
+  clearTimeout(lokZegar);
+  const q = $("lok-szukaj").value.trim();
+  if (q.length < 2) { $("lok-wyniki").replaceChildren(); return; }
+  lokZegar = setTimeout(async () => {
+    let wyniki = [];
+    try { wyniki = (await api("/api/g/miejsce", {q})).miejsca; } catch (e) { /* bez wyników lokalnych */ }
+    if (!wyniki.length) {  // poza Polską / ulice — OpenStreetMap (internet, jak podkład mapy)
+      try {
+        const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=6&accept-language=pl&q=" + encodeURIComponent(q));
+        wyniki = (await r.json()).map(x => ({nazwa: x.display_name, lat: +x.lat, lon: +x.lon}));
+      } catch (e) { /* brak internetu */ }
+    }
+    const l = $("lok-wyniki"); l.replaceChildren();
+    if (!wyniki.length) { l.append(Object.assign(document.createElement("div"), {className: "info", textContent: "Nic nie znaleziono."})); return; }
+    for (const m of wyniki) l.append(przycisk("📍 " + m.nazwa, () => {
+      ustawZnacznik(m.lat, m.lon); lok.mapa.setView([m.lat, m.lon], 13); l.replaceChildren();
+    }));
+  }, 300);
+};
+$("p-miejsce").onclick = e => { e.stopPropagation(); const p = biezacy(); if (p) oknoLokalizacji(p); };
+
 // ---------- 🗑 usuwanie: do kosza programu (Odłożone/Usunięte), z cofaniem ----------
 // w oknie programu i na telefonie z pilotem (serwer 24/7 jest tylko do oglądania)
 const MOZE_USUWAC = W_PROGRAMIE || !!P.get("pilot");
@@ -642,6 +765,8 @@ function narzedziaPelnego(p) {
   $("p-z-albumu").hidden = !(W_PROGRAMIE && g.zrodlo.typ === "kolekcja" && g.zrodlo.kol === "album" && g.lista === g.pliki);
   $("p-otworz").hidden = !W_PROGRAMIE;
   $("p-usun").hidden = !MOZE_USUWAC;
+  $("p-miejsce").hidden = !MOZE_USUWAC;
+  if (p) $("p-miejsce").textContent = p.lat != null ? "📍 Zmień miejsce" : "📍 Dodaj miejsce";
   $("p-pokaz").textContent = g.pokaz ? "⏸ Pauza" : "▶ Pokaz";
 }
 const biezacy = () => g.lista[g.poz];

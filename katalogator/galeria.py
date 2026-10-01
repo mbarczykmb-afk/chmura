@@ -408,6 +408,24 @@ class Galeria:
         finally:
             db.close()
 
+    def lokalizacja(self, ids: list[int], lat, lon) -> dict:
+        """📍 Dodaj / zmień (np. przesunięta pinezka) / usuń (lat=None) lokalizację — w pliku i w bazie."""
+        from . import lokalizacja
+        w, arg = self._warunek()
+        db = self._db()
+        try:
+            dozwolone = [int(i) for i in ids[:2000]
+                         if db.execute(f"SELECT 1 FROM pliki WHERE rowid=? {w}", [int(i)] + arg).fetchone()]
+            if not dozwolone:
+                return {"blad": "Nie ma takiego pliku — odśwież widok."}
+            try:
+                return lokalizacja.ustaw(db, dozwolone, None if lat is None else float(lat),
+                                         None if lat is None else float(lon))
+            except (TypeError, ValueError):
+                return {"blad": "Nieprawidłowe współrzędne."}
+        finally:
+            db.close()
+
     def cofnij_usuniecie(self, partia: int) -> dict:
         from . import usuwanie
         db = self._db()
@@ -666,6 +684,10 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict):
         return g.pliki(q.get("rok", [""])[0], i("miesiac") or None, i("od"), min(i("ile", 200), 500), obszar()), None
     if sciezka == "/api/g/szukaj":
         return g.szukaj(q.get("q", [""])[0][:200], i("od"), min(i("ile", 200), 500)), None
+    if sciezka == "/api/g/miejsce":  # wyszukiwarka miejscowości do ustawiania lokalizacji (bez internetu: Polska)
+        from . import miejsca
+        w = miejsca.szukaj_miejsca(q.get("q", [""])[0][:100])
+        return {"miejsca": [{"nazwa": n, "lat": la, "lon": lo} for la, lo, n in (w or {}).get("pl", [])[:8]]}, None
     if sciezka == "/api/g/tego-dnia":
         return g.tego_dnia(q.get("md", [""])[0], i("dni")), None
     if sciezka == "/api/g/albumy":
@@ -712,12 +734,18 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
     return obsluz_usuwanie(g, sciezka, dane)
 
 
+ZMIANY_PLIKOW = ("/api/g/usun", "/api/g/usun/cofnij", "/api/g/lokalizacja")
+
+
 def obsluz_usuwanie(g: Galeria, sciezka: str, dane: dict) -> dict | None:
-    """🗑 Usuń / Cofnij — w oknie programu i na telefonie (gdy pozwolono sterować z telefonu)."""
+    """🗑 Usuń / Cofnij, 📍 lokalizacja — w oknie programu i na telefonie (gdy pozwolono sterować z telefonu)."""
     if sciezka == "/api/g/usun":
         return g.usun([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()])
     if sciezka == "/api/g/usun/cofnij":
         return g.cofnij_usuniecie(int(dane.get("partia") or 0))
+    if sciezka == "/api/g/lokalizacja":
+        return g.lokalizacja([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()],
+                             dane.get("lat"), dane.get("lon"))
     return None
 
 
@@ -851,12 +879,12 @@ class SerwerGalerii:
                     if blad:
                         return self._wyslij({"blad": blad}, kod=HTTPStatus.BAD_REQUEST)
                     return self._wyslij(s.pilot.status())
-                if u.path in ("/api/g/usun", "/api/g/usun/cofnij") and s.pilot is not None:
+                if u.path in ZMIANY_PLIKOW and s.pilot is not None:
                     q = parse_qs(u.query)
                     if not self._ok(q):
                         return self._wyslij({"blad": "Podaj PIN"}, kod=HTTPStatus.UNAUTHORIZED)
                     if not s.pilot.sterowanie:
-                        return self._wyslij({"blad": "Usuwanie z telefonu jest wyłączone — włącz sterowanie "
+                        return self._wyslij({"blad": "Zmiany z telefonu są wyłączone — włącz sterowanie "
                                                      "na komputerze (📱)."}, kod=HTTPStatus.FORBIDDEN)
                     blad = s.pilot.zajety_projekt(q.get("z", [""])[0])
                     if blad:
@@ -869,7 +897,7 @@ class SerwerGalerii:
                     z = q.get("z", [""])[0]
                     g = s.galerie(z) if s.galerie is not None and z in s.ZAKRESY else s.galeria
                     w = obsluz_usuwanie(g, u.path, dane if isinstance(dane, dict) else {})
-                    s.pilot.po_usunieciu(z)
+                    s.pilot.po_usunieciu(z, w if u.path == "/api/g/lokalizacja" else None)
                     return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
                 if u.path != "/api/g/zaloguj":
                     return self._wyslij(None)

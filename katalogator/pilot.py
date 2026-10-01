@@ -117,8 +117,10 @@ class Pilot:
             return "Poczekaj, aż komputer skończy bieżące zadanie."
         return None
 
-    def po_usunieciu(self, zakres: str) -> None:
+    def po_usunieciu(self, zakres: str, lokalizacja: dict | None = None) -> None:
         s = self.stan
+        if lokalizacja and lokalizacja.get("sciezki"):
+            s.rozeslij_lokalizacje(zakres, lokalizacja)
         if zakres == "przegladarka":
             return
         with s.blokada:

@@ -357,6 +357,12 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     propozycja drzewa pomija usunięty plik; cofnięcie konkretnej partii przywraca plik z tym samym numerem (rowid).
     Trasy: `/api/usun`, `/api/usun/cofnij` (zakładki), `/api/g/usun`, `/api/g/usun/cofnij` (galeria; tylko pliki
     z zakresu galerii; telefon — tylko z pilotem i włączonym sterowaniem). Nie w trakcie zadania projektu.
+39. **📍 Edycja lokalizacji 1.15** ✅ (`katalogator/lokalizacja.py`): JPEG — podmiana segmentu APP1/EXIF
+    (GPS IFD przez Pillow, bez rekompresji), plik tymczasowy + sprawdzenie + `os.replace`, `os.utime` zachowuje
+    mtime; inne — `<plik>.xmp` ze znacznikiem `katalogator:Lokalizacja` („reczna”/„brak”), który przy skanie
+    wygrywa z GPS z pliku i z .json Google; cudzego .xmp nie nadpisujemy. Baza: lat/lon/rozmiar/mtime, kasowany
+    odcisk (duplikaty) i wpis wspólnego indeksu; zmiana rozsyłana do baz innych projektów i Przeglądarki.
+    `/api/g/lokalizacja` {ids, lat, lon|null}, `/api/g/miejsce?q=` (Polska offline; dalej Nominatim w oknie).
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

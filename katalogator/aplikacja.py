@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import (__version__, aktualizacje, analiza, duplikaty, dyski, galeria, indeks, logi, pilot, planista, projekty, przegladarka,
+from . import (__version__, aktualizacje, analiza, duplikaty, dyski, galeria, indeks, logi, lokalizacja, pilot, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, usuwanie, wykonawca)
 from .logi import LOG
 
@@ -141,6 +141,14 @@ class Stan:
         except ValueError as e:
             return str(e)
         return None
+
+    def rozeslij_lokalizacje(self, zakres: str, w: dict) -> None:
+        """📍 Zmiana lokalizacji widoczna od razu wszędzie: w pozostałych projektach i w Przeglądarce."""
+        bazy = [self.projekty.baza(p["id"]) for p in self.projekty.lista()] + [self.przegladarka.baza]
+        zrodlo = self.przegladarka.baza if zakres == "przegladarka" else self.baza
+        for b in bazy:
+            if os.path.abspath(str(b)) != os.path.abspath(str(zrodlo)) and os.path.exists(b):
+                lokalizacja.rozeslij(b, w["sciezki"], w.get("lat"), w.get("lon"))
 
     def przelacz_tryb(self, tryb: str) -> str | None:
         """Porządkowanie ↔ Sprzątanie: otwiera ostatni projekt danego rodzaju (albo zakłada nowy)."""
@@ -959,12 +967,14 @@ def _handler(stan: Stan, token: str, zamknij):
             dane = self._json()
             if u.path.startswith("/api/g/"):  # ulubione, albumy, miniatury filmów — dane galerii, nie projektu
                 z = parse_qs(u.query).get("z", ["biblioteka"])[0]
-                usuwa = u.path in ("/api/g/usun", "/api/g/usun/cofnij")
+                usuwa = u.path in galeria.ZMIANY_PLIKOW
                 if usuwa and z != "przegladarka" and stan.zajety():
                     return self._wyslij({"blad": "Poczekaj, aż skończy się bieżące zadanie."}, kod=HTTPStatus.CONFLICT)
                 w = galeria.obsluz_post(stan.galeria(z), u.path, dane)
                 if w is None:
                     return self._wyslij({"blad": "nie ma"}, kod=HTTPStatus.NOT_FOUND)
+                if u.path == "/api/g/lokalizacja" and w.get("sciezki"):
+                    stan.rozeslij_lokalizacje(z, w)
                 if usuwa and z != "przegladarka":
                     with stan.blokada:
                         stan.wersja_danych += 1
