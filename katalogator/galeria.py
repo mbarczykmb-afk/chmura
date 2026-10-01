@@ -394,6 +394,28 @@ class Galeria:
                 "lata": [{"rok": k, "n": v, "lat_temu": int(teraz) - int(k)} for k, v in lata.items()],
                 "pliki": [_nazwa(r) for r in wiersze], "najblizszy": najblizszy}
 
+    # --- 🗑 usuwanie: do kosza programu (Odłożone/Usunięte), z cofaniem ------------------------------------------
+    def usun(self, ids: list[int]) -> dict:
+        from . import usuwanie
+        w, arg = self._warunek()
+        db = self._db()
+        try:
+            dozwolone = [int(i) for i in ids[:5000]
+                         if db.execute(f"SELECT 1 FROM pliki WHERE rowid=? {w}", [int(i)] + arg).fetchone()]
+            if not dozwolone:
+                return {"blad": "Nie ma takiego pliku — odśwież widok."}
+            return usuwanie.usun(db, dozwolone)
+        finally:
+            db.close()
+
+    def cofnij_usuniecie(self, partia: int) -> dict:
+        from . import usuwanie
+        db = self._db()
+        try:
+            return usuwanie.cofnij(db, partia)
+        finally:
+            db.close()
+
     # --- ulubione i albumy ----------------------------------------------------------------------------
     def _sciezki(self, db, ids, z_kluczem: bool = False) -> list:
         w, arg = self._warunek()
@@ -687,6 +709,15 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
         return g.zapisz_miniature_filmu(int(dane.get("id") or 0), jpeg)
     if sciezka == "/api/g/otworz":
         return g.otworz(int(dane.get("id") or 0))
+    return obsluz_usuwanie(g, sciezka, dane)
+
+
+def obsluz_usuwanie(g: Galeria, sciezka: str, dane: dict) -> dict | None:
+    """🗑 Usuń / Cofnij — w oknie programu i na telefonie (gdy pozwolono sterować z telefonu)."""
+    if sciezka == "/api/g/usun":
+        return g.usun([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()])
+    if sciezka == "/api/g/usun/cofnij":
+        return g.cofnij_usuniecie(int(dane.get("partia") or 0))
     return None
 
 
@@ -820,6 +851,26 @@ class SerwerGalerii:
                     if blad:
                         return self._wyslij({"blad": blad}, kod=HTTPStatus.BAD_REQUEST)
                     return self._wyslij(s.pilot.status())
+                if u.path in ("/api/g/usun", "/api/g/usun/cofnij") and s.pilot is not None:
+                    q = parse_qs(u.query)
+                    if not self._ok(q):
+                        return self._wyslij({"blad": "Podaj PIN"}, kod=HTTPStatus.UNAUTHORIZED)
+                    if not s.pilot.sterowanie:
+                        return self._wyslij({"blad": "Usuwanie z telefonu jest wyłączone — włącz sterowanie "
+                                                     "na komputerze (📱)."}, kod=HTTPStatus.FORBIDDEN)
+                    blad = s.pilot.zajety_projekt(q.get("z", [""])[0])
+                    if blad:
+                        return self._wyslij({"blad": blad}, kod=HTTPStatus.CONFLICT)
+                    try:
+                        n = int(self.headers.get("Content-Length") or 0)
+                        dane = json.loads(self.rfile.read(min(n, 200000)) or b"{}")
+                    except ValueError:
+                        dane = {}
+                    z = q.get("z", [""])[0]
+                    g = s.galerie(z) if s.galerie is not None and z in s.ZAKRESY else s.galeria
+                    w = obsluz_usuwanie(g, u.path, dane if isinstance(dane, dict) else {})
+                    s.pilot.po_usunieciu(z)
+                    return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
                 if u.path != "/api/g/zaloguj":
                     return self._wyslij(None)
                 ip = self.client_address[0]

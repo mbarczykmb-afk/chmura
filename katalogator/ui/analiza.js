@@ -102,8 +102,8 @@ function karta(id, rodzaj, tytul, podpis, zaznaczona, klik, duza = false) {
   const img = new Image(); img.loading = "lazy"; img.alt = "";
   img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${id}` + (duza ? "&srednia=1" : "");
   if (duza) img.ondblclick = e => { e.stopPropagation(); podgladDuzy(id, tytul); };
-  img.onerror = () => { ob.textContent = IKONY[rodzaj] || "🖼️"; };
-  ob.append(img);
+  img.onerror = () => { ob.firstChild === img && img.replaceWith(IKONY[rodzaj] || "🖼️"); };
+  ob.append(img, przyciskKosz(id, tytul, k));
   const op = document.createElement("div"); op.className = "op";
   const n = document.createElement("div"); n.className = "n"; n.textContent = tytul.split(/[\\/]/).pop();
   const m = document.createElement("div"); m.className = "m"; m.textContent = podpis;
@@ -245,7 +245,8 @@ function rysujPodobne() {
         z.textContent = (i === 0 ? "★ " : "") + (zost ? "zostaje" : "odłożę");
         const gora = document.createElement("div"); gora.className = "gora"; gora.append(c, z);
         const op = document.createElement("span"); op.className = "zn2"; op.textContent = opisZdjecia(w);
-        r.append(gora, img, sc, op, przyciskiKategorii([w.id], w.kat, v => { w.kat = v; }));
+        r.append(gora, img, sc, op, przyciskiKategorii([w.id], w.kat, v => { w.kat = v; }),
+                 przyciskKosz(w.id, w.wzgledna, r, "na-zdj"));
         siatka.append(r);
       });
       l.append(k);
@@ -287,7 +288,10 @@ function podgladDuzy(id, nazwa) {
   const img = new Image(); img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${id}&duza=1`; img.alt = nazwa;
   img.style.cssText = "max-width:90vw;max-height:85vh;border-radius:8px;background:#000;transform-origin:0 0";
   img.title = "Kółko myszy = powiększenie · przeciągnij, żeby przesunąć · kliknij obok, żeby zamknąć";
-  n.append(img); document.body.append(n);
+  const kosz = przyciskKosz(id, nazwa, null);
+  kosz.style.cssText = "position:fixed;top:16px;right:16px;width:auto;height:auto;padding:8px 14px;font-size:14px;opacity:1";
+  kosz.textContent = "🗑 Usuń"; kosz.onclick = e => { e.stopPropagation(); n.remove(); usunWProjekcie([id], nazwa, null); };
+  n.append(img, kosz); document.body.append(n);
   // powiększanie kółkiem (do kursora) i przesuwanie — jak w Bibliotece
   const z = {s: 1, x: 0, y: 0, ciagnie: null, ruszyl: false};
   const rysuj = () => { img.style.transform = z.s === 1 ? "" : `translate(${z.x}px,${z.y}px) scale(${z.s})`;

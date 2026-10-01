@@ -155,6 +155,11 @@ folderu („2004 Zakopane”), a na końcu „w domu”.
      wtedy telefon tylko ogląda. *✎ Ustaw swój PIN* — stały PIN (4–12 cyfr), a telefon zostaje zalogowany
      także po ponownym uruchomieniu programu. Działa, dopóki Katalogator jest otwarty.
 
+**🗑 Usuń — wszędzie, gdzie widać plik**: kafelki i podgląd w Bibliotece i Przeglądarce (także klawisz *Delete*),
+zakładki Duplikaty, Dokumenty, Podobne, Nie z aparatu, Śmieci, 🌳 Drzewo, duży podgląd oraz telefon (pilot, gdy
+pozwolono sterować). Plik trafia do kosza programu `<folder>/Odłożone/Usunięte/…` — działa też na dyskach sieciowych,
+gdzie nie ma Kosza Windows — i od razu można go **↶ Cofnąć**. Na stałe: tryb 🧹 Sprzątanie → *Usuwanie*.
+
 11. **🧹 Sprzątanie** (przełącznik trybów u góry: 🗂 Porządkowanie | 🧹 Sprzątanie | 🔭 Przeglądarka) — porządki
     **na miejscu**, bez kopiowania i bez nowego drzewa: zaznacz foldery → *Skanuj* → *Szukaj duplikatów* →
     zakładki **Duplikaty** i **🗑 Śmieci** (puste, tymczasowe, skróty, ikony, miniatury) → *Odłóż* (do `Odłożone`,

@@ -23,7 +23,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, aktualizacje, analiza, duplikaty, dyski, galeria, indeks, logi, pilot, planista, projekty, przegladarka,
-               przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, wykonawca)
+               przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, usuwanie, wykonawca)
 from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
@@ -958,9 +958,17 @@ def _handler(stan: Stan, token: str, zamknij):
             stan.ostatni_ping = time.time()
             dane = self._json()
             if u.path.startswith("/api/g/"):  # ulubione, albumy, miniatury filmów — dane galerii, nie projektu
-                w = galeria.obsluz_post(stan.galeria(parse_qs(u.query).get("z", ["biblioteka"])[0]), u.path, dane)
+                z = parse_qs(u.query).get("z", ["biblioteka"])[0]
+                usuwa = u.path in ("/api/g/usun", "/api/g/usun/cofnij")
+                if usuwa and z != "przegladarka" and stan.zajety():
+                    return self._wyslij({"blad": "Poczekaj, aż skończy się bieżące zadanie."}, kod=HTTPStatus.CONFLICT)
+                w = galeria.obsluz_post(stan.galeria(z), u.path, dane)
                 if w is None:
                     return self._wyslij({"blad": "nie ma"}, kod=HTTPStatus.NOT_FOUND)
+                if usuwa and z != "przegladarka":
+                    with stan.blokada:
+                        stan.wersja_danych += 1
+                    stan.przegladarka.zglos_zmiany()
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/przegladarka/auto":
                 return self._wyslij(stan.przegladarka.ustaw_auto(bool(dane.get("auto")), dane.get("co_godzin")))
@@ -1106,6 +1114,17 @@ def _handler(stan: Stan, token: str, zamknij):
                 w = stan.z_db(edycja[u.path])
                 if u.path == "/api/odloz":
                     stan.przegladarka.zglos_zmiany()
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path in ("/api/usun", "/api/usun/cofnij"):  # 🗑 w zakładkach projektu
+                if stan.zajety():
+                    return self._wyslij({"blad": "Poczekaj, aż skończy się bieżące zadanie."}, kod=HTTPStatus.CONFLICT)
+                if u.path == "/api/usun":
+                    w = stan.z_db(lambda db: usuwanie.usun(db, [int(i) for i in dane.get("ids") or []]))
+                else:
+                    w = stan.z_db(lambda db: usuwanie.cofnij(db, int(dane.get("partia") or 0)))
+                with stan.blokada:
+                    stan.wersja_danych += 1
+                stan.przegladarka.zglos_zmiany()
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/przegladarka/foldery":
                 stan.przegladarka.ustaw_foldery([str(f) for f in dane.get("foldery") or []])

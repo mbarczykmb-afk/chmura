@@ -89,7 +89,7 @@ function rysujSmieci() {
         else { ob = document.createElement("span"); ob.className = "ik"; ob.textContent = p.rozmiar ? "📄" : "∅"; }
         const sc = document.createElement("span"); sc.className = "sc"; sc.title = p.sciezka; sc.textContent = "‎" + p.wzgledna;
         const r = document.createElement("span"); r.className = "gdzie"; r.textContent = rozmiar(p.rozmiar);
-        w.append(c, ob, sc, r); d.append(w);
+        w.append(c, ob, sc, r, przyciskKosz(p.id, p.wzgledna, w, "w-wierszu")); d.append(w);
       }
       if (pliki.length > 1000) d.append(Object.assign(document.createElement("div"), {className: "pusto", textContent: `… i ${pliki.length - 1000} więcej (też zaznaczone, jeśli grupa jest zaznaczona)`}));
     };

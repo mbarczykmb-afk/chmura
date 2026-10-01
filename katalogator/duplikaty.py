@@ -27,7 +27,8 @@ BLOK = 1 << 20
 # (zwłaszcza sieciowego z talerzem, np. WD My Cloud) to skakanie głowicy i wielokrotnie wolniejszy odczyt.
 DUZY_PLIK = 64 * BLOK
 FOLDER_ODLOZONE = "Odłożone"   # <korzeń>/Odłożone/{Duplikaty,Podobne,Nieostre}/<ścieżka>
-PODFOLDERY = {"duplikat": "Duplikaty", "podobne": "Podobne", "nieostre": "Nieostre", "smieci": "Śmieci"}
+PODFOLDERY = {"duplikat": "Duplikaty", "podobne": "Podobne", "nieostre": "Nieostre", "smieci": "Śmieci",
+              "usuniete": "Usunięte"}
 FOLDER_DUPLIKATOW = "_Duplikaty_Katalogator"  # do wersji 1.3 — nadal pomijany przy skanie
 
 SCHEMAT = """
@@ -373,6 +374,7 @@ def _odloz_wiersz(db: sqlite3.Connection, w, partia: int, typ: str) -> str | Non
     except OSError as e:
         return f"{w['wzgledna']}: {e.strerror or e}"
     dane = {k: w[k] for k in w.keys() if k != "rowid"}
+    dane["_rowid"] = w["rowid"]  # przy cofaniu plik wraca z tym samym numerem (miniatury, propozycja drzewa)
     db.execute("INSERT INTO operacje(partia, czas, typ, z_, do_, wiersz) VALUES (?,?,?,?,?,?)",
                (partia, time.time(), typ, w["sciezka"], cel, json.dumps(dane, ensure_ascii=False)))
     db.execute("DELETE FROM pliki WHERE rowid = ?", (w["rowid"],))
@@ -407,9 +409,9 @@ def ostatnia_partia(db: sqlite3.Connection) -> dict | None:
     return dict(r) if r else None
 
 
-def cofnij(db: sqlite3.Connection) -> dict:
-    """Przywraca pliki z ostatniej nie cofniętej operacji."""
-    ost = ostatnia_partia(db)
+def cofnij(db: sqlite3.Connection, partia: int | None = None) -> dict:
+    """Przywraca pliki z ostatniej nie cofniętej operacji (albo ze wskazanej partii)."""
+    ost = ostatnia_partia(db) if partia is None else {"partia": int(partia)}
     if not ost:
         return {"przywrocone": 0, "bledy": []}
     przywrocone, bledy = 0, []
@@ -423,12 +425,15 @@ def cofnij(db: sqlite3.Connection) -> dict:
             bledy.append(str(e))
             continue
         w = json.loads(op["wiersz"])
+        rowid = w.pop("_rowid", None)
+        if rowid is not None and not db.execute("SELECT 1 FROM pliki WHERE rowid=?", (rowid,)).fetchone():
+            w["rowid"] = rowid
         db.execute(f"INSERT OR REPLACE INTO pliki({','.join(w)}) VALUES ({','.join('?' * len(w))})", list(w.values()))
         db.execute("UPDATE operacje SET cofnieta = 1 WHERE id = ?", (op["id"],))
         przywrocone += 1
     db.commit()
     _usun_puste(db, ost["partia"])
-    return {"przywrocone": przywrocone, "bledy": bledy}
+    return {"przywrocone": przywrocone, "bledy": bledy, "partia": ost["partia"]}
 
 
 def _usun_puste(db: sqlite3.Connection, partia: int) -> None:

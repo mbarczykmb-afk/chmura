@@ -151,6 +151,13 @@ main{flex:1;min-height:0;position:relative}
 .rok-nagl small{color:var(--mut);font-weight:500;font-size:13px}
 .dzien-nav{display:inline-flex;align-items:center;gap:4px}
 .dzien-nav b{min-width:120px;text-align:center}
+.k .ob .kosz{position:absolute;top:6px;right:6px;z-index:2;width:32px;height:32px;padding:0;border-radius:999px;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:15px;opacity:0;transition:opacity .15s;display:grid;place-items:center}
+.k:hover .ob .kosz,.k .ob .kosz:focus-visible{opacity:1}
+.k .ob .kosz:hover{background:#dc2626}
+@media (hover:none){.k .ob .kosz{opacity:.85}}
+#p-usun:hover{background:#dc2626;border-color:#dc2626;color:#fff}
+#toast-g{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:4000;background:var(--fg);color:var(--bg);border-radius:12px;padding:10px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 30px rgba(0,0,0,.35);font-size:14px;max-width:92vw}
+#toast-g button{background:none;border:0;color:var(--akc);font-weight:700;padding:4px 6px}
 </style>
 </head>
 <body>
@@ -181,7 +188,7 @@ main{flex:1;min-height:0;position:relative}
   </span>
   <span id="prz-foldery" style="display:contents"></span>
   <button id="prz-dodaj" title="Dodaj dysk lub folder do przeglądania">＋ Dysk lub folder</button>
-  <button id="prz-skanuj" class="akt" title="Tylko czyta: nic nie jest zmieniane ani przenoszone">⟳ Skanuj</button>
+  <button id="prz-skanuj" class="akt" title="Skan tylko czyta dyski — zmieniasz coś wyłącznie sam (🗑 Usuń)">⟳ Skanuj</button>
   <button id="prz-przerwij" hidden>Przerwij</button>
   <label title="Przy starcie programu i potem co 6 godzin wczytuję nowe i zmienione pliki (tylko odczyt)">
     <input type="checkbox" id="prz-auto"> odświeżaj samo co 6 h</label>
@@ -206,6 +213,7 @@ main{flex:1;min-height:0;position:relative}
     <button id="p-album" hidden title="Dodaj do albumu">＋ Album</button>
     <button id="p-z-albumu" hidden title="Usuń z tego albumu (zdjęcie zostaje na dysku)">− Z albumu</button>
     <button id="p-pokaz" title="Pokaz slajdów (P)">▶ Pokaz</button>
+    <button id="p-usun" hidden title="Usuń (Delete) — do kosza programu: Odłożone/Usunięte, można cofnąć">🗑 Usuń</button>
     <button id="p-otworz" hidden title="Otwórz w programie Windows (np. Filmy i TV, VLC)">⤢ Otwórz w programie</button>
   </div>
   <button class="pop" title="Poprzednie (←)">‹</button>
@@ -253,6 +261,7 @@ main{flex:1;min-height:0;position:relative}
 <script src="/ui/mapa/leaflet.js"></script>
 <script src="/ui/mapa/leaflet.markercluster.js"></script>
 <script src="/ui/mapa/qrcode.js"></script>
+<div id="toast-g" hidden></div>
 <script src="/ui/galeria.js"></script>
 </body>
 </html>

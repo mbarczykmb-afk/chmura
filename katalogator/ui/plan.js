@@ -266,6 +266,7 @@ function rysujPliki() {
     } else if (f.rodzaj === "film" && f.plik_id != null) {
       ob.append(podgladFilmu(f.plik_id));
     } else ob.textContent = IKONY[f.rodzaj] || "📄";
+    if (f.plik_id != null && !f.wynik) ob.append(przyciskKosz(f.plik_id, f.nazwa, k));
     const op = document.createElement("div"); op.className = "op";
     const n = document.createElement("div"); n.className = "n"; n.textContent = f.nazwa;
     const m = document.createElement("div"); m.className = "m";

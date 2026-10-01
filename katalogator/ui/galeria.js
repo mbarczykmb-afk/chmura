@@ -74,7 +74,7 @@ async function wczytajLata(tylkoLiczby = false) {
     $("siatka").innerHTML = `<div class="pusto">${g.obszar ? "Brak zdjęć z datą w tym obszarze." : W_PROGRAMIE && g.zakres === "biblioteka"
       ? "Biblioteka jest jeszcze pusta — uporządkuj pliki albo wybierz „Wszystko w projekcie”."
       : g.zakres === "przegladarka"
-        ? "Dodaj dysk lub folder (＋) i kliknij „Skanuj”. Przeglądarka tylko czyta — niczego nie zmienia ani nie przenosi."
+        ? "Dodaj dysk lub folder (＋) i kliknij „Skanuj”. Przeglądarka tylko czyta dyski — niczego sama nie zmienia (usuwasz tylko Ty, przyciskiem 🗑, z możliwością cofnięcia)."
         : "Brak zdjęć z datą."}</div>`;
     $("miesiace").replaceChildren(); return;
   }
@@ -195,6 +195,10 @@ function rysujSiatke() {
       const im = new Image(); im.loading = "lazy"; im.alt = ""; im.src = miniatura(p.id, false);  // mała: szybka, zapamiętywana na dysku
       im.onerror = () => { ob.textContent = "🖼️"; }; ob.append(im);
     } else miniaturaFilmu(p, ob);
+    if (MOZE_USUWAC) {
+      const x = document.createElement("button"); x.className = "kosz"; x.textContent = "🗑"; x.title = "Usuń (do kosza programu, można cofnąć)";
+      x.onclick = e => { e.stopPropagation(); usunPliki([p]); }; ob.append(x);
+    }
     const op = document.createElement("div"); op.className = "op";
     op.innerHTML = "<div></div><div class='m'></div>";
     op.children[0].textContent = p.nazwa;
@@ -323,6 +327,7 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowRight" && zoom.s === 1) krokRecznie(1);
   if (e.key === "p" || e.key === "P") przelaczPokaz();
   if ((e.key === "f" || e.key === "F") && W_PROGRAMIE) $("p-ulub").click();
+  if (e.key === "Delete" && MOZE_USUWAC) $("p-usun").click();
   if (e.key === "+" || e.key === "=") zoomUstaw(zoom.s * 1.4);
   if (e.key === "-") zoomUstaw(zoom.s / 1.4);
   if (e.key === "0") zoomUstaw(1);
@@ -597,6 +602,38 @@ async function rysujKolekcje() {
   if (!W_PROGRAMIE && !r.albumy.length && !r.ulubione.n) s.innerHTML = '<div class="pusto">Brak ulubionych i albumów — tworzy się je w programie na komputerze.</div>';
 }
 
+// ---------- 🗑 usuwanie: do kosza programu (Odłożone/Usunięte), z cofaniem ----------
+// w oknie programu i na telefonie z pilotem (serwer 24/7 jest tylko do oglądania)
+const MOZE_USUWAC = W_PROGRAMIE || !!P.get("pilot");
+function toastG(tekst, cofnij) {
+  const t = $("toast-g"); t.replaceChildren(tekst);
+  if (cofnij) t.append(przycisk("Cofnij", async () => { t.hidden = true; await cofnij(); }));
+  t.hidden = false; clearTimeout(toastG.z); toastG.z = setTimeout(() => { t.hidden = true; }, 8000);
+}
+async function usunPliki(lista) {
+  let w;
+  try { w = await post("/api/g/usun", {ids: lista.map(p => p.id)}); } catch (e) { toastG("Nie usunięto: " + e.message); return; }
+  const ids = new Set(lista.map(p => p.id));
+  const bylPelny = !$("pelny").hidden, poz = g.poz;
+  for (const tab of [g.pliki, g.lista]) {
+    for (let i = tab.length - 1; i >= 0; i--) if (ids.has(tab[i].id)) tab.splice(i, 1);
+  }
+  g.razem = Math.max(0, g.razem - w.usuniete);
+  rysujSiatke(); rysujFiltr(); wczytajLata(true).catch(() => {});
+  if (bylPelny) { if (!g.lista.length) zamknijPelny(); else pokazPelny(g.lista, Math.min(poz, g.lista.length - 1)); }
+  const n = w.usuniete;
+  toastG((n === 1 ? `🗑 Usunięto „${lista[0].nazwa}”` : `🗑 Usunięto ${liczbaZdjec(n)}`) +
+         (w.pominiete && w.pominiete.length ? ` · pominięto ${w.pominiete.length}: ${w.pominiete[0]}` : ""),
+         async () => {
+           try {
+             const c = await post("/api/g/usun/cofnij", {partia: w.partia});
+             toastG(`Przywrócono ${liczbaZdjec(c.przywrocone)}` + (c.bledy.length ? ` · ${c.bledy[0]}` : ""));
+           } catch (e) { toastG(e.message); }
+           wczytajLata(true).catch(() => {}); wczytajPliki().catch(() => {});
+         });
+}
+$("p-usun").onclick = e => { e.stopPropagation(); const p = biezacy(); if (p) usunPliki([p]); };
+
 // ---------- podgląd: ulubione, album, pokaz slajdów, otwieranie w programie ----------
 function narzedziaPelnego(p) {
   const ul = $("p-ulub");
@@ -604,6 +641,7 @@ function narzedziaPelnego(p) {
   $("p-album").hidden = !W_PROGRAMIE;
   $("p-z-albumu").hidden = !(W_PROGRAMIE && g.zrodlo.typ === "kolekcja" && g.zrodlo.kol === "album" && g.lista === g.pliki);
   $("p-otworz").hidden = !W_PROGRAMIE;
+  $("p-usun").hidden = !MOZE_USUWAC;
   $("p-pokaz").textContent = g.pokaz ? "⏸ Pauza" : "▶ Pokaz";
 }
 const biezacy = () => g.lista[g.poz];

@@ -353,6 +353,10 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
 37. **Tego dnia 1.13** ✅: widok 🕰 w galerii (`/api/g/tego-dnia?md=MM-DD&dni=0..15`): poprzednie lata od najnowszych
     z nagłówkami lat, nawigacja po dniach, zakres ± dni (także przez przełom roku), gdy pusto — najbliższy dzień
     roku ze zdjęciami; karta z miniaturami na pilocie w telefonie (pierwszy zbiór z wynikami).
+38. **🗑 Usuń 1.14** ✅ (`katalogator/usuwanie.py`): `duplikaty.odloz(…, "usuniete")` → `<korzeń>/Odłożone/Usunięte`,
+    propozycja drzewa pomija usunięty plik; cofnięcie konkretnej partii przywraca plik z tym samym numerem (rowid).
+    Trasy: `/api/usun`, `/api/usun/cofnij` (zakładki), `/api/g/usun`, `/api/g/usun/cofnij` (galeria; tylko pliki
+    z zakresu galerii; telefon — tylko z pilotem i włączonym sterowaniem). Nie w trakcie zadania projektu.
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

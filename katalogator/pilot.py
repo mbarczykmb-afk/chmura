@@ -110,6 +110,21 @@ class Pilot:
                          else "Nic nie czeka w „Odłożone” — odkładasz na komputerze (Duplikaty, Śmieci…)")
         return k
 
+    # --- usuwanie z telefonu (galeria) ----------------------------------------------------------
+    def zajety_projekt(self, zakres: str) -> str | None:
+        """Pliki projektu nie zmieniają miejsca w trakcie zadania (Przeglądarka ma osobną bazę)."""
+        if zakres != "przegladarka" and self.stan.zajety():
+            return "Poczekaj, aż komputer skończy bieżące zadanie."
+        return None
+
+    def po_usunieciu(self, zakres: str) -> None:
+        s = self.stan
+        if zakres == "przegladarka":
+            return
+        with s.blokada:
+            s.wersja_danych += 1
+        s.przegladarka.zglos_zmiany()
+
     # --- sterowanie ---------------------------------------------------------
     def akcja(self, nazwa: str, dane: dict) -> str | None:
         """Uruchamia krok / przerywa / przełącza projekt. Zwraca komunikat błędu albo None."""
