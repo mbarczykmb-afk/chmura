@@ -125,3 +125,35 @@ def test_od_razu_na_stale_tylko_ta_partia(tmp_path):
     assert r["usuniete"] == 1
     assert sprzatanie.odlozone([str(k)])["plikow"] == 1  # wcześniejsza partia nadal w koszu
     assert len([f for f in os.listdir(k) if f.endswith(".bin")]) == 2  # oryginały zostały
+
+
+def test_pamiec_grup_po_odlozeniu_jak_pelne_przeliczenie(tmp_path):
+    from katalogator import duplikaty
+    k = tmp_path / "d"
+    k.mkdir()
+    for i in range(5):
+        for j in range(3):
+            (k / f"p{i}_{j}.bin").write_bytes(bytes([i]) * (1000 + i))
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    duplikaty.szukaj(db)
+
+    def pelne():
+        duplikaty._PAMIEC_GRUP.clear()
+        return duplikaty.podsumowanie(db), [(g["h"], g["n"]) for g in duplikaty.grupy(db, None, 0, 50)]
+
+    def z_pamieci():
+        return duplikaty.podsumowanie(db), [(g["h"], g["n"]) for g in duplikaty.grupy(db, None, 0, 50)]
+    g = duplikaty.grupy(db, None, 0, 50)
+    w = duplikaty.przenies(db, [{"zostaw": g[0]["zostaw"], "usun": [p["id"] for p in g[0]["pliki"] if p["id"] != g[0]["zostaw"]]}])
+    assert duplikaty._aktualna_pamiec(db)  # poprawiona, nie liczona od nowa
+    a = z_pamieci()
+    assert a == pelne() and a[0]["grupy"] == 4
+    duplikaty.grupy(db, None, 0, 50)
+    duplikaty.odloz(db, [g[1]["pliki"][2]["id"]], "usuniete")  # z grupy 3 kopii zostają 2
+    a = z_pamieci()
+    assert a == pelne() and dict(a[1])[g[1]["h"]] == 2
+    duplikaty.grupy(db, None, 0, 50)
+    duplikaty.cofnij(db, w["partia"])
+    a = z_pamieci()
+    assert a == pelne() and a[0]["grupy"] == 5

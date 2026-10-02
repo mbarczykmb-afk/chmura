@@ -65,7 +65,8 @@ class Stan:
         if g is None:
             korzenie = (lambda: [self.ustawienia["cel"]] if self.ustawienia["cel"] else []) \
                 if zakres == "biblioteka" else (lambda: None)
-            g = self._galerie[klucz] = galeria.Galeria(self.baza, korzenie)
+            g = self._galerie[klucz] = galeria.Galeria(self.baza, korzenie,  # miniatury zapamiętane na dysku
+                                                       pamiec_min=Path(self.katalog) / "miniatury" / "galeria")
         return g
 
     def telefon(self, wlacz: bool, zakres: str = "biblioteka", sterowanie: bool = True,
@@ -303,7 +304,7 @@ class Stan:
                         self._licze_podsumowania.release()
                 w = threading.Thread(target=licz, daemon=True)
                 w.start()
-                w.join(1.5)
+                w.join(0.25)  # okno nie czeka — wyniki dojdą przy następnym odświeżeniu
                 if not w.is_alive():
                     cache = wynik
             dane["wczytuje"] = self._licze_podsumowania.locked() and w_cache < 0
@@ -588,35 +589,113 @@ class Stan:
             db.close()
             self.przegladarka.zglos_zmiany()
 
-    def miniatura(self, id_: int, srednia: bool = False) -> bytes | None:
+    # --- miniatury: pamięć na dysku (<dane>/miniatury, do 1,5 GB) + przygotowywanie z wyprzedzeniem ---------------
+    # Przez sieć (My Cloud) każda miniatura to odczyt z dysku sieciowego — robimy ją raz, a listę (duplikaty,
+    # podobne, dokumenty) przygotowujemy w tle, zanim okno poprosi o kolejne obrazki.
+    MAKS_PAMIEC_MIN = 1_500_000_000
+
+    def _plik_miniatury(self, sciezka: str, rozmiar, mtime, srednia: bool) -> Path:
+        import hashlib
+        k = hashlib.sha1(f"{sciezka}|{rozmiar}|{mtime}|{'s' if srednia else 'm'}".encode()).hexdigest()
+        return Path(self.katalog) / "miniatury" / k[:2] / f"{k}.jpg"
+
+    def _wiersz_zdjecia(self, id_: int):
+        db = self.db()
+        try:
+            r = db.execute("SELECT sciezka, rozmiar, mtime FROM pliki WHERE rowid=? AND rodzaj='zdjecie'", (id_,)).fetchone()
+            if not r:  # plik z planu, którego nie ma już w skanie (np. w miejscu docelowym)
+                r = db.execute("SELECT sciezka, rozmiar, NULL mtime FROM plan WHERE plik_id=? AND rodzaj='zdjecie'",
+                               (id_,)).fetchone()
+        finally:
+            db.close()
+        return r
+
+    def miniatura(self, id_: int, srednia: bool = False, wiersz=None) -> bytes | None:
         klucz = ("s", id_) if srednia else id_
         if klucz in self.miniatury:
             return self.miniatury[klucz]
-        db = self.db()
-        try:
-            r = db.execute("SELECT sciezka FROM pliki WHERE rowid=? AND rodzaj='zdjecie'", (id_,)).fetchone()
-            if not r:  # plik z planu, którego nie ma już w skanie (np. w miejscu docelowym)
-                r = db.execute("SELECT sciezka FROM plan WHERE plik_id=? AND rodzaj='zdjecie'", (id_,)).fetchone()
-        finally:
-            db.close()
+        r = wiersz or self._wiersz_zdjecia(id_)
         if not r:
             return None
+        plik = self._plik_miniatury(r["sciezka"], r["rozmiar"], r["mtime"], srednia)
         try:
-            import io
-            if srednia:  # do porównywania podobnych — wyraźniejsza niż miniatura z EXIF
-                im, _ = analiza.miniatura(r["sciezka"], min_bok=200)
-                im.thumbnail((600, 600))
-            else:
-                im, _ = analiza.miniatura(r["sciezka"], min_bok=150)
-                im.thumbnail((260, 260))
-            buf = io.BytesIO()
-            im.save(buf, "JPEG", quality=82)
-        except Exception:
-            return None
+            dane = plik.read_bytes()
+        except OSError:
+            dane = None
+        if dane is None:
+            try:
+                import io
+                if srednia:  # do porównywania podobnych — wyraźniejsza niż miniatura z EXIF
+                    im, _ = analiza.miniatura(r["sciezka"], min_bok=200)
+                    im.thumbnail((600, 600))
+                else:
+                    im, _ = analiza.miniatura(r["sciezka"], min_bok=150)
+                    im.thumbnail((260, 260))
+                buf = io.BytesIO()
+                im.save(buf, "JPEG", quality=82)
+                dane = buf.getvalue()
+            except Exception:
+                return None
+            try:
+                plik.parent.mkdir(parents=True, exist_ok=True)
+                tmp = plik.with_suffix(".tmp")
+                tmp.write_bytes(dane)
+                os.replace(tmp, plik)
+                self._nowych_min = getattr(self, "_nowych_min", 0) + 1
+                if self._nowych_min % 2000 == 0:
+                    threading.Thread(target=self._przytnij_miniatury, daemon=True).start()
+            except OSError:
+                pass
         if len(self.miniatury) > 600:
             self.miniatury.clear()
-        self.miniatury[klucz] = buf.getvalue()
-        return self.miniatury[klucz]
+        self.miniatury[klucz] = dane
+        return dane
+
+    def _przytnij_miniatury(self) -> None:
+        try:
+            pliki = [(p.stat().st_atime, p.stat().st_size, p) for p in (Path(self.katalog) / "miniatury").rglob("*.jpg")]
+        except OSError:
+            return
+        razem = sum(r for _, r, _ in pliki)
+        for _, r, p in sorted(pliki):
+            if razem <= self.MAKS_PAMIEC_MIN * 0.8:
+                break
+            try:
+                p.unlink()
+                razem -= r
+            except OSError:
+                pass
+
+    def przygotuj_miniatury(self, ids, srednia: bool = False) -> None:
+        """Miniatury listy w tle (3 wątki, najpierw te z góry listy) — okno dostaje je potem od razu."""
+        with self.blokada:
+            if not hasattr(self, "_kolejka_min"):
+                import collections
+                self._kolejka_min, self._w_kolejce, self._watki_min = collections.deque(), set(), 0
+            nowe = [(int(i), srednia) for i in ids if (int(i), srednia) not in self._w_kolejce]
+            self._kolejka_min.extendleft(reversed(nowe))  # najnowsza lista ma pierwszeństwo
+            self._w_kolejce.update(nowe)
+            while len(self._kolejka_min) > 3000:  # stare, nieobejrzane — porzucamy
+                self._w_kolejce.discard(self._kolejka_min.pop())
+            uruchom = min(3 - self._watki_min, len(self._kolejka_min))
+            self._watki_min += max(0, uruchom)
+        for _ in range(max(0, uruchom)):
+            threading.Thread(target=self._watek_miniatur, daemon=True, name="miniatury").start()
+
+    def _watek_miniatur(self) -> None:
+        while True:
+            with self.blokada:
+                if not self._kolejka_min:
+                    self._watki_min -= 1
+                    return
+                id_, srednia = self._kolejka_min.popleft()
+                self._w_kolejce.discard((id_, srednia))
+            if self._zajety():  # trwa skan / porządkowanie — dysk jest potrzebny zadaniu
+                time.sleep(0.5)
+            try:
+                self.miniatura(id_, srednia)
+            except Exception:
+                pass
 
     def sciezka_filmu(self, id_: int) -> str | None:
         db = self.db()
@@ -978,12 +1057,15 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/plan/sprawdz":
                 return self._wyslij(stan.z_db(wykonawca.sprawdz))
             if u.path == "/api/nie-z-aparatu":
-                return self._wyslij({"pliki": stan.z_db(kategorie.do_sprawdzenia)})
+                pliki = stan.z_db(kategorie.do_sprawdzenia)
+                stan.przygotuj_miniatury([p["id"] for p in pliki[:400]], srednia=True)
+                return self._wyslij({"pliki": pliki})
             if u.path == "/api/dokumenty":
                 kand = stan.z_db(analiza.kandydaci_dokumentow)
                 kat = stan.z_db(kategorie.kategorie_plikow, [k["id"] for k in kand])
                 for k in kand:
                     k["kat"] = kat.get(k["id"])
+                stan.przygotuj_miniatury([k["id"] for k in kand[:400]], srednia=True)
                 return self._wyslij({"kandydaci": kand})
             if u.path == "/api/podobne":
                 przejrz = stan.z_db(duplikaty.przejrzane_klucze, "podobne")
@@ -992,6 +1074,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 od, ile = _int(q, "od", 0), min(_int(q, "ile", 30), 200)
                 wycinek = grupy[od:od + ile]
                 kat = stan.z_db(kategorie.kategorie_plikow, [w["id"] for g in wycinek for w in g])
+                # ta strona i następna — w tle, zanim okno o nie poprosi
+                stan.przygotuj_miniatury([w["id"] for g in grupy[od:od + 2 * ile] for w in g], srednia=True)
                 return self._wyslij({"razem": len(grupy), "przejrzane": len(przejrz), "grupy": [
                     [{**{k: w[k] for k in ("id", "sciezka", "wzgledna", "mtime", "rozmiar", "szer", "wys", "ostrosc")},
                       "kat": kat.get(w["id"])} for w in g] for g in wycinek]})
@@ -1000,7 +1084,9 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/odlozone":
                 return self._wyslij(sprzatanie.odlozone(stan.korzenie_kosza()))
             if u.path == "/api/nieostre":
-                return self._wyslij({"pliki": stan.z_db(analiza.najmniej_ostre, min(_int(q, "ile", 120), 500))})
+                pliki = stan.z_db(analiza.najmniej_ostre, min(_int(q, "ile", 120), 500))
+                stan.przygotuj_miniatury([p["id"] for p in pliki])
+                return self._wyslij({"pliki": pliki})
             if u.path == "/api/przegladarka":
                 return self._wyslij({**stan.przegladarka.opis(), "katalogator_pracuje": stan.zajety()})
             if u.path == "/api/dyski":
@@ -1012,7 +1098,9 @@ def _handler(stan: Stan, token: str, zamknij):
                     od, ile = int(q.get("od", ["0"])[0]), min(int(q.get("ile", ["100"])[0]), 200)
                 except ValueError:
                     od, ile = 0, 100
-                return self._wyslij(stan.grupy(q.get("rodzaj", [""])[0], od, ile))
+                w = stan.grupy(q.get("rodzaj", [""])[0], od, ile)
+                stan.przygotuj_miniatury([g["pliki"][0]["id"] for g in w["grupy"] if g["rodzaj"] == "zdjecie"])
+                return self._wyslij(w)
             if u.path == "/plik":
                 return self._strumien(stan.sciezka_filmu(_int(q, "id", 0)))
             if u.path == "/film-mp4":  # stary / nieznany przeglądarce format — przerabiany w locie

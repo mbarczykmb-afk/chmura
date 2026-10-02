@@ -244,9 +244,9 @@ def szukano(db: sqlite3.Connection) -> bool:
 
 
 _GRUPY = """
-    SELECT o.pelny h, p.rozmiar, COUNT(*) n FROM pliki p
+    SELECT o.pelny h, p.rozmiar, COUNT(*) n, MIN(p.rodzaj) rodzaj FROM pliki p
     JOIN odciski o ON o.sciezka = p.sciezka AND o.rozmiar = p.rozmiar AND o.mtime = p.mtime
-    WHERE o.pelny IS NOT NULL AND o.pelny NOT IN (SELECT klucz FROM dup_przejrzane WHERE rodzaj = 'dup')
+    WHERE o.pelny IS NOT NULL
     GROUP BY o.pelny HAVING COUNT(*) > 1
 """
 
@@ -275,17 +275,15 @@ def przejrzane_klucze(db: sqlite3.Connection, rodzaj: str) -> set[str]:
 
 
 def podsumowanie(db: sqlite3.Connection) -> dict:
+    """Z pamiętanej listy grup (ta sama, co lista w zakładce) — bez osobnego, drogiego zapytania."""
     przygotuj(db)
-    r = db.execute(
-        f"SELECT COUNT(*) grupy, COALESCE(SUM(n-1),0) nadmiar, COALESCE(SUM((n-1)*rozmiar),0) bajty FROM ({_GRUPY})"
-    ).fetchone()
-    wg = db.execute(
-        f"""SELECT p.rodzaj, COUNT(DISTINCT g.h) grupy FROM ({_GRUPY}) g
-            JOIN odciski o ON o.pelny = g.h JOIN pliki p ON p.sciezka = o.sciezka
-            GROUP BY p.rodzaj"""
-    ).fetchall()
-    return {"grupy": r["grupy"], "nadmiar": r["nadmiar"], "bajty": r["bajty"],
-            "rodzaje": {w["rodzaj"]: w["grupy"] for w in wg}}
+    pomin = przejrzane_klucze(db, "dup")
+    grupy_ = [g for g in _naglowki(db) if g[0] not in pomin]
+    rodzaje: dict[str, int] = {}
+    for g in grupy_:
+        rodzaje[g[3]] = rodzaje.get(g[3], 0) + 1
+    return {"grupy": len(grupy_), "nadmiar": sum(g[2] - 1 for g in grupy_),
+            "bajty": sum((g[2] - 1) * g[1] for g in grupy_), "rodzaje": rodzaje}
 
 
 def _ocena(plik: dict, cele: set[str]) -> tuple:
@@ -295,6 +293,8 @@ def _ocena(plik: dict, cele: set[str]) -> tuple:
     return (podejrzana, w_celu, plik["mtime"], len(plik["wzgledna"]), plik["wzgledna"])
 
 
+# Lista grup duplikatów (h, rozmiar, n, rodzaj), od największego zysku — przy 400 tys. plików liczy się sekundy,
+# więc jest pamiętana; po odłożeniu / cofnięciu poprawiamy tylko zmienione grupy (bez liczenia wszystkiego od nowa).
 _PAMIEC_GRUP: dict = {}
 
 
@@ -303,36 +303,67 @@ def _odcisk_stanu(db: sqlite3.Connection) -> tuple:
     plik = next((r[2] for r in db.execute("PRAGMA database_list") if r[1] == "main"), "")
     return (plik or id(db),
             *db.execute("SELECT COUNT(*), MAX(rowid), TOTAL(rowid), TOTAL(mtime), TOTAL(rozmiar) FROM pliki").fetchone(),
-            *db.execute("SELECT COUNT(*), TOTAL(rowid), COUNT(pelny), MAX(pelny), MIN(pelny) FROM odciski").fetchone(),
-            *db.execute("SELECT COUNT(*), MAX(klucz) FROM dup_przejrzane WHERE rodzaj='dup'").fetchone())
+            *db.execute("SELECT COUNT(*), TOTAL(rowid), COUNT(pelny), MAX(pelny), MIN(pelny) FROM odciski").fetchone())
+
+
+def _kolejnosc(g) -> tuple:
+    return (-(g[2] - 1) * g[1], g[0])
+
+
+def _naglowki(db: sqlite3.Connection) -> list[tuple]:
+    klucz = _odcisk_stanu(db)
+    if _PAMIEC_GRUP.get("klucz") != klucz:
+        naglowki = sorted((tuple(r) for r in db.execute(f"SELECT h, rozmiar, n, rodzaj FROM ({_GRUPY})")),
+                          key=_kolejnosc)
+        _PAMIEC_GRUP.clear()
+        _PAMIEC_GRUP.update(klucz=klucz, naglowki=naglowki)
+    return _PAMIEC_GRUP["naglowki"]
+
+
+def _aktualna_pamiec(db: sqlite3.Connection) -> bool:
+    return bool(_PAMIEC_GRUP) and _PAMIEC_GRUP.get("klucz") == _odcisk_stanu(db)
+
+
+def _popraw_pamiec(db: sqlite3.Connection, odciski: set, byla_aktualna: bool) -> None:
+    """Po odłożeniu / cofnięciu: przelicz tylko grupy o tych odciskach (zamiast całej listy)."""
+    if not byla_aktualna or not odciski:
+        return
+    nowe = {g[0]: g for g in _PAMIEC_GRUP["naglowki"] if g[0] not in odciski}
+    for h in odciski:
+        r = db.execute("""SELECT p.rozmiar, COUNT(*) n, MIN(p.rodzaj) FROM pliki p
+                          JOIN odciski o ON o.sciezka = p.sciezka AND o.rozmiar = p.rozmiar AND o.mtime = p.mtime
+                          WHERE o.pelny = ?""", (h,)).fetchone()
+        if r and r[1] > 1:
+            nowe[h] = (h, r[0], r[1], r[2])
+    _PAMIEC_GRUP.update(klucz=_odcisk_stanu(db), naglowki=sorted(nowe.values(), key=_kolejnosc))
+
+
+def _odciski_plikow(db: sqlite3.Connection, ids) -> set:
+    ids = [int(i) for i in ids]
+    if not ids:
+        return set()
+    return {r[0] for r in db.execute(
+        f"SELECT o.pelny FROM odciski o JOIN pliki p ON p.sciezka = o.sciezka WHERE o.pelny IS NOT NULL "
+        f"AND p.rowid IN ({','.join('?' * len(ids))})", ids)}
 
 
 def grupy(db: sqlite3.Connection, rodzaj: str | None = None, od: int = 0, ile: int = 50,
           cele: set[str] | None = None) -> list[dict]:
     przygotuj(db)
     cele = cele or set()
-    filtr, arg = "", []
-    if rodzaj:
-        filtr = "WHERE EXISTS (SELECT 1 FROM odciski o3 JOIN pliki p3 ON p3.sciezka=o3.sciezka " \
-                "WHERE o3.pelny = g.h AND p3.rodzaj = ?)"
-        arg.append(rodzaj)
-    # lista grup (przy 200 tys. plików liczy się ponad sekundę) jest pamiętana — kolejne strony są natychmiast
-    klucz = (_odcisk_stanu(db), rodzaj)
-    if _PAMIEC_GRUP.get("klucz") != klucz:
-        _PAMIEC_GRUP.clear()
-        _PAMIEC_GRUP.update(klucz=klucz, naglowki=[tuple(r) for r in db.execute(
-            f"SELECT g.h, g.rozmiar, g.n FROM ({_GRUPY}) g {filtr} ORDER BY (g.n - 1) * g.rozmiar DESC, g.h",
-            arg)])
-    naglowki = [dict(zip(("h", "rozmiar", "n"), r)) for r in _PAMIEC_GRUP["naglowki"][od:od + ile]]
+    pomin = przejrzane_klucze(db, "dup")
+    lista = [g for g in _naglowki(db) if g[0] not in pomin and (not rodzaj or g[3] == rodzaj)]
     wynik = []
-    for g in naglowki:
+    for h, rozmiar, n, _ in lista[od:od + ile]:
         pliki = [dict(r) for r in db.execute(
             """SELECT p.rowid id, p.sciezka, p.korzen, p.wzgledna, p.mtime, p.data, p.rodzaj
                FROM pliki p JOIN odciski o ON o.sciezka = p.sciezka AND o.rozmiar = p.rozmiar AND o.mtime = p.mtime
-               WHERE o.pelny = ?""", (g["h"],))]
+               WHERE o.pelny = ?""", (h,))]
+        if len(pliki) < 2:
+            continue
         pliki.sort(key=lambda p: _ocena(p, cele))
         wynik.append({
-            "h": g["h"], "rozmiar": g["rozmiar"], "n": g["n"], "rodzaj": pliki[0]["rodzaj"],
+            "h": h, "rozmiar": rozmiar, "n": len(pliki), "rodzaj": pliki[0]["rodzaj"],
             "zostaw": pliki[0]["id"], "pliki": pliki,
         })
     return wynik
@@ -353,6 +384,8 @@ def przenies(db: sqlite3.Connection, decyzje: list[dict]) -> dict:
     przygotuj(db)
     partia = nowa_partia(db)
     przeniesione, pominiete, bajty = 0, [], 0
+    aktualna = _aktualna_pamiec(db)
+    zmienione = _odciski_plikow(db, [i for d in decyzje for i in d.get("usun", [])]) if aktualna else set()
     for d in decyzje:
         ids = [d["zostaw"], *d.get("usun", [])]
         if d["zostaw"] in d.get("usun", []) or not d.get("usun"):
@@ -391,6 +424,7 @@ def przenies(db: sqlite3.Connection, decyzje: list[dict]) -> dict:
                 przeniesione += 1
                 bajty += wiersze[i]["rozmiar"]
         db.commit()
+    _popraw_pamiec(db, zmienione, aktualna)
     return {"przeniesione": przeniesione, "bajty": bajty, "pominiete": pominiete, "partia": partia}
 
 
@@ -418,6 +452,8 @@ def odloz(db: sqlite3.Connection, ids: list[int], typ: str) -> dict:
     przygotuj(db)
     partia = nowa_partia(db)
     przeniesione, pominiete, bajty = 0, [], 0
+    aktualna = _aktualna_pamiec(db)
+    zmienione = _odciski_plikow(db, ids) if aktualna else set()
     for i in dict.fromkeys(int(x) for x in ids):
         w = db.execute("SELECT rowid, * FROM pliki WHERE rowid=?", (i,)).fetchone()
         if not w:
@@ -430,6 +466,7 @@ def odloz(db: sqlite3.Connection, ids: list[int], typ: str) -> dict:
             przeniesione += 1
             bajty += w["rozmiar"]
     db.commit()
+    _popraw_pamiec(db, zmienione, aktualna)
     return {"przeniesione": przeniesione, "bajty": bajty, "pominiete": pominiete, "partia": partia}
 
 
@@ -447,6 +484,7 @@ def cofnij(db: sqlite3.Connection, partia: int | None = None) -> dict:
     if not ost:
         return {"przywrocone": 0, "bledy": []}
     przywrocone, bledy = 0, []
+    aktualna = _aktualna_pamiec(db)
     for op in db.execute("SELECT * FROM operacje WHERE partia = ? AND cofnieta = 0", (ost["partia"],)).fetchall():
         try:
             if os.path.exists(op["z_"]):
@@ -464,6 +502,12 @@ def cofnij(db: sqlite3.Connection, partia: int | None = None) -> dict:
         db.execute("UPDATE operacje SET cofnieta = 1 WHERE id = ?", (op["id"],))
         przywrocone += 1
     db.commit()
+    if aktualna:  # przywrócone pliki wracają do swoich grup
+        przywr = [r[0] for r in db.execute("SELECT z_ FROM operacje WHERE partia=? AND cofnieta=1", (ost["partia"],))]
+        hs = {r[0] for c in range(0, len(przywr), 500) for r in db.execute(
+            f"SELECT pelny FROM odciski WHERE pelny IS NOT NULL AND sciezka IN ({','.join('?' * len(przywr[c:c + 500]))})",
+            przywr[c:c + 500])}
+        _popraw_pamiec(db, hs, True)
     _usun_puste(db, ost["partia"])
     return {"przywrocone": przywrocone, "bledy": bledy, "partia": ost["partia"]}
 

@@ -380,6 +380,11 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     serwera programu na 127.0.0.1 z jego tokenem (`stan.glowny`), strumieniowo (filmy, Range). Tylko przy
     `pilot.sterowanie`; `/api/zamknij` i instalacja aktualizacji zablokowane. Układ okna na telefon (≤760 px),
     `body.zdalnie` chowa Zamknij/📱.
+44. **Szybkość wczytywania 1.19.1** ✅: lista grup duplikatów pamiętana (h, rozmiar, n, rodzaj), podsumowanie
+    liczone z niej, przejrzane filtrowane w Pythonie, po odłożeniu / cofnięciu poprawiane tylko zmienione grupy;
+    `/api/stan` czeka na podsumowania najwyżej 0,25 s; miniatury na dysku (`<dane>/miniatury`, do 1,5 GB, także
+    Biblioteka) i przygotowywane w tle (3 wątki) dla list: duplikaty, podobne (+ następna strona), dokumenty, nie z
+    aparatu, nieostre. Pomiar 200 tys.: stan 4,06→0,26 s, duplikaty 4,21→0,38 s, 60 miniatur 2,94→0,11 s.
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.
