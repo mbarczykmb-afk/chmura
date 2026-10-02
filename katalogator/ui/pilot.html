@@ -60,6 +60,8 @@ button:disabled{opacity:.45;cursor:default}
 .dzien-min img{width:100%;height:100%;object-fit:cover;display:block}
 .dzien-min span{position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:1px 6px;border-radius:999px}
 .dzien-link{color:var(--akc);font-weight:600;text-decoration:none}
+.pelny{display:flex;flex-direction:column;gap:2px;margin:10px 0;padding:14px;border-radius:16px;background:var(--grad);color:#fff;text-decoration:none;box-shadow:0 8px 24px rgba(79,70,229,.35)}
+.pelny b{font-size:17px}.pelny span{font-size:13px;opacity:.9}
 </style>
 </head>
 <body>
@@ -75,6 +77,11 @@ button:disabled{opacity:.45;cursor:default}
   <select id="projekt" aria-label="Projekt"></select>
   <div class="mut" id="foldery" style="margin-top:8px"></div>
 </section>
+
+<a class="pelny" id="pelny" href="/program" hidden>
+  <b>🖥 Pełny program</b>
+  <span>Duplikaty, Dokumenty, Podobne, Drzewo, kosz — wszystko jak na komputerze</span>
+</a>
 
 <section class="karta teraz" id="teraz">
   <h2>Teraz na komputerze</h2>

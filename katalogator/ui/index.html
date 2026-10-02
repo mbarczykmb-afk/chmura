@@ -444,6 +444,44 @@ header .wersja,#biblioteka-btn,.tryby button{white-space:nowrap}
 @media (max-width:1400px){header .wersja{display:none}}
 @media (max-width:1300px){.tryby button{padding:6px 10px} #biblioteka-btn .t{display:none}}
 @media (max-width:1150px){.tryby button .t{display:none} .tryby button{font-size:17px;padding:5px 12px} header h1 .logo-tekst{display:none}}
+/* --- telefon (pełny program przez serwer telefonu): jedna kolumna, zakładki na górze, bez przewijania w bok --- */
+@media (max-width:760px){
+  html,body{overflow-x:hidden;max-width:100vw}
+  header{flex-wrap:wrap;gap:6px;padding:8px 10px}
+  header h1 .logo-tekst,header .wersja{display:none}
+  .tryby{order:5;width:100%;margin-left:0;overflow-x:auto;justify-content:space-between}
+  .tryby button{flex:1;padding:7px 6px;font-size:13px}
+  .tryby button .t{display:inline}
+  header .odstep{display:none}
+  header button{padding:6px 9px}
+  .kroki{flex-wrap:nowrap;overflow-x:auto;padding:8px 10px 0;scrollbar-width:none}
+  .kroki .krok{flex:none;font-size:12px}
+  main{grid-template-columns:1fr;padding:8px 8px 90px;gap:10px}
+  main>div:first-child{order:2}  /* foldery, projekt — pod zakładkami (na telefonie liczą się Duplikaty itd.) */
+  main>section,main>div{min-width:0}
+  section{padding:12px}
+  .zakladki{scrollbar-width:none}
+  .zakladka{padding:7px 9px;font-size:13px;flex:none}
+  .grupa{grid-template-columns:64px 1fr;gap:8px;padding:8px}
+  .grupa .mini{width:64px;height:64px}
+  .plik{font-size:12.5px;gap:4px;padding:5px 2px;grid-template-columns:18px 1fr auto auto}
+  .plik .sc{grid-column:2 / -1}  /* nazwa w całej linii, pod nią: zostaje/odłożę, 🔍, 🗑 */
+  .plik .znak{grid-column:2;justify-self:start}
+  .plik .znak{font-size:10px;padding:1px 5px}
+  .kosz.w-wierszu{width:34px;height:34px}
+  .stopka{position:sticky;bottom:0;flex-wrap:wrap;gap:6px;padding:8px;z-index:3}
+  .stopka .glowny{width:100%}
+  .pw-okno{padding:16px;max-height:94vh}
+  .pw-hero{margin:-16px -16px 14px;height:130px}
+  .pw-kroki{grid-template-columns:1fr 1fr;gap:8px}
+  .okno{max-width:calc(100vw - 20px)!important;padding:16px}
+  .nakladka{padding:10px}
+  .toast{max-width:94vw;bottom:12px}
+  .filtry{overflow-x:auto;flex-wrap:nowrap}
+  .karty,.siatka-kart{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))!important}
+  #aktywnosc{bottom:70px}
+}
+body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
 </style>
 </head>
 <body>
@@ -864,6 +902,8 @@ header .wersja,#biblioteka-btn,.tryby button{white-space:nowrap}
   window.addEventListener("unhandledrejection", e => wyslij("Promise: " + (e.reason && (e.reason.stack || e.reason.message) || e.reason)));
 })();
 const TOKEN = new URLSearchParams(location.search).get("t") || "";
+// otwarte z telefonu przez serwer telefonu (pełny program) — bez tokenu w adresie; zamykanie programu na PC ukryte
+if (!TOKEN) document.body.classList.add("zdalnie");
 const $ = id => document.getElementById(id);
 let stan = {zrodla: [], cel: "", skan: {}, ma_wyniki: false};
 let bylSkan = false;

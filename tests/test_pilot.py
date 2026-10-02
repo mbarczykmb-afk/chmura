@@ -1,6 +1,7 @@
 """Pilot na telefonie: stan pracy programu, kolejne kroki, przerywanie — po PIN-ie."""
 
 import json
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -119,3 +120,40 @@ def test_wlasny_pin(tmp_path):
         assert w["pin"] != "1111" and not w["wlasny_pin"]
     finally:
         stan.telefon(False)
+
+
+def test_pelny_program_przez_serwer_telefonu(tmp_path):
+    """🖥 Pełny program z telefonu: po PIN-ie (ciasteczko) zapytania idą do programu na komputerze."""
+    import http.cookiejar
+    serwer, url, stan = aplikacja.uruchom_serwer(tmp_path / "dane")
+    threading.Thread(target=serwer.serve_forever, daemon=True).start()
+    s = galeria.SerwerGalerii(stan.galeria("wszystko"), port=0, pin="1357", host="127.0.0.1",
+                              pilot=pilot.Pilot(stan, sterowanie=True), galerie=stan.galeria).start()
+    try:
+        b = f"http://127.0.0.1:{s.port}"
+        kl = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        # bez PIN-u: przekierowanie do logowania, API zamknięte
+        with kl.open(b + "/program") as o:
+            assert o.geturl().endswith("/?dalej=/program")
+        with pytest.raises(urllib.error.HTTPError) as e:
+            kl.open(b + "/api/stan")
+        assert e.value.code == 401
+        kl.open(urllib.request.Request(b + "/api/g/zaloguj", data=json.dumps({"pin": "1357"}).encode(),
+                                       headers={"Content-Type": "application/json"}))
+        with kl.open(b + "/program") as o:
+            assert b"Katalogator" in o.read()  # główne okno programu
+        with kl.open(b + "/api/stan") as o:
+            assert json.loads(o.read())["projekt"]["nazwa"]
+        with kl.open(urllib.request.Request(b + "/api/projekty/nowy", data=json.dumps({"nazwa": "Z telefonu"}).encode(),
+                                            headers={"Content-Type": "application/json"})) as o:
+            assert json.loads(o.read())["projekt"]["nazwa"] == "Z telefonu"  # zapis przez pośrednika
+        with pytest.raises(urllib.error.HTTPError) as e:
+            kl.open(urllib.request.Request(b + "/api/zamknij", data=b"{}"))
+        assert e.value.code == 403  # programu na komputerze nie zamkniemy z telefonu
+        s.pilot.sterowanie = False
+        with pytest.raises(urllib.error.HTTPError) as e:
+            kl.open(b + "/api/stan")
+        assert e.value.code == 403
+    finally:
+        s.stop()
+        serwer.shutdown()

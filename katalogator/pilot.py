@@ -110,6 +110,10 @@ class Pilot:
                          else "Nic nie czeka w „Odłożone” — odkładasz na komputerze (Duplikaty, Śmieci…)")
         return k
 
+    # --- 🖥 pełny program z telefonu: (port, token) serwera programu albo None ----------------------------
+    def pelny(self):
+        return getattr(self.stan, "glowny", None) if self.sterowanie else None
+
     # --- usuwanie z telefonu (galeria) ----------------------------------------------------------
     def zajety_projekt(self, zakres: str) -> str | None:
         """Pliki projektu nie zmieniają miejsca w trakcie zadania (Przeglądarka ma osobną bazę)."""

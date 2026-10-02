@@ -495,7 +495,10 @@ async function telefon(wlacz, pin) {
       adres zaczyna się od 100.): <span id="tel-inne"></span></li>
       <li>Windows może zapytać o zaporę — zaznacz <b>sieci prywatne</b> i kliknij <b>Zezwalaj</b>.</li>
       <li>Działa, dopóki Katalogator jest otwarty. Na 24/7 — Raspberry Pi (instrukcja w README).</li>
-      <li>Na telefonie zobaczysz, co robi program, i uruchomisz kolejne kroki projektu; zdjęcia — tylko do oglądania.</li></ul>
+      <li>Na telefonie: pilot (postęp, kolejne kroki) i <b>🖥 Pełny program</b> — Duplikaty, Dokumenty, Podobne, Drzewo,
+      kosz, jak na komputerze (gdy zaznaczone niżej „Pozwól sterować”).</li>
+      <li><b>Spoza domu</b>: włącz w telefonie VPN do domu (WireGuard na domowym serwerze albo Tailscale) i otwórz ten sam adres.
+      Programu nie wystawiamy wprost do internetu.</li></ul>
       <label class="tel-ster"><input type="checkbox" id="tel-ster"> Pozwól sterować z telefonu (uruchamianie kroków, przerywanie)</label>`;
     $("tel-ster").checked = j.sterowanie !== false;
     $("tel-pin-info").textContent = j.wlasny_pin ? "Twój PIN — stały" : "losowy przy każdym włączeniu";

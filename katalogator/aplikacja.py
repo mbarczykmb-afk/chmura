@@ -1267,6 +1267,7 @@ def uruchom_serwer(katalog: Path | None = None, port: int = 0):
 
     serwer = ThreadingHTTPServer(("127.0.0.1", port), _handler(stan, token, zamknij))
     serwer.daemon_threads = True
+    stan.glowny = (serwer.server_address[1], token)  # dla „pełnego programu z telefonu” (przez serwer telefonu)
     url = f"http://127.0.0.1:{serwer.server_address[1]}/?t={token}"
     return serwer, url, stan
 

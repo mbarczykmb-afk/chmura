@@ -52,7 +52,10 @@ $("login-form").onsubmit = async e => {
     if (!r.ok || !j.t) throw new Error(j.blad || "Zły PIN");
     TOKEN = j.t;
     try { localStorage.setItem(KLUCZ, TOKEN); } catch (err) { /* prywatne okno */ }
-    $("login").hidden = true; odswiez();
+    $("login").hidden = true;
+    const dalej = new URLSearchParams(location.search).get("dalej");
+    if (dalej === "/program") { location.href = "/program"; return; }  // po PIN-ie — od razu pełny program
+    odswiez();
   } catch (err) { $("login-blad").textContent = err.message; }
 };
 
@@ -105,6 +108,8 @@ function rysuj() {
     k.append(w);
   });
   $("bez-sterowania").hidden = s.sterowanie;
+  $("pelny").hidden = !s.sterowanie;
+  $("pelny").href = "/program?s=" + encodeURIComponent(TOKEN);  // sesja dla pełnego programu (ciasteczko)
   // ostatnio
   $("ostatnie-k").hidden = !s.ostatnie.length;
   $("ostatnie").replaceChildren(...s.ostatnie.map(o =>

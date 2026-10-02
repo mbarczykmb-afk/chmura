@@ -375,6 +375,11 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     imageio-ffmpeg, PATH). Klatka JPEG (yadif + skala) → `/miniatura-filmu` (pamięć `miniatury_filmow/`) i
     `Galeria.miniatura` (g_min_filmow); `/film-mp4`, `/api/g/film-mp4` (`&f=webm`) — H.264+AAC fMP4 / VP8+Opus
     WebM na żywo, proces kończony po zamknięciu połączenia. Klient: oryginał (mp4/m4v/mov/webm) → MP4 → WebM.
+43. **Pełny program z telefonu 1.19** ✅: `SerwerGalerii` — PIN → ciasteczko `kat_s` (HttpOnly, SameSite=Lax);
+    `/program` (i `?s=token` z pilota) → główne okno; pozostałe ścieżki (poza pilotem i /api/g/…) przekazywane do
+    serwera programu na 127.0.0.1 z jego tokenem (`stan.glowny`), strumieniowo (filmy, Range). Tylko przy
+    `pilot.sterowanie`; `/api/zamknij` i instalacja aktualizacji zablokowane. Układ okna na telefon (≤760 px),
+    `body.zdalnie` chowa Zamknij/📱.
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

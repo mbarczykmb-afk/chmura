@@ -838,13 +838,97 @@ class SerwerGalerii:
                 self.end_headers()
                 self.wfile.write(dane)
 
-            def _ok(self, q) -> bool:
-                t = self.headers.get("X-Token") or q.get("t", [""])[0]
+            def _znany(self, t) -> bool:
                 return bool(t) and (t in s.tokeny or bool(s.staly_token) and secrets.compare_digest(t, s.staly_token))
+
+            def _sesja(self) -> str:
+                """Ciasteczko sesji z logowania PIN-em — pełny program przez przeglądarkę telefonu (obrazki, filmy)."""
+                for k in (self.headers.get("Cookie") or "").split(";"):
+                    nazwa, _, wart = k.strip().partition("=")
+                    if nazwa == "kat_s":
+                        return wart
+                return ""
+
+            def _ok(self, q) -> bool:
+                return (self._znany(self.headers.get("X-Token") or q.get("t", [""])[0]) or
+                        self._znany(self._sesja()))
+
+            def _ciasteczko(self, t: str) -> None:
+                self.send_header("Set-Cookie", f"kat_s={t}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000")
+
+            def _przekieruj(self, dokad: str, t: str | None = None) -> None:
+                self.send_response(HTTPStatus.SEE_OTHER)
+                if t:
+                    self._ciasteczko(t)
+                self.send_header("Location", dokad)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            # --- 🖥 pełny program z telefonu: zapytania przekazywane do programu na komputerze -------------
+            ZABRONIONE = ("/api/zamknij", "/api/aktualizacja/instaluj")  # nie z telefonu
+
+            def _pelny(self):
+                return s.pilot.pelny() if s.pilot is not None else None
+
+            def _przekaz(self, sciezka_glowna: str | None = None) -> None:
+                import http.client
+                from urllib.parse import urlencode
+                cel = self._pelny()
+                if not cel:
+                    return self._wyslij({"blad": "Pełny program z telefonu jest wyłączony — na komputerze: 📱 → "
+                                                 "„Pozwól sterować z telefonu”."}, kod=HTTPStatus.FORBIDDEN)
+                port, token = cel
+                u = urlparse(self.path)
+                if u.path in self.ZABRONIONE:
+                    return self._wyslij({"blad": "Tego nie da się zrobić z telefonu."}, kod=HTTPStatus.FORBIDDEN)
+                q = parse_qs(u.query, keep_blank_values=True)
+                q["t"] = [token]
+                adres = (sciezka_glowna or u.path) + "?" + urlencode(q, doseq=True)
+                n = int(self.headers.get("Content-Length") or 0)
+                tresc = self.rfile.read(n) if n else None
+                naglowki = {"X-Token": token}
+                for k in ("Content-Type", "Range"):
+                    if self.headers.get(k):
+                        naglowki[k] = self.headers[k]
+                pol = http.client.HTTPConnection("127.0.0.1", port, timeout=900)
+                try:
+                    pol.request(self.command, adres, body=tresc, headers=naglowki)
+                    r = pol.getresponse()
+                    self.send_response(r.status)
+                    dlugosc = r.getheader("Content-Length")
+                    for k in ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "Cache-Control",
+                              "Content-Disposition"):
+                        if r.getheader(k):
+                            self.send_header(k, r.getheader(k))
+                    if not dlugosc:
+                        self.send_header("Connection", "close")
+                        self.close_connection = True
+                    self.end_headers()
+                    while True:
+                        kawalek = r.read(64 * 1024)
+                        if not kawalek:
+                            break
+                        self.wfile.write(kawalek)
+                except (OSError, http.client.HTTPException):
+                    pass  # telefon zamknął połączenie / program na komputerze zamknięty
+                finally:
+                    pol.close()
 
             def do_GET(self):
                 u = urlparse(self.path)
                 q = parse_qs(u.query)
+                if u.path == "/program":  # 🖥 pełny program (duplikaty, dokumenty, drzewo…) — po PIN-ie
+                    t = q.get("s", [""])[0]
+                    if self._znany(t):
+                        return self._przekieruj("/program", t)  # ciasteczko sesji z tokenu pilota
+                    if not self._znany(self._sesja()):
+                        return self._przekieruj("/?dalej=/program")
+                    return self._przekaz("/")
+                if (s.pilot is not None and u.path not in ("/", "/galeria") and not u.path.startswith(("/ui/", "/api/g/"))
+                        and u.path != "/api/pilot"):
+                    if not self._ok(q):
+                        return self._wyslij({"blad": "Podaj PIN"}, kod=HTTPStatus.UNAUTHORIZED)
+                    return self._przekaz()
                 if u.path == "/" and s.pilot is not None:
                     return self._wyslij((UI / "pilot.html").read_bytes(), "text/html; charset=utf-8")
                 if u.path in ("/", "/galeria"):
@@ -912,6 +996,8 @@ class SerwerGalerii:
                     s.pilot.po_usunieciu(z, w if u.path == "/api/g/lokalizacja" else None)
                     return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
                 if u.path != "/api/g/zaloguj":
+                    if s.pilot is not None and self._ok(parse_qs(u.query)):
+                        return self._przekaz()  # pełny program: zapisy, decyzje, odkładanie…
                     return self._wyslij(None)
                 ip = self.client_address[0]
                 teraz = time.time()
@@ -926,7 +1012,14 @@ class SerwerGalerii:
                 if pin and secrets.compare_digest(pin, s.pin):
                     t = s.staly_token or secrets.token_urlsafe(24)
                     s.tokeny.add(t)
-                    return self._wyslij({"t": t})
+                    dane = json.dumps({"t": t}).encode()
+                    self.send_response(HTTPStatus.OK)
+                    self._ciasteczko(t)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", str(len(dane)))
+                    self.end_headers()
+                    self.wfile.write(dane)
+                    return
                 time.sleep(1)
                 s.nieudane[ip] = proby + [teraz]
                 return self._wyslij({"blad": "Zły PIN"}, kod=HTTPStatus.UNAUTHORIZED)

@@ -155,6 +155,12 @@ folderu („2004 Zakopane”), a na końcu „w domu”.
      wtedy telefon tylko ogląda. *✎ Ustaw swój PIN* — stały PIN (4–12 cyfr), a telefon zostaje zalogowany
      także po ponownym uruchomieniu programu. Działa, dopóki Katalogator jest otwarty.
 
+**🖥 Pełny program z telefonu** (gdy Katalogator działa na komputerze): 📱 → kod QR + PIN → na pilocie *🖥 Pełny
+program* — wszystkie zakładki (Duplikaty, Dokumenty, Podobne, Drzewo, kosz…) w układzie na telefon. Serwer telefonu
+po PIN-ie przekazuje zapytania do programu na komputerze; wymaga *Pozwól sterować z telefonu*; zamknąć programu ani
+zainstalować aktualizacji z telefonu się nie da. **Spoza domu**: VPN do domu (WireGuard na domowym serwerze albo
+Tailscale) i ten sam adres — program nie jest wystawiany wprost do internetu.
+
 **🎬 Filmy w każdym formacie — także bardzo stare** (2000–2012): AVI (DivX, Xvid, MS-MPEG4, MJPEG z aparatów),
 MPG/VOB, MOD/TOD/MTS z kamer (przeplot usuwany), 3GP z telefonów, WMV, FLV, DV… Miniatura = klatka z filmu;
 odtwarzanie w oknie (Drzewo, Duplikaty: ▶, Biblioteka, Przeglądarka, telefon): MP4/MOV/WebM — oryginał, inne —
