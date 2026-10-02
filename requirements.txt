@@ -1,4 +1,5 @@
 pillow>=10
 pillow-heif>=0.16   # zdjęcia HEIC (opcjonalnie)
 mutagen>=1.47
+imageio-ffmpeg>=0.5  # ffmpeg: podgląd i miniatury starych filmów (AVI, MPG, 3GP, WMV…)
 pytest>=8           # tylko do testów

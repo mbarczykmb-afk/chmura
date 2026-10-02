@@ -56,7 +56,19 @@ jobs:
           --add-data "katalogator/ui;katalogator/ui"
           --add-data "katalogator/dane;katalogator/dane"
           --collect-all pillow_heif
+          --exclude-module imageio_ffmpeg
           uruchom.py
+
+      # ffmpeg (stare filmy: AVI/DivX, MPG, 3GP, WMV, MOD/MTS… — miniatury i odtwarzanie) — tylko w instalatorze,
+      # obok programu; wersja przenośna zostaje lekka (bez ffmpeg odtwarza tylko MP4/WebM)
+      - name: ffmpeg do instalatora
+        shell: pwsh
+        run: |
+          $f = python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"
+          New-Item -ItemType Directory -Force dist\instalacja\Katalogator\ffmpeg | Out-Null
+          Copy-Item $f dist\instalacja\Katalogator\ffmpeg\ffmpeg.exe
+          & dist\instalacja\Katalogator\ffmpeg\ffmpeg.exe -hide_banner -version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) { throw "ffmpeg nie działa" }
 
       - name: Budowanie Katalogator.exe (wersja przenośna, jeden plik)
         run: >
@@ -66,6 +78,7 @@ jobs:
           --add-data "katalogator/ui;katalogator/ui"
           --add-data "katalogator/dane;katalogator/dane"
           --collect-all pillow_heif
+          --exclude-module imageio_ffmpeg
           uruchom.py
 
       - name: Test uruchomienia exe (serwer startuje)
@@ -110,6 +123,7 @@ jobs:
           $exe = "$env:LOCALAPPDATA\Programs\Katalogator\Katalogator.exe"
           if (-not (Test-Path $exe)) { throw "Brak zainstalowanego programu: $exe" }
           if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Katalogator\_internal")) { throw "Brak folderu _internal (wersja folder)" }
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Katalogator\ffmpeg\ffmpeg.exe")) { throw "Brak ffmpeg w instalacji" }
           $p = Start-Process -FilePath $exe -PassThru  # zainstalowany program wstaje
           Start-Sleep -Seconds 8
           if ($p.HasExited) { throw "Zainstalowany Katalogator.exe zakonczyl sie od razu (kod $($p.ExitCode))" }

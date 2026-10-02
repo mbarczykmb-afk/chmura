@@ -229,10 +229,20 @@ async function pokazPelny(lista, poz) {
   $("pelny").hidden = false; zoomReset();
   const p = lista[poz], t = $("pelny-tresc"); t.replaceChildren();
   if (p.rodzaj === "film") {
-    const v = document.createElement("video"); v.controls = true; v.autoplay = true; v.src = url("/api/g/film", {id: p.id});
-    v.onerror = () => {  // np. HEVC z iPhone'a albo AVI — przeglądarka nie odtworzy
+    const v = document.createElement("video"); v.controls = true; v.autoplay = true;
+    // MP4/MOV/WebM — oryginał; stare formaty (AVI, MPG, 3GP, WMV…) albo błąd (HEVC) — MP4 przerabiany w locie (ffmpeg)
+    const natywny = /\.(mp4|m4v|mov|webm)$/i.test(p.nazwa || "");
+    const zrodla = [...(natywny ? [url("/api/g/film", {id: p.id})] : []), url("/api/g/film-mp4", {id: p.id}),
+                    url("/api/g/film-mp4", {id: p.id, f: "webm"})];
+    let nr = 0;
+    const info = document.createElement("div"); info.className = "film-info";
+    info.textContent = "⏳ Przygotowuję stary format filmu…"; info.hidden = natywny;
+    v.onplaying = () => { info.hidden = true; };
+    v.src = zrodla[0];
+    v.onerror = () => {  // np. HEVC z iPhone'a albo AVI — kolejne źródło: MP4, potem WebM (przerabiane w locie)
+      if (++nr < zrodla.length) { info.hidden = false; v.src = zrodla[nr]; v.play().catch(() => {}); return; }
       const b = document.createElement("div"); b.className = "film-blad";
-      b.append("🎬 Tego filmu nie da się odtworzyć w przeglądarce (np. format HEVC z iPhone'a albo AVI).", document.createElement("br"));
+      b.append("🎬 Tego filmu nie da się odtworzyć (uszkodzony albo nietypowy format).", document.createElement("br"));
       if (W_PROGRAMIE) {
         const o = document.createElement("button"); o.textContent = "⤢ Otwórz w programie Windows"; o.onclick = e => { e.stopPropagation(); otworzWProgramie(p); }; b.append(o);
       } else {
@@ -241,7 +251,7 @@ async function pokazPelny(lista, poz) {
       t.replaceChildren(b);
     };
     v.onended = () => { if (g.pokaz) krokPokazu(); };
-    t.append(v);
+    t.append(v, info);
   } else {
     const mini = new Image(); mini.src = miniatura(p.id); t.append(mini);  // najpierw szybka miniatura
     const im = new Image(); im.src = url("/api/g/podglad", {id: p.id});
@@ -865,7 +875,7 @@ function nastepnyFilm() {
       } catch (e) { /* bez klatki */ }
       zakoncz();
     };
-    v.onerror = () => { z.textContent = "▶ film (inny format)"; z.title = "Przeglądarka nie odtworzy tego formatu — otwórz w programie"; zakoncz(); };
+    v.onerror = () => { z.textContent = "▶ film"; z.title = "Stary format — odtwarzany po przerobieniu (ffmpeg)"; zakoncz(); };
     v.src = url("/api/g/film", {id: p.id});
   }
 }

@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import (__version__, aktualizacje, analiza, duplikaty, dyski, galeria, indeks, logi, lokalizacja, pilot, planista, projekty, przegladarka,
+from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, logi, lokalizacja, pilot, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, usuwanie, wykonawca)
 from .logi import LOG
 
@@ -273,6 +273,7 @@ class Stan:
                 "dup": dup, "zad": zad, "ma_wyniki": ma, "duplikaty": None, "do_cofniecia": None,
                 "analiza": None, "plan": None, "wykonanie": None, "przychodzace": None}
         dane["biezace"] = self._biezace(skan, dup, zad)
+        dane["ffmpeg"] = bool(filmy.ffmpeg())
         with self.przegladarka.blokada:  # skan Przeglądarki (także samoczynny w tle) — dla wskaźnika pracy
             ps = self.przegladarka.stan
             dane["przegladarka"] = {k: ps.get(k) for k in ("trwa", "zrobione", "wszystkie", "etap", "auto")}
@@ -626,6 +627,31 @@ class Stan:
             db.close()
         return r["sciezka"] if r else None
 
+    def miniatura_filmu(self, id_: int) -> bytes | None:
+        """Klatka filmu (ffmpeg — każdy format), zapamiętana na dysku: <dane>/miniatury_filmow/."""
+        import hashlib
+        sc = self.sciezka_filmu(id_)
+        if not sc:
+            return None
+        try:
+            st = os.stat(sc)
+        except OSError:
+            return None
+        k = hashlib.sha1(f"{sc}|{st.st_size}|{st.st_mtime}".encode()).hexdigest()
+        plik = Path(self.katalog) / "miniatury_filmow" / f"{k}.jpg"
+        try:
+            return plik.read_bytes()
+        except OSError:
+            pass
+        jpeg = filmy.klatka(sc, 480)
+        if jpeg:
+            try:
+                plik.parent.mkdir(exist_ok=True)
+                plik.write_bytes(jpeg)
+            except OSError:
+                pass
+        return jpeg
+
     def podglad(self, id_: int) -> bytes | None:
         """Duży podgląd zdjęcia (np. do porównania podobnych) — bez zapamiętywania."""
         db = self.db()
@@ -921,6 +947,8 @@ def _handler(stan: Stan, token: str, zamknij):
                     return self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
                 if w[0] == "film":
                     return galeria.wyslij_strumien(self, w[1])
+                if w[0] == "film-mp4":
+                    return filmy.wyslij_mp4(self, w[1], w[2], w[3])
                 if w[1]:
                     return self._wyslij(w[0], w[1]) if w[0] is not None else \
                         self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
@@ -987,6 +1015,12 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij(stan.grupy(q.get("rodzaj", [""])[0], od, ile))
             if u.path == "/plik":
                 return self._strumien(stan.sciezka_filmu(_int(q, "id", 0)))
+            if u.path == "/film-mp4":  # stary / nieznany przeglądarce format — przerabiany w locie
+                return filmy.wyslij_mp4(self, stan.sciezka_filmu(_int(q, "id", 0)), max(0, _int(q, "od", 0)),
+                                        q.get("f", [""])[0] == "webm")
+            if u.path == "/miniatura-filmu":
+                jpeg = stan.miniatura_filmu(_int(q, "id", 0))
+                return self._wyslij(jpeg, "image/jpeg") if jpeg else self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
             if u.path == "/miniatura":
                 try:
                     id_ = int(q.get("id", ["0"])[0])

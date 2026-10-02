@@ -155,6 +155,12 @@ folderu („2004 Zakopane”), a na końcu „w domu”.
      wtedy telefon tylko ogląda. *✎ Ustaw swój PIN* — stały PIN (4–12 cyfr), a telefon zostaje zalogowany
      także po ponownym uruchomieniu programu. Działa, dopóki Katalogator jest otwarty.
 
+**🎬 Filmy w każdym formacie — także bardzo stare** (2000–2012): AVI (DivX, Xvid, MS-MPEG4, MJPEG z aparatów),
+MPG/VOB, MOD/TOD/MTS z kamer (przeplot usuwany), 3GP z telefonów, WMV, FLV, DV… Miniatura = klatka z filmu;
+odtwarzanie w oknie (Drzewo, Duplikaty: ▶, Biblioteka, Przeglądarka, telefon): MP4/MOV/WebM — oryginał, inne —
+przerabiane w locie na MP4 (zapasowo WebM), bez przewijania. Oryginalny plik się nie zmienia. Wymaga ffmpeg —
+jest w instalatorze (wersja przenośna bez ffmpeg odtwarza tylko MP4/WebM).
+
 **⏳ Praca w tle** — w lewym dolnym rogu okna (także w Bibliotece i Przeglądarce): wczytywanie miniatur z paskiem
 (np. 12 / 40), dłuższe wczytywanie danych, wyniki dużego projektu po starcie i skan Przeglądarki (także samoczynny).
 **🔍 Duplikaty**: kliknij miniaturę grupy albo 🔍 przy pliku — duże zdjęcie, kółko myszy = powiększenie,
@@ -234,3 +240,6 @@ py -m katalogator raport
 py -m katalogator galeria --folder Z:\Biblioteka --pin 1234   # galeria dla telefonu (serwer)
 ```
 </details>
+
+ffmpeg (https://ffmpeg.org, licencja GPL) — kompilacja z pakietu imageio-ffmpeg, dołączana do instalatora jako
+osobny program `ffmpeg\ffmpeg.exe` (podgląd i miniatury filmów).

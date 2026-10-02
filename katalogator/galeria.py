@@ -228,9 +228,16 @@ class Galeria:
             finally:
                 db.close()
             try:
-                return r["dane"] if r and abs(r["mtime"] - os.path.getmtime(film)) < 1 else None
+                if r and abs(r["mtime"] - os.path.getmtime(film)) < 1:
+                    return r["dane"]
             except OSError:
                 return None
+            # każdy format (także stare AVI/MPG/3GP/WMV) — klatka z ffmpeg, zapamiętana w bazie galerii
+            from . import filmy
+            jpeg = filmy.klatka(film, 480)
+            if jpeg:
+                self.zapisz_miniature_filmu(id_, jpeg)
+            return jpeg
         klucz = (int(id_), srednia)
         with self._blokada:
             if klucz in self._min:
@@ -704,6 +711,8 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict):
         return g.podglad(i("id")), "image/jpeg"
     if sciezka == "/api/g/film":
         return "film", g.sciezka(i("id"), "film")
+    if sciezka == "/api/g/film-mp4":  # format, którego przeglądarka nie zna — przerabiany w locie (ffmpeg)
+        return "film-mp4", g.sciezka(i("id"), "film"), max(0, i("od")), q.get("f", [""])[0] == "webm"
     return None
 
 
@@ -859,6 +868,9 @@ class SerwerGalerii:
                     return self._wyslij(None)
                 if w[0] == "film":
                     return wyslij_strumien(self, w[1])
+                if w[0] == "film-mp4":
+                    from . import filmy
+                    return filmy.wyslij_mp4(self, w[1], w[2], w[3])
                 return self._wyslij(w[0], w[1]) if w[1] else self._wyslij(w[0])
 
             def do_POST(self):

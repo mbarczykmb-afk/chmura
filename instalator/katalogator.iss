@@ -56,6 +56,7 @@ Filename: "{app}\Katalogator.exe"; Description: "Uruchom Katalogator"; Flags: no
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\ffmpeg"
 
 [UninstallRun]
 Filename: "{app}\Katalogator.exe"; Parameters: "--usun-harmonogramy"; Flags: runhidden waituntilterminated; RunOnceId: "UsunHarmonogramy"

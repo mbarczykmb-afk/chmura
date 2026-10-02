@@ -264,7 +264,7 @@ function rysujPliki() {
       img.ondblclick = e => { e.stopPropagation(); podgladDuzy(f.plik_id, f.nazwa); };
       ob.append(img);
     } else if (f.rodzaj === "film" && f.plik_id != null) {
-      ob.append(podgladFilmu(f.plik_id));
+      ob.append(podgladFilmu(f.plik_id, f.nazwa));
     } else ob.textContent = IKONY[f.rodzaj] || "📄";
     if (f.plik_id != null && !f.wynik) ob.append(przyciskKosz(f.plik_id, f.nazwa, k));
     const op = document.createElement("div"); op.className = "op";
@@ -318,25 +318,51 @@ function rysujPliki() {
 }
 
 // Klatka z filmu (przeglądarka czyta tylko początek pliku); dwuklik = odtwarzanie
-function podgladFilmu(id) {
-  const v = document.createElement("video");
-  v.muted = true; v.preload = "metadata"; v.playsInline = true;
-  v.src = `/plik?t=${encodeURIComponent(TOKEN)}&id=${id}#t=1`;
-  v.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover";
+// Filmy: miniatura = klatka z ffmpeg (każdy format, także stare AVI/MPG/3GP/WMV z lat 2000–2012);
+// odtwarzanie: oryginał, gdy przeglądarka zna format, inaczej (albo po błędzie) — MP4 przerabiany w locie.
+const FILM_NATYWNY = /\.(mp4|m4v|mov|webm)$/i;
+function podgladFilmu(id, nazwa = "") {
+  const box = document.createElement("div"); box.style.cssText = "position:absolute;inset:0;display:grid;place-items:center;font-size:34px";
+  const ikona = document.createElement("span"); ikona.textContent = IKONY.film;
+  const im = new Image(); im.loading = "lazy"; im.alt = ""; im.draggable = false;
+  im.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .2s";
+  im.onload = () => { im.style.opacity = 1; ikona.remove(); };
+  im.onerror = () => im.remove();
+  im.src = `/miniatura-filmu?t=${encodeURIComponent(TOKEN)}&id=${id}`;
   const znak = document.createElement("span"); znak.textContent = "▶";
   znak.style.cssText = "position:absolute;bottom:6px;left:8px;font-size:16px;color:#fff;text-shadow:0 0 4px #000";
-  const box = document.createElement("div"); box.style.cssText = "position:absolute;inset:0";
-  v.onerror = () => { box.replaceChildren(); box.style.cssText = "display:grid;place-items:center;font-size:34px"; box.textContent = IKONY.film; };
-  box.ondblclick = e => { e.stopPropagation(); odtworz(id); };
-  box.append(v, znak);
+  box.append(ikona, im, znak);
+  box.title = "Dwuklik = odtwórz";
+  box.ondblclick = e => { e.stopPropagation(); odtworz(id, nazwa); };
   return box;
 }
-function odtworz(id) {
+function odtworz(id, nazwa = "") {
   const n = document.createElement("div"); n.className = "nakladka"; n.dataset.podglad = "1";
   const v = document.createElement("video"); v.controls = true; v.autoplay = true;
-  v.src = `/plik?t=${encodeURIComponent(TOKEN)}&id=${id}`;
-  v.style.cssText = "max-width:90vw;max-height:85vh;border-radius:8px;background:#000";
-  n.append(v); n.onclick = e => { if (e.target === n) { v.pause(); n.remove(); } };
+  v.style.cssText = "max-width:90vw;max-height:82vh;border-radius:8px;background:#000";
+  const opis = document.createElement("div");
+  opis.style.cssText = "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;" +
+    "padding:6px 14px;border-radius:999px;font-size:13px;max-width:90vw;text-align:center";
+  const natywny = FILM_NATYWNY.test(nazwa);
+  const mp4 = `/film-mp4?t=${encodeURIComponent(TOKEN)}&id=${id}`;
+  // kolejne źródła: oryginał (gdy przeglądarka zna format) → MP4 z ffmpeg → WebM z ffmpeg (system bez H.264)
+  const zrodla = [...(natywny ? [`/plik?t=${encodeURIComponent(TOKEN)}&id=${id}`] : []), mp4, mp4 + "&f=webm"];
+  let nr = 0, przerabiany = !natywny;
+  const napis = () => { opis.textContent = "\u200E" + (nazwa.split(/[\\/]/).pop() || "") +
+    (przerabiany ? " · stary format — przerabiany w locie (bez przewijania)" : ""); };
+  v.onerror = () => {
+    if (++nr < zrodla.length) { przerabiany = true; napis(); v.src = zrodla[nr]; v.play().catch(() => {}); return; }
+    opis.textContent = stan.ffmpeg === false
+      ? "Tego formatu nie da się odtworzyć — brak modułu ffmpeg (zainstaluj program z instalatora)."
+      : "Nie udało się odtworzyć tego filmu (uszkodzony albo nietypowy plik).";
+  };
+  v.src = zrodla[0];
+  napis();
+  n.append(v, opis);
+  const zamknij = () => { v.pause(); v.removeAttribute("src"); v.load(); n.remove(); document.removeEventListener("keydown", esc, true); };
+  const esc = e => { if (e.key === "Escape") { e.preventDefault(); zamknij(); } };
+  document.addEventListener("keydown", esc, true);
+  n.onclick = e => { if (e.target === n) zamknij(); };
   document.body.append(n);
 }
 

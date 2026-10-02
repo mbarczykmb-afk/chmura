@@ -371,6 +371,10 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     `aktywnosc.ustaw/usun`, miniatury = niewczytane obrazki /miniatura blisko ekranu + licznik wczytanych,
     zapytania > 0,6 s (bez odpytywania stanu), `/api/stan` → `przegladarka` i `wczytuje`. `podgladDuzy(id, nazwa, lista)`
     — ‹ › / strzałki między kopiami, Delete, Esc.
+42. **Stare filmy 1.18** ✅ (`katalogator/filmy.py`): ffmpeg (<program>/ffmpeg/ffmpeg.exe z instalatora,
+    imageio-ffmpeg, PATH). Klatka JPEG (yadif + skala) → `/miniatura-filmu` (pamięć `miniatury_filmow/`) i
+    `Galeria.miniatura` (g_min_filmow); `/film-mp4`, `/api/g/film-mp4` (`&f=webm`) — H.264+AAC fMP4 / VP8+Opus
+    WebM na żywo, proces kończony po zamknięciu połączenia. Klient: oryginał (mp4/m4v/mov/webm) → MP4 → WebM.
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.
