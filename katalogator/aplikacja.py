@@ -273,6 +273,9 @@ class Stan:
                 "dup": dup, "zad": zad, "ma_wyniki": ma, "duplikaty": None, "do_cofniecia": None,
                 "analiza": None, "plan": None, "wykonanie": None, "przychodzace": None}
         dane["biezace"] = self._biezace(skan, dup, zad)
+        with self.przegladarka.blokada:  # skan Przeglądarki (także samoczynny w tle) — dla wskaźnika pracy
+            ps = self.przegladarka.stan
+            dane["przegladarka"] = {k: ps.get(k) for k in ("trwa", "zrobione", "wszystkie", "etap", "auto")}
         ust = aktualizacje._ustawienia(self.katalog)
         dane["powitanie_widziane"] = bool(ust.get("powitanie_widziane"))
         dane["motyw"] = ust.get("motyw", "dark")

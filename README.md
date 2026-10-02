@@ -155,6 +155,11 @@ folderu („2004 Zakopane”), a na końcu „w domu”.
      wtedy telefon tylko ogląda. *✎ Ustaw swój PIN* — stały PIN (4–12 cyfr), a telefon zostaje zalogowany
      także po ponownym uruchomieniu programu. Działa, dopóki Katalogator jest otwarty.
 
+**⏳ Praca w tle** — w lewym dolnym rogu okna (także w Bibliotece i Przeglądarce): wczytywanie miniatur z paskiem
+(np. 12 / 40), dłuższe wczytywanie danych, wyniki dużego projektu po starcie i skan Przeglądarki (także samoczynny).
+**🔍 Duplikaty**: kliknij miniaturę grupy albo 🔍 przy pliku — duże zdjęcie, kółko myszy = powiększenie,
+**← →** między kopiami z grupy, *Delete* = do kosza, *Esc* zamyka.
+
 **🗑 Kosz i szybkie przeglądanie**: w Duplikatach (200 grup na stronę) i Podobnych *Odłóż zaznaczone kopie i pokaż
 kolejne* — kopie od razu trafiają do kosza (folder `Odłożone`), przejrzane grupy znikają, a grupy *zostaw wszystkie*
 są zapamiętane jako przejrzane (*↺ pokaż przejrzane* przywraca je). Opcja *od razu usuń na stałe* (identyczne kopie,

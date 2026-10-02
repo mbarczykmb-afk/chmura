@@ -367,6 +367,10 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     pomijana w grupach i podsumowaniu, `/api/przejrzane`; Duplikaty po 200 grup, po odłożeniu lista od początku
     (= kolejne); kosz = `Odłożone` w źródłach i w miejscu docelowym (`korzenie_kosza`), 🗑 w nagłówku;
     „od razu na stałe” = `sprzatanie.usun_partie` (tylko pliki tej operacji); numery partii zawsze rosnące.
+41. **Wskaźnik pracy w tle + powiększanie w Duplikatach 1.17** ✅: `ui/aktywnosc.js` (okno i galeria):
+    `aktywnosc.ustaw/usun`, miniatury = niewczytane obrazki /miniatura blisko ekranu + licznik wczytanych,
+    zapytania > 0,6 s (bez odpytywania stanu), `/api/stan` → `przegladarka` i `wczytuje`. `podgladDuzy(id, nazwa, lista)`
+    — ‹ › / strzałki między kopiami, Delete, Esc.
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

@@ -291,19 +291,42 @@ function doOdlozenia() {
   }
   return ids;
 }
-function podgladDuzy(id, nazwa) {
+// Duży podgląd: kółko = powiększenie (do kursora), przeciąganie, dwuklik; z listą — ‹ › i strzałki między plikami
+// (np. wszystkie kopie w grupie duplikatów). lista: [{id, nazwa}]
+function podgladDuzy(id, nazwa, lista = null) {
+  lista = lista && lista.length ? lista : [{id, nazwa}];
+  let poz = Math.max(0, lista.findIndex(x => x.id === id));
   const n = document.createElement("div"); n.className = "nakladka"; n.dataset.podglad = "1";
-  const img = new Image(); img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${id}&duza=1`; img.alt = nazwa;
-  img.style.cssText = "max-width:90vw;max-height:85vh;border-radius:8px;background:#000;transform-origin:0 0";
-  img.title = "Kółko myszy = powiększenie · przeciągnij, żeby przesunąć · kliknij obok, żeby zamknąć";
+  const img = new Image();
+  img.style.cssText = "max-width:90vw;max-height:82vh;border-radius:8px;background:#000;transform-origin:0 0";
+  img.title = "Kółko myszy = powiększenie · przeciągnij, żeby przesunąć · kliknij obok albo Esc, żeby zamknąć";
+  const podpis = document.createElement("div");
+  podpis.style.cssText = "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(0,0,0,.65);color:#fff;" +
+    "padding:6px 14px;border-radius:999px;font-size:13px;max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
   const kosz = przyciskKosz(id, nazwa, null);
   kosz.style.cssText = "position:fixed;top:16px;right:16px;width:auto;height:auto;padding:8px 14px;font-size:14px;opacity:1";
-  kosz.textContent = "🗑 Usuń"; kosz.onclick = e => { e.stopPropagation(); n.remove(); usunWProjekcie([id], nazwa, null); };
-  n.append(img, kosz); document.body.append(n);
-  // powiększanie kółkiem (do kursora) i przesuwanie — jak w Bibliotece
+  kosz.textContent = "🗑 Usuń";
+  kosz.onclick = e => { e.stopPropagation(); zamknij(); usunWProjekcie([lista[poz].id], lista[poz].nazwa, null); };
+  const strzalka = (znak, d) => {
+    const b = document.createElement("button"); b.textContent = znak; b.title = d < 0 ? "Poprzedni (←)" : "Następny (→)";
+    b.style.cssText = `position:fixed;top:50%;${d < 0 ? "left" : "right"}:16px;transform:translateY(-50%);width:48px;height:48px;` +
+      "border-radius:999px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:26px;cursor:pointer";
+    b.onclick = e => { e.stopPropagation(); idz(d); };
+    return b;
+  };
+  n.append(img, podpis, kosz);
+  if (lista.length > 1) n.append(strzalka("‹", -1), strzalka("›", 1));
+  document.body.append(n);
   const z = {s: 1, x: 0, y: 0, ciagnie: null, ruszyl: false};
   const rysuj = () => { img.style.transform = z.s === 1 ? "" : `translate(${z.x}px,${z.y}px) scale(${z.s})`;
                         img.style.cursor = z.s > 1 ? "grab" : "zoom-in"; };
+  function pokaz() {
+    const p = lista[poz];
+    img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${p.id}&duza=1`; img.alt = p.nazwa || "";
+    podpis.textContent = (lista.length > 1 ? `${poz + 1} / ${lista.length} · ` : "") + "\u200E" + (p.nazwa || "");
+    z.s = 1; z.x = 0; z.y = 0; rysuj();
+  }
+  function idz(d) { poz = (poz + d + lista.length) % lista.length; pokaz(); }
   const ustaw = (s, px, py) => {
     s = Math.min(8, Math.max(1, s)); const r = img.getBoundingClientRect();
     const cx = px - r.left, cy = py - r.top;
@@ -320,7 +343,18 @@ function podgladDuzy(id, nazwa) {
     z.ruszyl = true; rysuj();
   };
   img.onpointerup = () => { z.ciagnie = null; };
-  n.onclick = e => { if (e.target === img && (z.ruszyl || z.s > 1)) return; n.remove(); };
+  const klawisze = e => {
+    if (e.key === "Escape") zamknij();
+    else if (e.key === "ArrowLeft" && lista.length > 1) idz(-1);
+    else if (e.key === "ArrowRight" && lista.length > 1) idz(1);
+    else if (e.key === "Delete") kosz.click();
+    else return;
+    e.preventDefault(); e.stopPropagation();
+  };
+  document.addEventListener("keydown", klawisze, true);
+  function zamknij() { n.remove(); document.removeEventListener("keydown", klawisze, true); }
+  n.onclick = e => { if (e.target === img && (z.ruszyl || z.s > 1)) return; zamknij(); };
+  pokaz();
 }
 $("pod-filtry").onclick = e => {
   const b = e.target.closest(".filtr"); if (!b) return;

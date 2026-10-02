@@ -157,7 +157,7 @@ details.reczne summary{cursor:pointer;margin-bottom:6px}
 .grupa .gl{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px}
 .grupa .gl strong{flex:1}
 .grupa label.pomin{color:var(--mut);font-size:12px;display:flex;gap:4px;align-items:center;cursor:pointer}
-.plik{display:grid;grid-template-columns:18px 1fr auto auto;gap:8px;align-items:center;padding:4px 6px;border-radius:6px;font-size:13px;cursor:pointer}
+.plik{display:grid;grid-template-columns:18px 1fr auto auto auto;gap:8px;align-items:center;padding:4px 6px;border-radius:6px;font-size:13px;cursor:pointer}
 .plik:hover{background:var(--panel)}
 .plik .sc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
 .plik .sc em{font-style:normal;color:var(--mut)}
@@ -203,6 +203,8 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 @media (hover:none){.ob .kosz,.zdj .kosz.na-zdj{opacity:.85}}
 .kosz.w-wierszu{background:none;color:var(--mut);width:28px;height:28px;margin-left:4px}
 .kosz.w-wierszu:hover{background:#dc2626;color:#fff}
+.kosz.lupa:hover{background:var(--akc);color:#fff}
+.lupa-mini{cursor:zoom-in}.lupa-mini:hover img{transform:scale(1.06);transition:transform .2s}
 .usuniety{opacity:.35;filter:grayscale(1);pointer-events:none;position:relative}
 .usuniety::after{content:"🗑 Usunięto";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--panel);color:var(--fg);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;white-space:nowrap;opacity:1}
 .karta{border:1px solid var(--lin);border-radius:8px;background:var(--bg);overflow:hidden;cursor:pointer;position:relative;font-size:12px}
@@ -1355,6 +1357,9 @@ function rysujGrupy() {
       img.src = `/miniatura?t=${encodeURIComponent(TOKEN)}&id=${g.pliki[0].id}`;
       img.onerror = () => { mini.textContent = IKONY.zdjecie; };
       mini.append(img);
+      // 🔍 powiększenie: kliknij miniaturę — strzałkami ‹ › między wszystkimi kopiami z grupy
+      mini.classList.add("lupa-mini"); mini.title = "Kliknij, żeby powiększyć (← → między kopiami)";
+      mini.onclick = () => podgladDuzy(g.pliki[0].id, g.pliki[0].wzgledna, g.pliki.map(f => ({id: f.id, nazwa: f.wzgledna})));
     } else mini.textContent = IKONY[g.rodzaj] || "📄";
     const prawa = document.createElement("div");
     const gl = document.createElement("div"); gl.className = "gl";
@@ -1381,7 +1386,14 @@ function rysujGrupy() {
       if (!cz.length) em.textContent = "";
       const z = document.createElement("span"); z.className = "znak";
       z.textContent = d.pomin || zost ? "zostaje · " + data(f.mtime) : "odłożę · " + data(f.mtime);
-      w.append(r, sc, z, przyciskKosz(f.id, f.wzgledna, w, "w-wierszu")); prawa.append(w);
+      let lupa = document.createElement("span");
+      if (g.rodzaj === "zdjecie") {
+        lupa = document.createElement("button"); lupa.type = "button"; lupa.className = "kosz w-wierszu lupa"; lupa.textContent = "🔍";
+        lupa.title = "Powiększ to zdjęcie (← → między kopiami)";
+        lupa.onclick = e => { e.preventDefault(); e.stopPropagation();
+          podgladDuzy(f.id, f.wzgledna, g.pliki.map(x => ({id: x.id, nazwa: x.wzgledna}))); };
+      }
+      w.append(r, sc, z, lupa, przyciskKosz(f.id, f.wzgledna, w, "w-wierszu")); prawa.append(w);
     }
     k.append(mini, prawa); l.append(k);
   }
@@ -1485,6 +1497,15 @@ function rysujDup() {
   $("cofnij-box").hidden = !c;
   if (c) $("cofnij-opis").textContent = `Ostatnio odłożono ${c.n} plików.`;
   if (bylDup && !d.trwa) { bylDup = false; if (zakladka === "dup") wczytajGrupy(true); else dupGrupy = []; }
+  // wskaźnik pracy w tle: wyniki projektu liczone po starcie, skan Przeglądarki (także samoczynny)
+  if (window.aktywnosc) {
+    if (stan.wczytuje) aktywnosc.ustaw("wyniki", {tytul: "Wczytuję wyniki projektu", opis: "duży projekt — do minuty"});
+    else aktywnosc.usun("wyniki");
+    const pr = stan.przegladarka;
+    if (pr && pr.trwa) aktywnosc.ustaw("przegladarka", {tytul: "🔭 Przeglądarka: " + (pr.auto ? "odświeżanie w tle" : "skan dysków"),
+      zrobione: pr.wszystkie ? pr.zrobione : undefined, wszystkie: pr.wszystkie || undefined, opis: pr.etap || ""});
+    else aktywnosc.usun("przegladarka");
+  }
   // wyniki doszły po otwarciu okna (duży projekt liczy je chwilę) — przerysuj, zamiast „nie szukano”
   if (!!stan.duplikaty !== rysujDup.bylyWyniki) {
     rysujDup.bylyWyniki = !!stan.duplikaty;
@@ -1500,6 +1521,7 @@ function rysujDup() {
   setInterval(odswiez, 1000);
 })();
 </script>
+<script src="/ui/aktywnosc.js"></script>
 <script src="/ui/motyw.js"></script>
 <script src="/ui/plan.js"></script>
 <script src="/ui/analiza.js"></script>
