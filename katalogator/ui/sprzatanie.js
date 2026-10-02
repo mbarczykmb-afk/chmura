@@ -167,8 +167,11 @@ naStan.push(() => {
 const IKONY_KOSZA = {"Duplikaty": "📑", "Śmieci": "🗑", "Podobne": "🖼", "Nieostre": "🌫", "Usunięte": "🗑"};
 const koszZazn = new Map();
 let koszStan = null;
+function zaplanujKosz() { clearTimeout(zaplanujKosz.z); zaplanujKosz.z = setTimeout(odswiezKosz, 400); }
 async function odswiezKosz() {
-  try { koszStan = await api("/api/odlozone"); } catch (e) { return; }
+  if (odswiezKosz.trwa) return;  // jeden odczyt naraz (foldery Odłożone na dysku sieciowym)
+  odswiezKosz.trwa = true;
+  try { koszStan = await api("/api/odlozone"); } catch (e) { return; } finally { odswiezKosz.trwa = false; }
   const n = koszStan.plikow;
   $("kosz-licz").hidden = !n; $("kosz-licz").textContent = n > 999 ? "999+" : n;
   $("kosz-btn").title = n ? `Kosz: ${plikow(n)} (${rozmiar(koszStan.bajty)}) w folderach Odłożone — przywróć albo opróżnij`
@@ -217,8 +220,11 @@ setTimeout(odswiezKosz, 1500);
   const staryFetch = window.api;
   window.api = async (sciezka, dane) => {
     const w = await staryFetch(sciezka, dane);
-    if (/^\/api\/(odloz|usun|duplikaty\/(przenies|cofnij)|projekty\/otworz|tryb|ustawienia)/.test(sciezka)) setTimeout(odswiezKosz, 300);
-    if (sprzatanie() && /^\/api\/(odloz|usun|duplikaty\/(przenies|cofnij))/.test(sciezka)) setTimeout(odswiezOdlozone, 300);
+    // tylko po zmianach (POST) — sam odczyt kosza (/api/odlozone) nie może wywołać kolejnego odczytu (pętla!)
+    if (dane !== undefined && /^\/api\/(odloz|usun|usun\/cofnij|duplikaty\/(przenies|cofnij)|projekty\/otworz|tryb|ustawienia|odlozone\/usun)$/.test(sciezka)) {
+      zaplanujKosz();
+      if (sprzatanie()) { clearTimeout(zaplanujKosz.odl); zaplanujKosz.odl = setTimeout(odswiezOdlozone, 400); }
+    }
     if (sprzatanie() && sciezka === "/api/skanuj") smieci.wczytane = false;
     return w;
   };
