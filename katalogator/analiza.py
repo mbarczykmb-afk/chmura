@@ -8,9 +8,12 @@ Wyniki trafiają do tabeli `analiza` i są liczone ponownie tylko dla zmienionyc
 from __future__ import annotations
 
 import io
+import json
 import operator
 import re
 import sqlite3
+import threading
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 
 from PIL import Image, ImageChops, ImageFilter, ImageOps, ImageStat
@@ -29,6 +32,10 @@ CREATE TABLE IF NOT EXISTS analiza (
     szer     INTEGER,
     wys      INTEGER,
     blad     TEXT
+);
+CREATE TABLE IF NOT EXISTS podobne_pamiec (  -- policzone grupy podobnych: po ponownym uruchomieniu od razu
+    klucz TEXT PRIMARY KEY,
+    dane  BLOB NOT NULL
 );
 CREATE TABLE IF NOT EXISTS decyzje_dok (
     sciezka  TEXT PRIMARY KEY,
@@ -409,10 +416,43 @@ def grupy_podobnych(db: sqlite3.Connection, prog: int = PROG_PODOBNE, postep=Non
     klucz = _odcisk_danych(db, prog)
     if klucz in _PAMIEC_PODOBNYCH:
         return _PAMIEC_PODOBNYCH[klucz]
-    wynik = _grupy_podobnych(db, prog, postep)
-    _PAMIEC_PODOBNYCH.clear()  # pamiętamy tylko najnowszy wynik
-    _PAMIEC_PODOBNYCH[klucz] = wynik
+    # jedno liczenie naraz: okno (zakładka Podobne) i podsumowania w tle nie liczą tego samego dwa razy
+    with _LICZE_PODOBNE:
+        if klucz in _PAMIEC_PODOBNYCH:
+            return _PAMIEC_PODOBNYCH[klucz]
+        wynik = _z_dysku(db, klucz)
+        if wynik is None:
+            wynik = _grupy_podobnych(db, prog, postep)
+            _na_dysk(db, klucz, wynik)
+        _PAMIEC_PODOBNYCH.clear()  # pamiętamy tylko najnowszy wynik
+        _PAMIEC_PODOBNYCH[klucz] = wynik
     return wynik
+
+
+_LICZE_PODOBNE = threading.Lock()
+WERSJA_PODOBNYCH = 2  # 1.22: kopie z wielu folderów = jedno zdjęcie
+
+
+def _klucz_txt(klucz: tuple) -> str:
+    return json.dumps([WERSJA_PODOBNYCH, *klucz[1:]], default=str)  # bez ścieżki bazy — projekt można przenieść
+
+
+def _z_dysku(db: sqlite3.Connection, klucz: tuple):
+    try:
+        r = db.execute("SELECT dane FROM podobne_pamiec WHERE klucz=?", (_klucz_txt(klucz),)).fetchone()
+        return json.loads(zlib.decompress(r[0])) if r else None
+    except (sqlite3.Error, ValueError, zlib.error):
+        return None
+
+
+def _na_dysk(db: sqlite3.Connection, klucz: tuple, wynik: list) -> None:
+    try:
+        db.execute("DELETE FROM podobne_pamiec")
+        db.execute("INSERT INTO podobne_pamiec VALUES (?, ?)",
+                   (_klucz_txt(klucz), zlib.compress(json.dumps(wynik, separators=(",", ":")).encode(), 6)))
+        db.commit()
+    except sqlite3.Error:
+        pass  # baza tylko do odczytu / zajęta — następnym razem policzymy od nowa
 
 
 _PAMIEC_PODOBNYCH: dict = {}

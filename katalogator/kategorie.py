@@ -49,7 +49,8 @@ def przygotuj(db: sqlite3.Connection) -> None:
 def smieci(p: dict, wymiary: tuple | None = None) -> str | None:
     """Powód, dla którego plik to śmieć — albo None."""
     nazwa = os.path.basename(p["sciezka"])
-    ext = PurePath(nazwa).suffix.lower()
+    stem, ext = os.path.splitext(nazwa)  # (szybciej niż PurePath — wołane dla każdego pliku)
+    ext = ext.lower()
     if p["rozmiar"] == 0:
         return "pusty plik"
     if ext in _EXT_SMIECI:
@@ -60,7 +61,7 @@ def smieci(p: dict, wymiary: tuple | None = None) -> str | None:
         # zdjęcie z danymi aparatu / GPS / datą EXIF nigdy nie jest „ikoną”
         if wymiary and wymiary[0] and max(wymiary) <= MALY_BOK:
             return f"mały obrazek {wymiary[0]}×{wymiary[1]} (ikona / miniatura)"
-        if _NAZWA_SMIECI.search(PurePath(nazwa).stem):
+        if _NAZWA_SMIECI.search(stem):
             return "miniatura / ikona (nazwa pliku)"
     return None
 

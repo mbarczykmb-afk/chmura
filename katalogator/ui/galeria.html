@@ -29,7 +29,12 @@ header .odstep{flex:1}
 .chipy button.akt small{color:inherit;opacity:.8}
 main{flex:1;min-height:0;position:relative}
 #os{position:absolute;inset:0;display:flex;flex-direction:column}
-#siatka{flex:1;min-height:0;overflow-y:auto;padding:12px 14px;display:grid;grid-template-columns:repeat(auto-fill,200px);grid-auto-rows:max-content;gap:10px;align-content:start;justify-content:start}
+#siatka{flex:1;min-height:0;overflow-y:auto;padding:12px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--kafel,200px),1fr));grid-auto-rows:max-content;gap:10px;align-content:start}
+body.bez-podpisow .k .op{display:none}
+body.zwiniete #wykres,body.zwiniete #lata,body.zwiniete #prz,body.zwiniete #filtr{display:none!important}
+.menu-rz{display:flex;align-items:center;gap:6px;font-size:13px}.menu-rz span{flex:1;color:var(--mut)}
+.menu .menu-rz button{width:auto;padding:2px 10px}.menu-rz input{width:110px}
+.menu-cb{display:flex;gap:8px;align-items:center;font-size:13px;padding:2px 4px;cursor:pointer}
 .k{min-height:max-content}
 @supports not (aspect-ratio:1/1){.k .ob{height:0;padding-top:75%}.k .ob>*{position:absolute}}
 .k{border:1px solid var(--lin);border-radius:10px;overflow:hidden;background:var(--panel);cursor:zoom-in}
@@ -78,7 +83,7 @@ main{flex:1;min-height:0;position:relative}
 .pusto{grid-column:1/-1;color:var(--mut);padding:30px;text-align:center}
 @media (max-width:600px){
   header{padding:8px 10px} header h1{font-size:15px}
-  #siatka{grid-template-columns:repeat(auto-fill,minmax(105px,1fr));padding:8px;gap:6px}
+  #siatka{grid-template-columns:repeat(auto-fill,minmax(var(--kafel,105px),1fr));padding:8px;gap:6px}
   .k .op{display:none}
 }
 
@@ -222,6 +227,14 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
         <option value="wszystko">🗂 Wszystko w projekcie</option>
         <option value="przegladarka">🔭 Przeglądarka dysków</option>
       </select>
+      <div class="menu-rz" title="Rozmiar miniatur (także Ctrl + kółko myszy nad zdjęciami)">
+        <span>Miniatury</span><button id="kafel-mn" aria-label="Mniejsze">−</button>
+        <input type="range" id="kafel" min="80" max="380" step="10" aria-label="Rozmiar miniatur">
+        <button id="kafel-wi" aria-label="Większe">＋</button></div>
+      <label class="menu-cb"><input type="checkbox" id="podpisy"> Nazwy i daty pod miniaturami</label>
+      <label class="menu-cb" title="Przewijasz w dół — wykres, lata i dyski się chowają; w górę — wracają">
+        <input type="checkbox" id="chowaj"> Chowaj paski przy przewijaniu</label>
+      <button id="pelny-ekran">⛶ Pełny ekran</button>
       <button id="menu-pokaz">▶ Pokaz slajdów</button>
       <button id="na-telefon" hidden title="Oglądaj bibliotekę na telefonie (sieć domowa / Tailscale)">📱 Na telefon</button>
     </div>

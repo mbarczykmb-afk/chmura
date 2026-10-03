@@ -174,6 +174,12 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.22.1 — audyt:** odkładanie / cofanie / usuwanie zapisuje bazę po każdym pliku (wcześniej przenoszenie setek
+plików po sieci blokowało bazę na minuty i decyzje 📷/📄/🗑 kończyły się „database is locked”); grupy podobnych
+liczone raz naraz i zapamiętane w bazie projektu (po ponownym uruchomieniu od razu); szybsza lista śmieci.
+Przeglądarka: ⋯ → rozmiar miniatur (też Ctrl + kółko), nazwy pod miniaturami, chowanie pasków przy przewijaniu,
+⛶ pełny ekran.
+
 **Po restarcie komputera** (od 1.21): włączony telefon jest zapamiętany — po starcie programu włącza się sam, z tym
 samym PIN-em i adresem; zamknięcie okna go nie wyłącza (program pracuje w tle, okno otwiera zwykły skrót).
 W oknie 📱 opcja *Uruchamiaj Katalogator razem z Windows* (wpis w HKCU\…\Run, `Katalogator.exe --w-tle`,

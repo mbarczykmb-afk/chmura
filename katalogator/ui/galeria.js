@@ -468,8 +468,52 @@ function pokazDyski() {
 $("dyski-btn").onclick = () => { naglowek.dyski = !naglowek.dyski; zapamietaj("kat_g_dyski", naglowek.dyski); pokazDyski(); };
 $("wykres-btn").onclick = () => { naglowek.wykres = !naglowek.wykres; zapamietaj("kat_g_wykres", naglowek.wykres); uklad(); };
 $("menu-btn").onclick = e => { e.stopPropagation(); $("menu").hidden = !$("menu").hidden; };
-$("menu").onclick = e => { if (e.target.tagName === "BUTTON") $("menu").hidden = true; };
+$("menu").onclick = e => { if (e.target.tagName === "BUTTON" && !e.target.closest(".menu-rz")) $("menu").hidden = true; };
 document.addEventListener("click", e => { if (!$("menu").hidden && !e.target.closest(".menu-w")) $("menu").hidden = true; });
+// --- przestrzeń robocza: rozmiar miniatur, podpisy, chowanie pasków, pełny ekran (zapamiętane na tym urządzeniu) ---
+const telefonWaski = matchMedia("(max-width:600px)").matches;
+const robocza = (() => {
+  let z = {};
+  try { z = JSON.parse(localStorage.getItem("kat_g_robocza") || "{}"); } catch (e) { /* bez pamięci */ }
+  return {kafel: z.kafel || (telefonWaski ? 105 : 200), podpisy: z.podpisy ?? !telefonWaski, chowaj: z.chowaj ?? true};
+})();
+function ustawRobocza(zmiany = {}) {
+  Object.assign(robocza, zmiany);
+  robocza.kafel = Math.max(80, Math.min(380, robocza.kafel));
+  document.documentElement.style.setProperty("--kafel", robocza.kafel + "px");
+  document.body.classList.toggle("bez-podpisow", !robocza.podpisy);
+  if (!robocza.chowaj) document.body.classList.remove("zwiniete");
+  $("kafel").value = robocza.kafel; $("podpisy").checked = robocza.podpisy; $("chowaj").checked = robocza.chowaj;
+  try { localStorage.setItem("kat_g_robocza", JSON.stringify(robocza)); } catch (e) { /* bez pamięci */ }
+}
+ustawRobocza();
+$("kafel").oninput = () => ustawRobocza({kafel: +$("kafel").value});
+$("kafel-mn").onclick = () => { ustawRobocza({kafel: robocza.kafel - 30}); };
+$("kafel-wi").onclick = () => { ustawRobocza({kafel: robocza.kafel + 30}); };
+$("podpisy").onchange = () => ustawRobocza({podpisy: $("podpisy").checked});
+$("chowaj").onchange = () => ustawRobocza({chowaj: $("chowaj").checked});
+$("siatka").addEventListener("wheel", e => {  // Ctrl + kółko = większe / mniejsze miniatury
+  if (!e.ctrlKey) return;
+  e.preventDefault(); ustawRobocza({kafel: robocza.kafel + (e.deltaY < 0 ? 20 : -20)});
+}, {passive: false});
+let ostatniScroll = 0;
+$("siatka").addEventListener("scroll", () => {
+  const y = $("siatka").scrollTop;
+  if (robocza.chowaj) {
+    if (y > 160 && y > ostatniScroll + 30) document.body.classList.add("zwiniete");
+    else if (y < ostatniScroll - 30 || y < 40) document.body.classList.remove("zwiniete");
+  }
+  if (Math.abs(y - ostatniScroll) > 30 || y < 40) ostatniScroll = y;
+}, {passive: true});
+const pelnyEkranMozliwy = !!(document.fullscreenEnabled && document.documentElement.requestFullscreen);
+$("pelny-ekran").hidden = !pelnyEkranMozliwy;
+$("pelny-ekran").onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else document.documentElement.requestFullscreen().catch(() => {});
+};
+document.addEventListener("fullscreenchange", () => {
+  $("pelny-ekran").textContent = document.fullscreenElement ? "⛶ Zamknij pełny ekran" : "⛶ Pełny ekran";
+});
 $("menu-pokaz").onclick = () => { if (g.pliki.length) { pokazPelny(g.pliki, 0); startPokaz(); } };
 $("szukaj-btn").onclick = () => {
   const h = document.querySelector("header"), on = !h.classList.contains("szuka");

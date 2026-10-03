@@ -177,6 +177,7 @@ def ustaw(db: sqlite3.Connection, ids: list[int], lat: float | None, lon: float 
             db.execute("DELETE FROM odciski WHERE sciezka=?", (r["sciezka"],))
         except sqlite3.OperationalError:
             pass
+        db.commit()  # po każdym pliku — zapis do pliku na dysku sieciowym trwa; baza nie czeka zablokowana
         sciezki.append(r["sciezka"])
         zmienione += 1
     db.commit()

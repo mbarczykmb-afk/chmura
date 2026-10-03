@@ -17,8 +17,16 @@ def lista_smieci(db: sqlite3.Connection) -> list[dict]:
     wym = kategorie.wymiary(db)
     dec = kategorie.decyzje(db)
     wynik = []
-    for r in db.execute("SELECT rowid id, sciezka, wzgledna, korzen, rozmiar, rodzaj, aparat, lat, zrodlo_daty "
-                        "FROM pliki ORDER BY sciezka"):
+    # wstępny filtr w SQL (nadzbiór — dokładnie sprawdza kategorie.smieci): przy 300 tys. plików nie budujemy
+    # słownika dla każdego zdjęcia z aparatu
+    rozsz = " OR ".join(f"p.sciezka LIKE '%{e}'" for e in sorted(kategorie._EXT_SMIECI))
+    slowa = " OR ".join(f"COALESCE(p.wzgledna, p.sciezka) LIKE '%{w}%'" for w in ("thumb", "cache", "temp", "tmp", "sticker"))
+    for r in db.execute(f"""SELECT p.rowid id, p.sciezka, p.wzgledna, p.korzen, p.rozmiar, p.rodzaj, p.aparat, p.lat,
+                                   p.zrodlo_daty FROM pliki p LEFT JOIN kategorie k ON k.sciezka = p.sciezka
+                            WHERE p.rozmiar = 0 OR k.kategoria = 'smieci' OR {rozsz} OR {slowa}
+                               OR (p.rodzaj = 'zdjecie' AND p.aparat IS NULL AND p.lat IS NULL
+                                   AND COALESCE(p.zrodlo_daty, '') <> 'exif')
+                            ORDER BY p.sciezka"""):
         p = dict(r)
         if dec.get(p["sciezka"]) in ("zdjecie", "dokument"):
             continue  # użytkownik uznał, że to nie śmieć
@@ -93,6 +101,7 @@ def usun_odlozone(db: sqlite3.Connection, korzenie: list[str], kategorie_: list[
                 pass
         # tych plików nie da się już przywrócić — „Cofnij” w Duplikatach ich nie obiecuje
         db.execute("DELETE FROM operacje WHERE substr(do_, 1, ?) = ?", (len(sciezka) + 1, sciezka + os.sep))
+        db.commit()
     for k in korzenie:
         try:
             os.rmdir(os.path.join(k, duplikaty.FOLDER_ODLOZONE))  # tylko gdy pusty
@@ -127,6 +136,7 @@ def usun_partie(db: sqlite3.Connection, partia: int, postep=None, przerwij=None)
             continue
         foldery.add(os.path.dirname(p))
         db.execute("DELETE FROM operacje WHERE id=?", (op["id"],))
+        db.commit()  # bez długiej blokady bazy w trakcie kasowania po sieci
         if postep and i % 50 == 0:
             postep("usuwanie", i, len(ops), bajty)
     db.commit()

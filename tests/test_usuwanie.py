@@ -157,3 +157,32 @@ def test_pamiec_grup_po_odlozeniu_jak_pelne_przeliczenie(tmp_path):
     duplikaty.cofnij(db, w["partia"])
     a = z_pamieci()
     assert a == pelne() and a[0]["grupy"] == 5
+
+
+def test_odkladanie_nie_blokuje_bazy(tmp_path, monkeypatch):
+    """W trakcie odkładania wielu plików (po sieci — minuty) inne połączenie może zapisywać decyzje."""
+    import os
+    import sqlite3
+    from katalogator import duplikaty, skaner
+    k = tmp_path / "dysk"
+    k.mkdir()
+    for i in range(3):
+        (k / f"p{i}.jpg").write_bytes(b"x" * (100 + i))
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    duplikaty.przygotuj(db)
+    ids = [r[0] for r in db.execute("SELECT rowid FROM pliki")]
+    inne = sqlite3.connect(str(tmp_path / "k.db"), timeout=0.2)
+    zapisy = []
+    prawdziwy = os.rename
+
+    def wolny_rename(a, b):  # w trakcie przenoszenia kolejnego pliku ktoś klika decyzję w oknie
+        if zapisy is not None and len(zapisy) < 3 and "p0" not in a:
+            inne.execute("CREATE TABLE IF NOT EXISTS t (x)")
+            inne.execute("INSERT INTO t VALUES (1)")
+            inne.commit()
+            zapisy.append(a)
+        prawdziwy(a, b)
+    monkeypatch.setattr(os, "rename", wolny_rename)
+    w = duplikaty.odloz(db, ids, "podobne")
+    assert w["przeniesione"] == 3 and len(zapisy) == 2

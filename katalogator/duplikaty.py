@@ -476,6 +476,9 @@ def _odloz_wiersz(db: sqlite3.Connection, w, partia: int, typ: str) -> str | Non
     db.execute("INSERT INTO operacje(partia, czas, typ, z_, do_, wiersz) VALUES (?,?,?,?,?,?)",
                (partia, time.time(), typ, w["sciezka"], cel, json.dumps(dane, ensure_ascii=False)))
     db.execute("DELETE FROM pliki WHERE rowid = ?", (w["rowid"],))
+    # zapis po każdym pliku: przenoszenie setek plików po sieci trwa minuty, a otwarta transakcja blokowała
+    # w tym czasie każde kliknięcie w oknie („database is locked”); plik już przeniesiony = wpis od razu trwały
+    db.commit()
     return None
 
 
@@ -532,6 +535,7 @@ def cofnij(db: sqlite3.Connection, partia: int | None = None) -> dict:
             w["rowid"] = rowid
         db.execute(f"INSERT OR REPLACE INTO pliki({','.join(w)}) VALUES ({','.join('?' * len(w))})", list(w.values()))
         db.execute("UPDATE operacje SET cofnieta = 1 WHERE id = ?", (op["id"],))
+        db.commit()  # jak przy odkładaniu — bez długiej blokady bazy
         przywrocone += 1
     db.commit()
     if aktualna:  # przywrócone pliki wracają do swoich grup
