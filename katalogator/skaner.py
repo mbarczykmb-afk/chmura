@@ -137,6 +137,11 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
         for r in db.execute("SELECT sciezka, rozmiar, mtime FROM pliki WHERE korzen = ? AND blad IS NULL",
                             (korzen,))
     } if aktualne else {}
+    # 1.24: data filmów bez czytelnego nagłówka — z ffmpeg; filmy z datą „z pliku” czytamy raz jeszcze (jednorazowo)
+    if znane and not db.execute("SELECT 1 FROM skaner_meta WHERE klucz = ?", ("filmy:" + korzen,)).fetchone():
+        for (sc,) in db.execute("SELECT sciezka FROM pliki WHERE korzen = ? AND rodzaj = 'film' "
+                                "AND zrodlo_daty = 'plik'", (korzen,)):
+            znane.pop(sc, None)
     licz = {"pominiete_pliki": 0, "pominiete_foldery": 0, "bledy_dostepu": 0}
     stat = {"wszystkie": 0, "nowe_lub_zmienione": 0, "bez_zmian": 0}
     niezmienione: list[str] = []
@@ -184,6 +189,8 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
         rodz = typy.rodzaj(nazwa)
         b = [boczne[k] for k in (os.path.normcase(x) for x in boczne_nazwy(sciezka)) if k in boczne] if boczne else None
         zi = z_indeksu.get(sciezka) if not b else None  # z plikami .json/.xmp obok — zawsze świeży odczyt
+        if zi and rodz == typy.FILM and zi["zrodlo_daty"] == "plik":
+            zi = None  # film bez daty w indeksie — spróbujemy jeszcze ffmpeg
         if zi:
             m = Metadane()
             for k in ("zrodlo_daty", "lat", "lon", "aparat", "wykonawca", "album", "tytul"):
@@ -253,6 +260,7 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
         "DELETE FROM pliki WHERE korzen = ? AND skan != ?", (korzen, skan_id)
     ).rowcount
     db.execute("INSERT OR REPLACE INTO skaner_meta VALUES (?, ?)", ("wersja:" + korzen, str(WERSJA_ODCZYTU)))
+    db.execute("INSERT OR REPLACE INTO skaner_meta VALUES (?, '1')", ("filmy:" + korzen,))
     db.execute(
         "UPDATE skany SET koniec=?, pominiete_pliki=?, pominiete_foldery=?, bledy_dostepu=? WHERE id=?",
         (time.time(), licz["pominiete_pliki"], licz["pominiete_foldery"], licz["bledy_dostepu"], skan_id),

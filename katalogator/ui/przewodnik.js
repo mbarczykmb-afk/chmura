@@ -179,6 +179,10 @@ document.addEventListener("keydown", e => {
     }, 120);  // od razu następne zdjęcie — szybki przegląd
     return;
   }
+  if (zakladka === "pod" && typeof an !== "undefined" && an.jedna && an.tryb === "podobne") {  // ▣ jedna grupa na ekran
+    if (e.key === "Enter") { e.preventDefault(); zamknijPodglad(); zatwierdzJedna(); return; }
+    if (e.key === "s" || e.key === "S") { e.preventDefault(); zamknijPodglad(); zatwierdzJedna(true); return; }
+  }
   if (e.key === " " || e.key === "Enter") { e.preventDefault(); if (!zamknijPodglad()) powieksz(el); return; }
   if ((e.key === "z" || e.key === "Z") && zakladka === "pod") {  // Podobne: zostaw / odłóż
     e.preventDefault();

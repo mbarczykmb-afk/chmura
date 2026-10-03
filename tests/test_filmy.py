@@ -48,3 +48,23 @@ def test_film_w_programie(tmp_path):
     j = stan.miniatura_filmu(fid)
     assert j.startswith(b"\xff\xd8") and stan.miniatura_filmu(fid) == j  # druga — z pamięci na dysku
     assert stan.galeria("wszystko").miniatura(fid).startswith(b"\xff\xd8")  # galeria i telefon — klatka z ffmpeg
+
+
+def test_data_filmu_z_ffmpeg_gdy_naglowek_nieczytelny(tmp_path, monkeypatch):
+    """Stary 3GP/MP4, którego nagłówka nie umiemy przeczytać („Invalid argument”) — data z ffmpeg."""
+    import subprocess
+    from katalogator import metadane
+    f = filmy.ffmpeg()
+    if not f:
+        pytest.skip("brak ffmpeg")
+    p = tmp_path / "Wideo 0001.mp4"
+    subprocess.run([f, "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=duration=1:size=176x144:rate=10",
+                    "-metadata", "creation_time=2006-05-04T10:11:12", "-c:v", "libx264", str(p)], check=True)
+    q = tmp_path / "Wideo 0001.3gp"
+    p.rename(q)
+
+    def zepsuty(*_):
+        raise OSError(22, "Invalid argument")
+    monkeypatch.setattr(metadane, "z_mp4", zepsuty)
+    m = metadane.odczytaj(str(q), "film", 0)
+    assert m.blad is None and m.zrodlo_daty == "film" and m.data.year == 2006

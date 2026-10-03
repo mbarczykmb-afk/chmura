@@ -11,6 +11,7 @@ ffmpeg: obok programu (instalator: <program>/ffmpeg/ffmpeg.exe), z pakietu image
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -65,6 +66,42 @@ def klatka(sciezka: str, szer: int = 480, sekunda: float = 1.0) -> bytes | None:
             return w.stdout
     LOG.info("Klatka filmu %s: %s", sciezka, w.stderr.decode(errors="replace")[-300:])
     return None
+
+
+_CZAS = re.compile(r"creation_time\s*:\s*(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(\S*)")
+_MIEJSCE = re.compile(r"location(?:-eng)?\s*:\s*([+-]\d{1,2}\.\d+)([+-]\d{1,3}\.\d+)")
+
+
+def metadane(sciezka: str) -> dict:
+    """Data nagrania i GPS odczytane przez ffmpeg — zapas dla filmów, których nagłówka nie umiemy przeczytać
+    sami (stare 3GP z telefonów, nietypowe MP4). {"data": datetime|None, "lat": …, "lon": …}"""
+    from datetime import datetime, timezone
+    f = ffmpeg()
+    wynik: dict = {"data": None, "lat": None, "lon": None}
+    if not f:
+        return wynik
+    try:
+        w = subprocess.run([f, "-hide_banner", "-i", sciezka], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.PIPE, timeout=30, creationflags=_BEZ_OKNA)
+    except (OSError, subprocess.TimeoutExpired):
+        return wynik
+    tekst = w.stderr.decode("utf-8", errors="replace")
+    c = _CZAS.search(tekst)
+    if c:
+        try:
+            d = datetime(*map(int, c.groups()[:6]))
+            if c.group(7).endswith("Z"):  # UTC → czas lokalny
+                d = d.replace(tzinfo=timezone.utc).astimezone().replace(tzinfo=None)
+            if d.year >= 1990:
+                wynik["data"] = d
+        except ValueError:
+            pass
+    g = _MIEJSCE.search(tekst)
+    if g:
+        lat, lon = float(g.group(1)), float(g.group(2))
+        if abs(lat) <= 90 and abs(lon) <= 180 and (lat or lon):
+            wynik["lat"], wynik["lon"] = round(lat, 6), round(lon, 6)
+    return wynik
 
 
 def polecenie_mp4(sciezka: str, od: float = 0, webm: bool = False) -> list[str] | None:

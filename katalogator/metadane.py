@@ -534,6 +534,18 @@ def odczytaj(sciezka: str, rodzaj: str, mtime: float, boczne: list[str] | None =
             z_muzyki(sciezka, m)
     except Exception as e:  # uszkodzony / nietypowy plik — nie przerywa skanu
         m.blad = f"{type(e).__name__}: {e}"[:200]
+    if rodzaj == typy.FILM and (m.blad or m.data is None) and ext not in (".mkv", ".webm") \
+            and not data_z_nazwy(sciezka):
+        # nagłówka nie umiemy przeczytać (np. „Invalid argument” przy starych 3GP/MP4) — pyta ffmpeg
+        try:
+            from . import filmy
+            f = filmy.metadane(sciezka)
+            if f["data"]:
+                m.data, m.zrodlo_daty, m.blad = f["data"], "film", None
+            if f["lat"] is not None and m.lat is None:
+                m.lat, m.lon = f["lat"], f["lon"]
+        except Exception:
+            pass
     if boczne and rodzaj in (typy.ZDJECIE, typy.FILM):
         try:
             z_bocznych(boczne, m)

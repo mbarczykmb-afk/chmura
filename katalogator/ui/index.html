@@ -240,6 +240,12 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 .toast-cofnij{background:transparent;color:var(--bg);border:1px solid color-mix(in srgb,var(--bg) 50%,transparent);padding:3px 10px;font-weight:600;white-space:nowrap}
 .przelacznik{display:inline-flex}.przelacznik button{border-radius:0}.przelacznik button:first-child{border-radius:8px 0 0 8px}
 .przelacznik button:last-child{border-radius:0 8px 8px 0;margin-left:-1px}.przelacznik button.akt{background:var(--akc);color:var(--akc-fg);border-color:var(--akc)}
+#pod-jedna.akt{background:var(--akc);color:var(--akc-fg);border-color:var(--akc)}
+.jedna-gl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;font-size:14px}
+.jedna-gl b{flex:1;min-width:200px}
+.jedna .pod-siatka{grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr))!important}
+.jedna .pod-siatka img{height:min(36vh,340px)!important;max-height:none!important;object-fit:contain}
+#widok-pod.jedna-tryb .stopka{display:none}
 .hurt{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;margin-bottom:10px;border-radius:10px;
   border:1px solid color-mix(in srgb,var(--akc) 35%,var(--lin));background:color-mix(in srgb,var(--akc) 7%,var(--bg));font-size:13px}
 .hurt .info{margin:0}
@@ -798,6 +804,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
       <div class="filtry" id="pod-filtry">
         <button class="filtr maly akt" data-r="podobne">Podobne zdjęcia</button>
         <button class="filtr maly" data-r="nieostre">Najmniej ostre</button>
+        <button class="maly" id="pod-jedna" title="Jedna grupa na cały ekran: ←/→ wybór, Z zostaw/odłóż, Enter — zatwierdź i następna, S — zostaw wszystkie">▣ Jedna grupa na ekran</button>
         <span class="info" id="pod-info"></span>
       </div>
       <div class="lista-dup" id="pod-lista"></div>

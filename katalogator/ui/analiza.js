@@ -235,6 +235,7 @@ function opisZdjecia(w) {
 
 function rysujPodobne() {
   const l = $("pod-lista"); l.replaceChildren();
+  $("widok-pod").classList.toggle("jedna-tryb", !!an.jedna && an.tryb === "podobne");
   if (!stan.analiza) { l.innerHTML = BRAK_ANALIZY(); }
   else if (an.tryb === "podobne") {
     $("pod-info").textContent = `${an.razem} grup · ★ = najwyższa rozdzielczość i ostrość · kliknij, żeby zostawić więcej · dwuklik na miniaturze = powiększenie`;
@@ -245,8 +246,11 @@ function rysujPodobne() {
       $("pod-info").append(a);
     }
     if (!an.grupy.length) l.innerHTML = '<div class="pusto">Nie znaleziono podobnych zdjęć.</div>';
-    else l.append(podobneHurtem());
-    for (const g of an.grupy) {
+    else if (!an.jedna) l.append(podobneHurtem());
+    l.classList.toggle("jedna", !!an.jedna);
+    $("widok-pod").classList.toggle("jedna-tryb", !!an.jedna);
+    if (an.jedna && an.grupy.length) l.append(naglowekJednej());
+    for (const g of an.jedna ? an.grupy.slice(0, 1) : an.grupy) {
       const d = an.decyzje.get(g.map(w => w.id).join("-"));
       const k = document.createElement("div"); k.className = "grupa pod" + (d.pomin ? " pominieta" : "");
       const odz = g.filter(w => !d.pomin && !d.zostaw.has(w.id));
@@ -286,7 +290,10 @@ function rysujPodobne() {
       });
       l.append(k);
     }
-    if (an.grupy.length < an.razem) {
+    if (an.jedna && an.grupy.length) {  // kursor od razu na pierwszym zdjęciu grupy
+      setTimeout(() => { const k = l.querySelector(".plik"); if (k && typeof ustawKursor === "function") ustawKursor(k, false); }, 0);
+    }
+    if (!an.jedna && an.grupy.length < an.razem) {
       const b = document.createElement("button"); b.className = "wiecej"; b.textContent = "Pokaż więcej grup";
       b.onclick = () => wczytajPodobne(true); l.append(b);
     }
@@ -310,6 +317,65 @@ function rysujPodobne() {
   $("pod-odloz").disabled = !doOdl.length && !pomPod;
   $("pod-odloz").textContent = an.tryb === "podobne" ? (doOdl.length ? "Odłóż zaznaczone kopie i pokaż kolejne" : "Oznacz jako przejrzane i pokaż kolejne") : "Odłóż zaznaczone";
 }
+// ▣ jedna grupa na ekran: Enter — zatwierdź (odłóż nie zostawione) i następna; S — zostaw wszystkie
+an.jedna = (() => { try { return localStorage.getItem("kat_pod_jedna") === "1"; } catch (e) { return false; } })();
+an.kolejka = Promise.resolve(); an.zrobione = 0;
+$("pod-jedna").classList.toggle("akt", an.jedna);
+$("pod-jedna").onclick = () => {
+  an.jedna = !an.jedna; $("pod-jedna").classList.toggle("akt", an.jedna);
+  try { localStorage.setItem("kat_pod_jedna", an.jedna ? "1" : "0"); } catch (e) { /* bez pamięci */ }
+  rysujPodobne();
+};
+function naglowekJednej() {
+  const g = an.grupy[0], d = an.decyzje.get(g.map(w => w.id).join("-"));
+  const odz = d.pomin ? [] : g.filter(w => !d.zostaw.has(w.id));
+  const k = document.createElement("div"); k.className = "jedna-gl hurt";
+  const b = document.createElement("b");
+  b.textContent = `Grupa ${an.zrobione + 1} z ${(an.razem + an.zrobione).toLocaleString("pl-PL")} · zostaje ${g.length - odz.length}, odłożę ${odz.length}`;
+  const ok = document.createElement("button"); ok.className = "glowny maly"; ok.style.width = "auto";
+  ok.textContent = odz.length ? `✓ Odłóż ${odz.length} i dalej (Enter)` : "✓ Dalej (Enter)"; ok.onclick = () => zatwierdzJedna();
+  const wsz = document.createElement("button"); wsz.className = "maly"; wsz.textContent = "Zostaw wszystkie (S)";
+  wsz.onclick = () => zatwierdzJedna(true);
+  const pom = document.createElement("span"); pom.className = "info";
+  pom.textContent = "←/→ zdjęcie · Z zostaw/odłóż · spacja powiększ";
+  k.append(b, pom, wsz, ok);
+  return k;
+}
+function zatwierdzJedna(wszystkie = false) {
+  if (!an.jedna || !an.grupy.length) return;
+  const g = an.grupy.shift(), d = an.decyzje.get(g.map(w => w.id).join("-"));
+  const ids = wszystkie || d.pomin ? [] : g.filter(w => !d.zostaw.has(w.id)).map(w => w.id);
+  an.zrobione++; an.razem = Math.max(0, an.razem - 1);
+  rysujPodobne();  // od razu następna grupa — zapis idzie w tle, po kolei
+  an.kolejka = an.kolejka.then(async () => {
+    try {
+      if (ids.length) {
+        const w = await api("/api/odloz", {ids, typ: "podobne"});
+        if (w.pominiete && w.pominiete.length) toast(`Pominięto: ${w.pominiete[0]}`);
+        else toast(`Odłożono ${w.przeniesione} · ${rozmiar(w.bajty || 0)}`, async () => {
+          const c = await api("/api/duplikaty/cofnij", {});
+          toast(`Przywrócono ${c.przywrocone} zdjęć.`); an.podWczytane = false; wczytajPodobne();
+        });
+      } else {
+        await api("/api/przejrzane", {rodzaj: "podobne", klucze: [g.map(w => w.sciezka).sort().join("|")]});
+      }
+    } catch (e) { toast(e.message); }
+  });
+  if (an.grupy.length < 5) an.kolejka = an.kolejka.then(() => { if (an.jedna) return dociagnij(); });
+}
+async function dociagnij() {  // przetworzone grupy znikają na serwerze — bierzemy świeży początek listy
+  const r = await api(`/api/podobne?od=0&ile=30`);
+  const znane = new Set(an.grupy.map(g => g.map(w => w.id).join("-")));
+  for (const g of r.grupy) {
+    const k = g.map(w => w.id).join("-");
+    if (znane.has(k)) continue;
+    an.grupy.push(g); an.decyzje.set(k, {zostaw: new Set([g[0].id]), pomin: false});
+  }
+  an.razem = r.razem; an.ileKopii = r.ile_kopii || 0; an.ileReszty = r.ile_reszty || 0;
+  rysujPodobne();
+}
+window.zatwierdzJedna = zatwierdzJedna;
+
 // ⚡ szybko przez tysiące grup: najpierw same kopie (bezpieczne), potem — jeśli ufasz ★ — wszystko naraz
 function podobneHurtem() {
   const k = document.createElement("div"); k.className = "hurt";
