@@ -515,3 +515,58 @@ document.addEventListener("keydown", e => {
     e.preventDefault(); if (!$("plan-ponow").disabled) $("plan-ponow").click();
   }
 });
+
+// ---------- 🔵 uwagi hurtem: każdy rodzaj uwag jednym kliknięciem („w porządku”) ----------
+async function oknoUwag() {
+  let n = document.getElementById("okno-uwag");
+  if (!n) {
+    n = document.createElement("div"); n.className = "nakladka"; n.id = "okno-uwag";
+    n.innerHTML = `<div class="okno" role="dialog" style="max-width:640px;min-height:0;height:auto">
+      <h2>🔵 Uwagi „do sprawdzenia” — hurtem</h2>
+      <div class="info">Uwagi to podpowiedzi, nie błędy: pliki i tak trafią do pokazanych folderów. Gdy dany rodzaj Ci
+        pasuje, kliknij „✓ W porządku” — uwagi tego rodzaju znikną (także po utworzeniu drzewa od nowa). Można cofnąć.</div>
+      <div id="uwagi-lista" style="margin:12px 0;display:flex;flex-direction:column;gap:6px"></div>
+      <div style="display:flex;justify-content:flex-end"><button id="uwagi-zamknij">Zamknij</button></div></div>`;
+    document.body.append(n);
+    n.onclick = e => { if (e.target === n) n.hidden = true; };
+    n.querySelector("#uwagi-zamknij").onclick = () => { n.hidden = true; };
+  }
+  n.hidden = false;
+  const l = n.querySelector("#uwagi-lista"); l.textContent = "Wczytuję…";
+  let r;
+  try { r = await api("/api/plan/uwagi"); } catch (e) { l.textContent = e.message; return; }
+  l.replaceChildren();
+  if (!r.rodzaje.length) { l.innerHTML = '<div class="pusto">Brak uwag — wszystko przejrzane. 🎉</div>'; return; }
+  const filtry = {"data z pliku": "data_z_pliku", "bez GPS": "bez_gps", "nie z aparatu?": "nie_z_aparatu", "śmieci": "smieci"};
+  for (const u of r.rodzaje) {
+    const w = document.createElement("div");
+    w.style.cssText = "display:flex;gap:8px;align-items:center;border:1px solid var(--lin);border-radius:10px;padding:8px 10px";
+    const t = document.createElement("span"); t.style.flex = "1"; t.textContent = u.opis;
+    const b = document.createElement("b"); b.textContent = u.n.toLocaleString("pl-PL");
+    w.append(t, b);
+    const f = filtry[u.rodzaj] || (u.rodzaj.startsWith("bez GPS") ? "bez_gps" : null);
+    if (f) {
+      const p = document.createElement("button"); p.className = "maly"; p.textContent = "Pokaż";
+      p.onclick = () => { n.hidden = true; $("plan-filtr").value = f; $("plan-filtr").onchange(); };
+      w.append(p);
+    }
+    const ok = document.createElement("button"); ok.className = "maly glowny"; ok.style.width = "auto";
+    ok.textContent = "✓ W porządku";
+    ok.onclick = async () => {
+      try {
+        const z = await api("/api/plan/uwagi/przyjmij", {rodzaj: u.rodzaj});
+        toast(`✓ Przyjęto: ${u.opis} (${z.zmienione.toLocaleString("pl-PL")})`, async () => {
+          await api("/api/plan/uwagi/cofnij", {rodzaj: u.rodzaj}); toast("Cofnięto."); odswiezPoUwagach();
+        });
+        odswiezPoUwagach(); oknoUwag();
+      } catch (e) { toast(e.message); }
+    };
+    w.append(ok); l.append(w);
+  }
+}
+async function odswiezPoUwagach() {
+  plan.wczytany = false;
+  stan = await api("/api/stan"); rysuj();
+  if (zakladka === "drzewo" && przyPokazaniu.drzewo) przyPokazaniu.drzewo();
+}
+$("plan-uwagi").onclick = oknoUwag;

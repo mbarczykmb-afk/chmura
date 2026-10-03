@@ -33,6 +33,14 @@ CREATE TABLE IF NOT EXISTS plan (
     wynik     TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_plan_cel ON plan(cel);
+CREATE TABLE IF NOT EXISTS uwagi_przyjete (   -- rodzaje uwag „przyjętych hurtem” — nie wracają po nowej propozycji
+    rodzaj TEXT PRIMARY KEY
+);
+CREATE TABLE IF NOT EXISTS uwagi_cofnij (     -- poprzednie uwagi (cofnięcie przyjęcia)
+    rodzaj TEXT NOT NULL,
+    id     INTEGER NOT NULL,
+    stara  TEXT
+);
 CREATE TABLE IF NOT EXISTS plan_meta (klucz TEXT PRIMARY KEY, wartosc TEXT);
 CREATE TABLE IF NOT EXISTS plan_ops (
     op INTEGER PRIMARY KEY AUTOINCREMENT, opis TEXT NOT NULL, czas REAL NOT NULL, cofnieta INTEGER NOT NULL DEFAULT 0
@@ -280,6 +288,12 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
         wpisy.append({"p": p, "cel": folder[p["id"]] + "/" + nazwa, "alt": alt.get(p["id"], folder[p["id"]]) + "/" + nazwa,
                       "kat": kat.get(p["id"]), "tryb": p["tryb"], "stan": stan, "uwaga": uw, "jest": jest})
 
+    przyjete = {r[0] for r in db.execute("SELECT rodzaj FROM uwagi_przyjete")}
+    if przyjete:  # uwagi przyjęte hurtem nie wracają przy tworzeniu drzewa od nowa
+        for w in wpisy:
+            if w["uwaga"]:
+                w["uwaga"] = "; ".join(c for c in w["uwaga"].split("; ") if rodzaj_uwagi(c) not in przyjete) or None
+    db.execute("DELETE FROM uwagi_cofnij")
     _rozwiaz_kolizje(wpisy)
     db.execute("DELETE FROM plan")
     db.execute("DELETE FROM plan_ops")
@@ -739,6 +753,73 @@ def zastosuj_kategorie(db: sqlite3.Connection) -> dict:
     opisz_foldery_dokumentow(db)  # nowe dokumenty — dopisek „(skąd)” w nazwie folderu
     db.commit()
     return w
+
+
+# --- uwagi „do sprawdzenia” hurtem -----------------------------------------------------
+
+_OPISY_UWAG = {
+    "bez GPS": "📍 Bez GPS — miejsce z domu / okolicy",
+    "bez GPS — dopasowano do wyjazdu": "📍 Bez GPS — dopasowane do wyjazdu (sąsiednie zdjęcia)",
+    "bez GPS — miejsce z nazwy folderu": "📍 Bez GPS — miejsce z nazwy folderu",
+    "data z pliku": "📅 Data z pliku (brak daty zdjęcia)",
+    "brak tagów": "🎵 Muzyka bez tagów",
+    "razem z plikiem głównym": "🔗 Plik towarzyszący (razem z głównym)",
+    "nie z aparatu?": "❔ Nie z aparatu? (decyzja w zakładce „Nie z aparatu”)",
+    "śmieci": "🗑 Śmieci (Odłożone/Śmieci)",
+}
+
+
+def rodzaj_uwagi(czesc: str) -> str:
+    c = czesc.strip()
+    if c.startswith("nie z aparatu?"):
+        return "nie z aparatu?"
+    if c.startswith("śmieci"):
+        return "śmieci"
+    if c.startswith("razem z "):
+        return "razem z plikiem głównym"
+    if c.startswith("data z pliku"):
+        return "data z pliku"
+    return c
+
+
+def rodzaje_uwag(db: sqlite3.Connection) -> list[dict]:
+    """Uwagi w propozycji pogrupowane wg rodzaju: [{rodzaj, opis, n}] — od najczęstszych."""
+    przygotuj(db)
+    licz: dict[str, int] = defaultdict(int)
+    for (u,) in db.execute("SELECT uwaga FROM plan WHERE uwaga IS NOT NULL AND tryb!='istniejacy' AND pominiety=0 "
+                           "AND wynik IS NULL"):
+        for c in u.split("; "):
+            licz[rodzaj_uwagi(c)] += 1
+    return sorted(({"rodzaj": k, "opis": _OPISY_UWAG.get(k, k), "n": n} for k, n in licz.items()),
+                  key=lambda x: -x["n"])
+
+
+def przyjmij_uwagi(db: sqlite3.Connection, rodzaj: str) -> dict:
+    """„W porządku” dla wszystkich uwag danego rodzaju — znikają z „do sprawdzenia” (pliki zostają w drzewie
+    tam, gdzie są). Zapamiętane: nie wracają po utworzeniu drzewa od nowa; można cofnąć."""
+    przygotuj(db)
+    zmiany = []
+    for i, u in db.execute("SELECT id, uwaga FROM plan WHERE uwaga IS NOT NULL AND tryb!='istniejacy'"):
+        cz = u.split("; ")
+        zostaje = [c for c in cz if rodzaj_uwagi(c) != rodzaj]
+        if len(zostaje) != len(cz):
+            zmiany.append((i, u, "; ".join(zostaje) or None))
+    db.execute("DELETE FROM uwagi_cofnij WHERE rodzaj=?", (rodzaj,))
+    db.executemany("INSERT INTO uwagi_cofnij VALUES (?,?,?)", [(rodzaj, i, u) for i, u, _ in zmiany])
+    db.executemany("UPDATE plan SET uwaga=? WHERE id=?", [(n, i) for i, _, n in zmiany])
+    db.execute("INSERT OR IGNORE INTO uwagi_przyjete VALUES (?)", (rodzaj,))
+    db.commit()
+    return {"zmienione": len(zmiany), "rodzaj": rodzaj}
+
+
+def cofnij_uwagi(db: sqlite3.Connection, rodzaj: str) -> dict:
+    przygotuj(db)
+    stare = db.execute("SELECT id, stara FROM uwagi_cofnij WHERE rodzaj=?", (rodzaj,)).fetchall()
+    db.executemany("UPDATE plan SET uwaga=? WHERE id=?", [(u, i) for i, u in stare])
+    db.execute("DELETE FROM uwagi_cofnij WHERE rodzaj=?", (rodzaj,))
+    db.execute("DELETE FROM uwagi_przyjete WHERE rodzaj=?", (rodzaj,))
+    db.commit()
+    return {"zmienione": len(stare)}
 
 
 # --- wyszukiwanie i zmiany zbiorcze --------------------------------------------------

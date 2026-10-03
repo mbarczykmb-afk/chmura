@@ -1079,6 +1079,8 @@ def _handler(stan: Stan, token: str, zamknij):
                     return self._wyslij(w[0], w[1]) if w[0] is not None else \
                         self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
                 return self._wyslij(w[0])
+            if u.path == "/api/plan/uwagi":
+                return self._wyslij({"rodzaje": stan.z_db(planista.rodzaje_uwag)})
             if u.path == "/api/plan/aktualnosc":
                 return self._wyslij(stan.z_db(planista.aktualnosc))
             if u.path == "/api/plan/drzewo":
@@ -1351,6 +1353,8 @@ def _handler(stan: Stan, token: str, zamknij):
                     **kategorie.zapisz(db, {int(k): str(v) for k, v in (dane.get("wybor") or {}).items()}),
                     "plan": planista.zastosuj_kategorie(db)},
                 # ⚡ Podobne hurtem: „kopie” — tylko kopie tych samych zdjęć; „najlepsze” — w każdej grupie zostaje ★
+                "/api/plan/uwagi/przyjmij": lambda db: planista.przyjmij_uwagi(db, str(dane.get("rodzaj", ""))),
+                "/api/plan/uwagi/cofnij": lambda db: planista.cofnij_uwagi(db, str(dane.get("rodzaj", ""))),
                 "/api/podobne/auto": lambda db: duplikaty.odloz(db, _podobne_hurtem(db, dane.get("tryb")), "podobne"),
                 "/api/odloz": lambda db: duplikaty.odloz(db, [int(i) for i in dane.get("ids") or []],
                                                          dane.get("typ") if dane.get("typ") in ("podobne", "smieci")
@@ -1360,6 +1364,9 @@ def _handler(stan: Stan, token: str, zamknij):
                 if u.path in ("/api/odloz", "/api/podobne/auto") and stan.zajety():
                     return self._wyslij({"blad": "Poczekaj, aż skończy się bieżące zadanie."}, kod=HTTPStatus.BAD_REQUEST)
                 w = stan.z_db(edycja[u.path])
+                if u.path.startswith("/api/plan/uwagi/"):
+                    with stan.blokada:
+                        stan.wersja_danych += 1  # „do sprawdzenia” w podsumowaniu
                 if u.path in ("/api/odloz", "/api/podobne/auto"):
                     stan.przegladarka.zglos_zmiany()
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)

@@ -317,3 +317,23 @@ def test_aktualnosc_drzewa_po_odlozeniu(tmp_path):
     assert pl.aktualnosc(db)["reczne"] == 1
     pl.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(tmp_path / "cel"))
     assert not pl.aktualnosc(db)["nieaktualny"]
+
+
+def test_uwagi_hurtem(swiat):
+    k, cel, db = swiat
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
+    rodzaje = planista.rodzaje_uwag(db)
+    assert rodzaje and all(r["n"] > 0 for r in rodzaje)
+    r0 = rodzaje[0]
+    przed = planista.podsumowanie(db)["uwagi"]
+    w = planista.przyjmij_uwagi(db, r0["rodzaj"])
+    assert w["zmienione"] == r0["n"]
+    assert r0["rodzaj"] not in {r["rodzaj"] for r in planista.rodzaje_uwag(db)}
+    assert planista.podsumowanie(db)["uwagi"] < przed
+    # drzewo od nowa — przyjęte uwagi nie wracają
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
+    assert r0["rodzaj"] not in {r["rodzaj"] for r in planista.rodzaje_uwag(db)}
+    # cofnięcie przyjęcia (po nowym drzewie nie ma czego przywracać, ale rodzaj znów jest pokazywany)
+    planista.cofnij_uwagi(db, r0["rodzaj"])
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
+    assert r0["rodzaj"] in {r["rodzaj"] for r in planista.rodzaje_uwag(db)}
