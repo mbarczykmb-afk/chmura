@@ -168,6 +168,11 @@ po PIN-ie przekazuje zapytania do programu na komputerze; wymaga *Pozwól sterow
 zainstalować aktualizacji z telefonu się nie da. **Spoza domu**: VPN do domu (WireGuard na domowym serwerze albo
 Tailscale) i ten sam adres — program nie jest wystawiany wprost do internetu.
 
+**Po restarcie komputera** (od 1.21): włączony telefon jest zapamiętany — po starcie programu włącza się sam, z tym
+samym PIN-em i adresem; zamknięcie okna go nie wyłącza (program pracuje w tle, okno otwiera zwykły skrót).
+W oknie 📱 opcja *Uruchamiaj Katalogator razem z Windows* (wpis w HKCU\…\Run, `Katalogator.exe --w-tle`,
+usuwany przy odinstalowaniu) — telefon działa od razu po włączeniu komputera.
+
 **🎬 Filmy w każdym formacie — także bardzo stare** (2000–2012): AVI (DivX, Xvid, MS-MPEG4, MJPEG z aparatów),
 MPG/VOB, MOD/TOD/MTS z kamer (przeplot usuwany), 3GP z telefonów, WMV, FLV, DV… Miniatura = klatka z filmu;
 odtwarzanie w oknie (Drzewo, Duplikaty: ▶, Biblioteka, Przeglądarka, telefon): MP4/MOV/WebM — oryginał, inne —

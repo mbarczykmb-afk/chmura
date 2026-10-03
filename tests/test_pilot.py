@@ -157,3 +157,30 @@ def test_pelny_program_przez_serwer_telefonu(tmp_path):
     finally:
         s.stop()
         serwer.shutdown()
+
+
+def test_telefon_wlacza_sie_sam_po_ponownym_uruchomieniu(tmp_path):
+    """Włączony telefon jest zapamiętany: nowy start programu (np. po restarcie PC) włącza go z tym samym PIN-em."""
+    dane = tmp_path / "dane"
+    stan = aplikacja.Stan(dane)
+    w = stan.telefon(True, "wszystko", sterowanie=False, pin="2468")
+    assert w["wlaczone"] and w["pin"] == "2468" and w["autostart"] is False
+    assert stan.telefon_wlaczony()
+    stan.serwer_tel.stop()  # „zamknięcie programu” bez wyłączania telefonu
+
+    nowy = aplikacja.Stan(dane)
+    assert not nowy.telefon_wlaczony()
+    nowy.telefon_po_starcie()
+    try:
+        assert nowy.telefon_wlaczony()
+        assert nowy.serwer_tel.pin == "2468" and nowy.serwer_tel.pilot.sterowanie is False
+    finally:
+        nowy.telefon(False)  # wyłączenie = zapomniane
+    trzeci = aplikacja.Stan(dane)
+    trzeci.telefon_po_starcie()
+    assert not trzeci.telefon_wlaczony()
+
+
+def test_autostart_poza_windows():
+    assert aplikacja.autostart() is False
+    assert "Windows" in aplikacja.ustaw_autostart(True)

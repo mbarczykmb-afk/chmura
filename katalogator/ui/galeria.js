@@ -518,12 +518,27 @@ async function telefon(wlacz, pin) {
       <ul><li>Telefon musi być w tej samej sieci Wi-Fi — albo mieć włączony <b>Tailscale</b> (wtedy działa z każdego miejsca;
       adres zaczyna się od 100.): <span id="tel-inne"></span></li>
       <li>Windows może zapytać o zaporę — zaznacz <b>sieci prywatne</b> i kliknij <b>Zezwalaj</b>.</li>
-      <li>Działa, dopóki Katalogator jest otwarty. Na 24/7 — Raspberry Pi (instrukcja w README).</li>
+      <li>Działa, dopóki komputer jest włączony: zamknięcie okna nie wyłącza telefonu (program pracuje w tle),
+      a po ponownym uruchomieniu telefon włącza się sam — z tym samym PIN-em. Wyłączasz przyciskiem „Wyłącz” niżej.</li>
       <li>Na telefonie: pilot (postęp, kolejne kroki) i <b>🖥 Pełny program</b> — Duplikaty, Dokumenty, Podobne, Drzewo,
       kosz, jak na komputerze (gdy zaznaczone niżej „Pozwól sterować”).</li>
       <li><b>Spoza domu</b>: włącz w telefonie VPN do domu (WireGuard na domowym serwerze albo Tailscale) i otwórz ten sam adres.
       Programu nie wystawiamy wprost do internetu.</li></ul>
-      <label class="tel-ster"><input type="checkbox" id="tel-ster"> Pozwól sterować z telefonu (uruchamianie kroków, przerywanie)</label>`;
+      <label class="tel-ster"><input type="checkbox" id="tel-ster"> Pozwól sterować z telefonu (uruchamianie kroków, przerywanie)</label>
+      <label class="tel-ster" id="tel-auto-w"><input type="checkbox" id="tel-auto"> Uruchamiaj Katalogator razem z Windows (w tle, bez okna) —
+      telefon działa od razu po restarcie komputera</label>`;
+    $("tel-auto-w").hidden = !j.autostart_mozliwy;
+    $("tel-auto").checked = !!j.autostart;
+    $("tel-auto").onchange = async () => {
+      const c = $("tel-auto");
+      try {
+        const r = await fetch(url("/api/autostart"), {method: "POST", headers: {"Content-Type": "application/json", "X-Token": TOKEN},
+                                                       body: JSON.stringify({wlacz: c.checked})});
+        const w = await r.json();
+        if (!r.ok || w.blad) throw new Error(w.blad || r.statusText);
+        c.checked = !!w.autostart;
+      } catch (e) { c.checked = !c.checked; alert(e.message); }
+    };
     $("tel-ster").checked = j.sterowanie !== false;
     $("tel-pin-info").textContent = j.wlasny_pin ? "Twój PIN — stały" : "losowy przy każdym włączeniu";
     $("tel-pin").onclick = () => {

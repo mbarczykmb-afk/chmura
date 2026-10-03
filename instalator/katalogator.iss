@@ -54,6 +54,10 @@ Name: "{autodesktop}\Katalogator"; Filename: "{app}\Katalogator.exe"; Tasks: pul
 [Run]
 Filename: "{app}\Katalogator.exe"; Description: "Uruchom Katalogator"; Flags: nowait postinstall skipifsilent
 
+[Registry]
+; „Uruchamiaj z Windows” (włączane w programie) — odinstalowanie usuwa wpis
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "Katalogator"; Flags: uninsdeletevalue dontcreatekey
+
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\_internal"
 Type: filesandordirs; Name: "{app}\ffmpeg"

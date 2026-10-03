@@ -13,7 +13,7 @@ def main(argv=None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if sys.stdout is None:  # Katalogator.exe bez konsoli (UTF-8, bo domyślne cp1252 nie zna polskich znaków)
         sys.stdout = sys.stderr = open(os.devnull, "w", encoding="utf-8", errors="replace")
-    if args[:1] in (["--auto"], ["--usun-harmonogramy"]) or not args:
+    if args[:1] in (["--auto"], ["--usun-harmonogramy"], ["--w-tle"]) or not args:
         # tryby bez konsoli: wszystko (także błędy) do pliku dziennika, nigdy okienko z błędem
         from . import logi
         from .aplikacja import katalog_danych
@@ -34,9 +34,9 @@ def main(argv=None) -> int:
                 from .przychodzace import usun_wszystkie_harmonogramy
                 usun_wszystkie_harmonogramy(katalog)
                 return 0
-            if not args:
-                from .aplikacja import main as aplikacja  # bez parametrów: okno aplikacji
-                aplikacja()
+            if not args or args == ["--w-tle"]:
+                from .aplikacja import main as aplikacja  # bez parametrów: okno aplikacji; --w-tle: start z Windows
+                aplikacja(otworz=not args)
                 return 0
             return 2
         except Exception:

@@ -91,6 +91,7 @@ class Stan:
             if self.serwer_tel is not None and wlacz:  # już działa — zmieniamy tylko sterowanie (i PIN)
                 s = self.serwer_tel
                 s.pilot.sterowanie = sterowanie
+                aktualizacje.zapisz_ustawienia(self.katalog, telefon_auto={"zakres": zakres, "sterowanie": sterowanie})
                 if pin is not None:
                     s.pin = wlasny or galeria.losowy_pin()
                     s.staly_token = staly
@@ -100,6 +101,7 @@ class Stan:
                 self.serwer_tel.stop()
                 self.serwer_tel = None
             if not wlacz:
+                aktualizacje.zapisz_ustawienia(self.katalog, telefon_auto=None)
                 return {"wlaczone": False}
             for port in (8765, 8766, 8767, 0):
                 try:
@@ -111,12 +113,25 @@ class Stan:
                     continue
             s = self.serwer_tel
         LOG.info("Udostępnianie na telefon: %s", s.adresy())
+        aktualizacje.zapisz_ustawienia(self.katalog, telefon_auto={"zakres": zakres, "sterowanie": sterowanie})
         return self._tel_info(s, sterowanie, wlasny)
 
     @staticmethod
     def _tel_info(s, sterowanie: bool, wlasny) -> dict:
         return {"wlaczone": True, "pin": s.pin, "wlasny_pin": bool(wlasny), "adresy": s.adresy(), "port": s.port,
-                "sterowanie": sterowanie}
+                "sterowanie": sterowanie, "autostart": autostart(), "autostart_mozliwy": autostart_mozliwy()}
+
+    def telefon_po_starcie(self) -> None:
+        """Telefon był włączony przy poprzednim zamknięciu — włączamy od razu (ten sam PIN, ten sam adres)."""
+        a = aktualizacje._ustawienia(self.katalog).get("telefon_auto")
+        if isinstance(a, dict):
+            try:
+                self.telefon(True, str(a.get("zakres") or "biblioteka"), bool(a.get("sterowanie", True)))
+            except Exception:
+                LOG.exception("Nie udało się włączyć telefonu po starcie")
+
+    def telefon_wlaczony(self) -> bool:
+        return self.serwer_tel is not None
 
     def _otworz(self, pid: str) -> None:
         self.projekt = self.projekty.wczytaj(pid)
@@ -1165,6 +1180,10 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/nowy-folder":
                 w = dyski.nowy_folder(str(dane.get("w", "")), str(dane.get("nazwa", "")))
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/autostart":
+                blad = ustaw_autostart(bool(dane.get("wlacz")))
+                return self._wyslij({"blad": blad} if blad else {"autostart": autostart()},
+                                    kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
             if u.path == "/api/telefon":
                 return self._wyslij(stan.telefon(bool(dane.get("wlacz")), str(dane.get("zakres") or "biblioteka"),
                                                 bool(dane.get("sterowanie", True)),
@@ -1342,6 +1361,46 @@ def _handler(stan: Stan, token: str, zamknij):
     return H
 
 
+# --- uruchamianie razem z Windows (bez okna; okno otwiera skrót Katalogatora) -------------------------------
+_KLUCZ_RUN = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_NAZWA_RUN = "Katalogator"
+
+
+def autostart_mozliwy() -> bool:
+    return sys.platform == "win32" and bool(getattr(sys, "frozen", False))
+
+
+def autostart() -> bool:
+    if not autostart_mozliwy():
+        return False
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _KLUCZ_RUN) as k:
+            winreg.QueryValueEx(k, _NAZWA_RUN)
+        return True
+    except OSError:
+        return False
+
+
+def ustaw_autostart(wlacz: bool) -> str | None:
+    if not autostart_mozliwy():
+        return "Uruchamianie z Windows działa tylko w zainstalowanym programie na Windows."
+    import winreg
+    try:
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, _KLUCZ_RUN) as k:
+            if wlacz:
+                winreg.SetValueEx(k, _NAZWA_RUN, 0, winreg.REG_SZ, f'"{sys.executable}" --w-tle')
+            else:
+                try:
+                    winreg.DeleteValue(k, _NAZWA_RUN)
+                except FileNotFoundError:
+                    pass
+    except OSError as e:
+        return f"Nie udało się zmienić autostartu: {e}"
+    LOG.info("Autostart z Windows: %s", wlacz)
+    return None
+
+
 def _int(q: dict, klucz: str, domyslnie: int) -> int:
     try:
         return int(q.get(klucz, [domyslnie])[0])
@@ -1427,13 +1486,14 @@ def main(otworz: bool = True) -> None:
         while True:
             time.sleep(10)
             if time.time() - stan.ostatni_ping > BEZ_PINGU_ZAMKNIJ_PO:
-                if stan.zajety():
-                    continue  # okno zamknięte/zawieszone, ale zadanie trwa — kończymy dopiero po nim
+                if stan.zajety() or stan.telefon_wlaczony():
+                    continue  # zadanie trwa albo telefon włączony — program działa dalej (bez okna)
                 stan.przerwij.set()
                 serwer.shutdown()
                 return
 
     threading.Thread(target=pilnuj, daemon=True).start()
+    stan.telefon_po_starcie()
     if otworz:
         otworz_okno(url)
     try:
