@@ -171,17 +171,28 @@ async function wczytajPliki(wiecej = false) {
     : z.typ === "dzien" ? await api("/api/g/tego-dnia", {md: z.md || mdDzis(), dni: z.dni || 0})
     : await api("/api/g/pliki", {rok: g.rok, miesiac: g.mies || 0, od, ile: 200, ...obszarParam()});
   if (z !== g.zrodlo) return;  // w międzyczasie wybrano coś innego
+  const bylo = wiecej ? g.pliki.length : 0;
   g.pliki = wiecej ? g.pliki.concat(r.pliki) : r.pliki; g.razem = r.razem;
   if (r.opis !== undefined) z.opis = r.opis;
   if (r.nazwa) z.nazwa = r.nazwa;
   if (z.typ === "dzien") { z.md = r.md; z.lata = r.lata; z.najblizszy = r.najblizszy; }
-  rysujSiatke(); rysujFiltr();
+  rysujSiatke(bylo); rysujFiltr();
 }
-function rysujSiatke() {
-  const s = $("siatka"); s.replaceChildren();
+// Przewijanie do końca siatki doczytuje kolejne zdjęcia (bez klikania „Pokaż kolejne”)
+const doczytaj = "IntersectionObserver" in window ? new IntersectionObserver(wpisy => {
+  for (const w of wpisy) if (w.isIntersecting && !g.doczytuje && w.target.isConnected) {
+    g.doczytuje = true;
+    wczytajPliki(true).catch(() => {}).finally(() => { g.doczytuje = false; });
+  }
+}, {root: $("siatka"), rootMargin: "0px 0px 800px 0px"}) : null;
+function rysujSiatke(odIndeksu = 0) {  // odIndeksu > 0: dopisujemy tylko nowe (przewinięcie zostaje)
+  const s = $("siatka");
+  if (odIndeksu) s.querySelectorAll(":scope > .wiecej").forEach(b => { if (doczytaj) doczytaj.unobserve(b); b.remove(); });
+  else s.replaceChildren();
   const dzien = g.zrodlo.typ === "dzien";
-  let rok = null;
+  let rok = odIndeksu && g.pliki[odIndeksu - 1] && g.pliki[odIndeksu - 1].data ? g.pliki[odIndeksu - 1].data.slice(0, 4) : null;
   g.pliki.forEach((p, i) => {
+    if (i < odIndeksu) return;
     if (dzien && p.data && p.data.slice(0, 4) !== rok) {  // „Tego dnia”: nagłówek każdego roku
       rok = p.data.slice(0, 4);
       const n = (g.zrodlo.lata || []).find(x => x.rok === rok);
@@ -211,6 +222,7 @@ function rysujSiatke() {
     const b = document.createElement("button"); b.className = "wiecej";
     b.textContent = `Pokaż kolejne (zostało ${(g.razem - g.pliki.length).toLocaleString("pl-PL")})`;
     b.onclick = () => wczytajPliki(true); s.append(b);
+    if (doczytaj) doczytaj.observe(b);
   }
   if (!g.pliki.length) s.innerHTML = `<div class="pusto">${g.zrodlo.typ === "szukaj" ? "Nic nie znaleziono. Spróbuj: miejscowość, kraj, rok, miesiąc albo fragment nazwy."
     : g.zrodlo.typ === "kolekcja" ? (g.zrodlo.kol === "ulubione" ? "Brak ulubionych — otwórz zdjęcie i kliknij ☆ Ulubione (albo F)." : "Album jest pusty — otwórz zdjęcie i kliknij ＋ Album.")
