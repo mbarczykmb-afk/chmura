@@ -449,6 +449,36 @@ async function pelnyZPinezki(id, film) {
   pokazPelny([p], 0);
 }
 
+// ---------- zwarty nagłówek: tytuł, ⋯ menu, 📊 wykres, 💽 dyski, 🔍 na telefonie ----------
+const naglowek = (() => {
+  const czytaj = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v === "1"; } catch (e) { return d; } };
+  return {wykres: czytaj("kat_g_wykres", innerWidth > 760), dyski: czytaj("kat_g_dyski", false)};
+})();
+function zapamietaj(k, v) { try { localStorage.setItem(k, v ? "1" : "0"); } catch (e) { /* bez pamięci */ } }
+function tytul(ikona, nazwa) {
+  const h = $("tytul"); h.replaceChildren(ikona);
+  const t = document.createElement("span"); t.className = "t"; t.textContent = " " + nazwa; h.append(t);
+  h.title = nazwa;
+}
+function pokazDyski() {
+  const p = g.zakres === "przegladarka";
+  $("prz").hidden = !p || !naglowek.dyski;
+  $("dyski-btn").classList.toggle("akt", p && naglowek.dyski);
+}
+$("dyski-btn").onclick = () => { naglowek.dyski = !naglowek.dyski; zapamietaj("kat_g_dyski", naglowek.dyski); pokazDyski(); };
+$("wykres-btn").onclick = () => { naglowek.wykres = !naglowek.wykres; zapamietaj("kat_g_wykres", naglowek.wykres); uklad(); };
+$("menu-btn").onclick = e => { e.stopPropagation(); $("menu").hidden = !$("menu").hidden; };
+$("menu").onclick = e => { if (e.target.tagName === "BUTTON") $("menu").hidden = true; };
+document.addEventListener("click", e => { if (!$("menu").hidden && !e.target.closest(".menu-w")) $("menu").hidden = true; });
+$("menu-pokaz").onclick = () => { if (g.pliki.length) { pokazPelny(g.pliki, 0); startPokaz(); } };
+$("szukaj-btn").onclick = () => {
+  const h = document.querySelector("header"), on = !h.classList.contains("szuka");
+  h.classList.toggle("szuka", on); if (on) $("szukaj").focus();
+};
+$("szukaj").addEventListener("blur", () => {
+  if (!$("szukaj").value.trim()) document.querySelector("header").classList.remove("szuka");
+});
+
 // ---------- przełączanie widoków ----------
 function uklad() {  // co widać: oś czasu (wykres, miesiące), wyniki/kolekcja (sama siatka), kolekcje, mapa
   const w = g.widok, os = w === "os" && g.zrodlo.typ === "os";
@@ -456,7 +486,8 @@ function uklad() {  // co widać: oś czasu (wykres, miesiące), wyniki/kolekcja
   $("w-kolekcje").classList.toggle("akt", w === "kolekcje" || (w === "os" && g.zrodlo.typ === "kolekcja"));
   $("w-dzien").classList.toggle("akt", w === "os" && g.zrodlo.typ === "dzien");
   $("os").hidden = w === "mapa"; $("lata").hidden = !os; $("miesiace").hidden = !os; tip(null);
-  $("wykres").hidden = !os || !$("wykres").childElementCount;
+  $("wykres").hidden = !os || !$("wykres").childElementCount || !naglowek.wykres;
+  $("wykres-btn").hidden = !os; $("wykres-btn").classList.toggle("akt", naglowek.wykres);
   $("mapa").hidden = w !== "mapa"; $("mapa-info").hidden = w !== "mapa"; $("mapa-os").hidden = w !== "mapa";
   rysujFiltr();
 }
@@ -490,9 +521,9 @@ if (W_PROGRAMIE) {
   if (P.get("tel") === "1") telefon(true);  // 📱 w nagłówku programu
 }
 if (!W_PROGRAMIE && P.get("pilot")) {  // telefon: powrót do pilota (stan komputera, kolejne kroki)
-  $("zamknij").hidden = false; $("zamknij").textContent = "← Pilot"; $("zamknij").title = "Wróć do pilota";
+  $("zamknij").hidden = false; $("zamknij").textContent = "←"; $("zamknij").title = "Wróć do pilota";
   $("zamknij").onclick = () => { location.href = "/"; };
-  document.querySelector("header h1").textContent = {przegladarka: "🔭 Przeglądarka", wszystko: "🗂 Projekt"}[g.zakres] || "📚 Biblioteka";
+  tytul(...({przegladarka: ["🔭", "Przeglądarka"], wszystko: ["🗂", "Projekt"]}[g.zakres] || ["📚", "Biblioteka"]));
 }
 function telSterowanie() {
   const c = $("tel-ster");
@@ -614,14 +645,14 @@ function rysujFiltr() {
   } else if (g.widok === "os") {
     if (g.obszar) f.append(znacznik("📍 Obszar z mapy", () => { g.obszar = null; g.rok = null; wczytajLata(); rysujFiltr(); },
                                     "Pokaż wszystkie miejsca"));
-    if (g.dzien && g.dzien.razem && !g.obszar) {
-      const lata = g.dzien.lata.map(x => x.rok).slice(0, 4).join(", ");
-      f.append(przycisk(`📅 Tego dnia lata temu: ${lata} (${g.dzien.razem})`, () => pokazWyniki({typ: "dzien", md: mdDzis(), dni: 0}),
-                        "Zdjęcia zrobione tego samego dnia w poprzednich latach", "dzien"));
-    }
     const p = pokaz(); if (p && f.childElementCount) f.append(p);
   }
   f.hidden = !f.childElementCount;
+  const d = g.dzien && g.dzien.razem ? g.dzien : null;  // „tego dnia lata temu” — znaczek na 🕰 zamiast paska
+  $("dzien-ile").hidden = !d; $("dzien-ile").textContent = d ? (d.razem > 99 ? "99+" : d.razem) : "";
+  $("w-dzien").title = d ? `Tego dnia w poprzednich latach: ${d.lata.map(x => x.rok).slice(0, 6).join(", ")} (${d.razem})`
+    : "Zdjęcia z tego samego dnia w poprzednich latach";
+  $("menu-pokaz").disabled = !g.pliki.length;
 }
 
 // ---------- wyszukiwarka ----------
@@ -942,8 +973,8 @@ async function post(sciezka, dane) {
 const prz = {foldery: [], trwa: false, zegar: null, licz: 0};
 function ustawZakres() {
   const p = g.zakres === "przegladarka";
-  $("prz").hidden = !p;
-  document.querySelector("header h1").textContent = p ? "🔭 Przeglądarka" : "📚 Biblioteka";
+  $("dyski-btn").hidden = !p; pokazDyski();
+  tytul(...(p ? ["🔭", "Przeglądarka"] : ["📚", "Biblioteka"]));
   document.title = (p ? "Przeglądarka" : "Biblioteka") + " — Katalogator";
   if (p) odswiezPrz();
 }
@@ -980,6 +1011,10 @@ function rysujPrz(s) {
   } else {
     $("prz-stan").textContent = s.blad ? "Błąd: " + s.blad : (s.komunikat || (s.foldery.length ? "Kliknij „Skanuj”, żeby wczytać zdjęcia." : ""));
   }
+  const zn = $("dyski-stan");
+  zn.hidden = !(s.trwa || s.blad || !s.foldery.length);
+  zn.textContent = s.trwa ? (s.wszystkie ? Math.round(100 * Math.min(1, s.zrobione / s.wszystkie)) + "%" : "⟳") : s.blad ? "!" : "+";
+  if (!s.foldery.length && !naglowek.dyski) { naglowek.dyski = true; pokazDyski(); }  // nic nie dodano — od razu pokaż
   if (s.katalogator_pracuje && !s.trwa)  // ten sam dysk sieciowy — dwa zadania naraz idą wolniej
     $("prz-stan").textContent += " · Katalogator teraz porządkuje pliki — odświeżę się sam, gdy skończy";
 }

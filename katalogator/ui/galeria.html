@@ -87,7 +87,7 @@ main{flex:1;min-height:0;position:relative}
 #wykres:not([hidden]) ~ #lata{display:none}  /* lata są podpisane pod wykresem */
 .w-tor{display:flex;gap:10px;overflow-x:auto;scrollbar-width:thin;padding-bottom:2px}
 .w-rok{flex:0 1 auto;min-width:84px;width:calc(12 * 36px);display:flex;flex-direction:column}
-.w-slupki{height:88px;display:flex;align-items:flex-end;gap:2px;border-bottom:1px solid color-mix(in srgb,var(--mut) 45%,transparent)}
+.w-slupki{height:64px;display:flex;align-items:flex-end;gap:2px;border-bottom:1px solid color-mix(in srgb,var(--mut) 45%,transparent)}
 .w-s{flex:1 1 0;min-width:5px;max-width:34px;height:100%;padding:0;border:0;border-radius:0;background:none;display:flex;align-items:flex-end;cursor:pointer}
 .w-s:disabled{cursor:default}
 .w-s i{display:block;width:100%;border-radius:3px 3px 0 0;background:color-mix(in srgb,var(--akc) 45%,transparent);transition:background .15s,height .35s ease}
@@ -115,7 +115,7 @@ main{flex:1;min-height:0;position:relative}
 #wyb-lista{flex:1;overflow:auto;border:1px solid var(--lin);border-radius:10px;padding:4px}
 #wyb-lista button{display:block;width:100%;text-align:left;border:0;border-radius:6px;padding:7px 10px;background:none}
 #wyb-lista button:hover{background:var(--akc-miekki)}
-@media (max-width:600px){.w-slupki{height:64px}.w-rok{min-width:72px}}
+@media (max-width:600px){.w-slupki{height:52px}.w-rok{min-width:72px}}
 
 /* --- wyszukiwarka, filtry, kolekcje --- */
 #szukaj{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--lin);border-radius:999px;padding:6px 14px;width:min(340px,100%);min-width:0}
@@ -141,7 +141,27 @@ main{flex:1;min-height:0;position:relative}
 .menu-alb button{display:block;width:100%;text-align:left;border:0;border-radius:8px;padding:8px 10px;background:none}
 .menu-alb button:hover{background:var(--akc-miekki)}
 .prz label{font-size:12.5px;color:var(--mut);display:inline-flex;gap:5px;align-items:center}
-@media (max-width:600px){#szukaj{order:5;width:100%}}
+/* --- zwarty nagłówek: ikony, a reszta pod ⋯ / 💽 / 📊 --- */
+header button{white-space:nowrap;position:relative}
+header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);color:var(--akc-fg);border-radius:999px;font-size:10.5px;line-height:1;padding:3px 5px;font-weight:700}
+#szukaj-btn{display:none}
+#wykres-btn.akt,#dyski-btn.akt{background:var(--akc-miekki);color:var(--fg);border-color:var(--akc)}
+.menu-w{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 6px);z-index:1200;background:var(--bg);border:1px solid var(--lin);border-radius:12px;padding:8px;min-width:250px;display:flex;flex-direction:column;gap:6px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.menu button,.menu select{width:100%;text-align:left}
+.menu .info{padding:2px 4px 4px}
+@media (max-width:1100px){header .t{display:none}}
+@media (max-width:600px){
+  header{gap:4px;flex-wrap:nowrap;padding:8px}
+  header h1{display:none}
+  header button{padding:6px 8px}
+  #szukaj-btn{display:inline-block}
+  #szukaj{display:none}
+  header.szuka{flex-wrap:wrap}
+  header.szuka #szukaj{display:block;order:5;width:100%}
+  .prz{gap:6px;padding:6px 10px}
+  .prz-f{max-width:100%}
+}
 .zestaw{display:inline-flex;align-items:center;gap:0;border:1px solid var(--lin);border-radius:10px;overflow:hidden;background:var(--bg)}
 .zestaw select{border:0;border-radius:0;font-weight:700;max-width:220px;background:none}
 .zestaw button{border:0;border-left:1px solid var(--lin);border-radius:0;padding:6px 9px;background:none}
@@ -182,21 +202,30 @@ main{flex:1;min-height:0;position:relative}
 </head>
 <body>
 <header>
-  <h1>📚 Biblioteka</h1>
-  <button id="w-os" class="akt">📅 Oś czasu</button>
-  <button id="w-mapa">🗺 Mapa</button>
-  <button id="w-kolekcje" title="Ulubione i albumy">⭐ Kolekcje</button>
-  <button id="w-dzien" title="Zdjęcia z tego samego dnia w poprzednich latach">🕰 Tego dnia</button>
+  <h1 id="tytul">📚<span class="t"> Biblioteka</span></h1>
+  <button id="w-os" class="akt" title="Oś czasu">📅<span class="t"> Oś czasu</span></button>
+  <button id="w-mapa" title="Mapa miejsc">🗺<span class="t"> Mapa</span></button>
+  <button id="w-kolekcje" title="Ulubione i albumy">⭐<span class="t"> Kolekcje</span></button>
+  <button id="w-dzien" title="Zdjęcia z tego samego dnia w poprzednich latach">🕰<span class="t"> Tego dnia</span><b class="znaczek" id="dzien-ile" hidden></b></button>
+  <button id="szukaj-btn" title="Szukaj">🔍</button>
   <input id="szukaj" type="search" placeholder="🔍 Szukaj: Hel, lipiec 2019, Włochy, nazwa…" autocomplete="off"
          title="Miejsce (miejscowość, kraj), rok, miesiąc, fragment nazwy pliku lub folderu, aparat — można łączyć">
-  <span class="info" id="licznik"></span>
   <span class="odstep"></span>
-  <select id="zakres" hidden title="Które zdjęcia pokazać">
-    <option value="biblioteka">Biblioteka (miejsce docelowe)</option>
-    <option value="wszystko">Wszystko w projekcie</option>
-    <option value="przegladarka">🔭 Przeglądarka dysków</option>
-  </select>
-  <button id="na-telefon" hidden title="Oglądaj bibliotekę na telefonie (sieć domowa / Tailscale)">📱 Na telefon</button>
+  <button id="dyski-btn" hidden title="Dyski i foldery Przeglądarki, skanowanie">💽<span class="t"> Dyski</span><b class="znaczek" id="dyski-stan" hidden></b></button>
+  <button id="wykres-btn" title="Pokaż / schowaj wykres lat i miesięcy">📊</button>
+  <span class="menu-w">
+    <button id="menu-btn" title="Więcej: zakres, pokaz slajdów, telefon" aria-haspopup="true">⋯</button>
+    <div class="menu" id="menu" hidden>
+      <div class="info" id="licznik"></div>
+      <select id="zakres" hidden title="Które zdjęcia pokazać">
+        <option value="biblioteka">📚 Biblioteka (miejsce docelowe)</option>
+        <option value="wszystko">🗂 Wszystko w projekcie</option>
+        <option value="przegladarka">🔭 Przeglądarka dysków</option>
+      </select>
+      <button id="menu-pokaz">▶ Pokaz slajdów</button>
+      <button id="na-telefon" hidden title="Oglądaj bibliotekę na telefonie (sieć domowa / Tailscale)">📱 Na telefon</button>
+    </div>
+  </span>
   <button id="zamknij" hidden title="Wróć do porządkowania">✕</button>
 </header>
 <div class="prz" id="prz" hidden>
