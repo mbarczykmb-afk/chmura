@@ -31,7 +31,8 @@ class Przegladarka:
                      "blad": "", "czeka": ""}
         self.tempo = stabilnosc.Tempo()
         self._auto_watek: threading.Thread | None = None
-        self._zmiany = False  # Katalogator przeniósł/odłożył pliki — odświeżyć przy najbliższej okazji
+        self._zmiany = 0.0  # kiedy Katalogator ostatnio przeniósł/odłożył pliki (0 = nic do odświeżenia)
+        self._po_zmianach = 0.0  # kiedy ostatnio odświeżaliśmy z powodu zmian
         # galeria widzi tylko aktualnie wybrane foldery (usunięty z listy znika od razu, bez kasowania bazy)
         self.galeria = galeria.Galeria(self.baza, lambda: self.foldery(), pamiec_min=self.katalog / "miniatury",
                                        tylko_zdjecia_ludzi=True)
@@ -138,12 +139,21 @@ class Przegladarka:
 
     def zglos_zmiany(self) -> None:
         """Katalogator przeniósł, odłożył albo przywrócił pliki — Przeglądarka odświeży się, gdy skończy."""
-        self._zmiany = True
+        self._zmiany = time.time()
+
+    CISZA_PO_ZMIANACH = 300      # s bez nowych zmian (np. seria decyzji w Podobnych) — dopiero wtedy odświeżamy
+    ODSTEP_PO_ZMIANACH = 1800    # s — i nie częściej niż co 30 min: każde odświeżenie to przejście dysków po sieci
+
+    def _zmiany_do_odswiezenia(self, teraz: float | None = None) -> bool:
+        teraz = teraz or time.time()
+        return bool(self._zmiany) and teraz - self._zmiany >= self.CISZA_PO_ZMIANACH \
+            and teraz - self._po_zmianach >= self.ODSTEP_PO_ZMIANACH
 
     def teraz_odswiezyc(self, zajety=lambda: False) -> bool:
         if self.stan["trwa"] or zajety():  # w trakcie zadań Katalogatora nie obciążamy tego samego dysku
             return False
-        return self.do_odswiezenia() or (self._zmiany and self._ust().get("auto", True) and bool(self.wszystkie_foldery()))
+        return self.do_odswiezenia() or (self._zmiany_do_odswiezenia() and self._ust().get("auto", True)
+                                         and bool(self.wszystkie_foldery()))
 
     def uruchom_auto(self, pierwsze_po: float = 30, sprawdzaj_co: float = 60, zajety=lambda: False) -> None:
         """Wątek w tle: po starcie programu i potem co `sprawdzaj_co` s — skan, gdy minął ustawiony czas
@@ -157,7 +167,9 @@ class Przegladarka:
                 try:
                     if self.teraz_odswiezyc(zajety):
                         LOG.info("Przeglądarka: samoczynne odświeżanie")
-                        self._zmiany = False
+                        if self._zmiany_do_odswiezenia():
+                            self._po_zmianach = time.time()
+                        self._zmiany = 0.0
                         self.skanuj(auto=True)
                 except Exception:  # noqa: BLE001
                     LOG.exception("Przeglądarka: odświeżanie")

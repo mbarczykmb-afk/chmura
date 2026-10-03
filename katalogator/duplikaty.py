@@ -446,6 +446,8 @@ def _cel_przeniesienia(korzen: str, wzgledna: str, typ: str = "duplikat", docelo
 
 def przenies_plik(z: str, do: str) -> None:
     """Przeniesienie pliku — także między dyskami (Y: → Z:): kopia, sprawdzenie rozmiaru, usunięcie oryginału."""
+    from . import sprzatanie
+    sprzatanie.zmiana_odlozonych()  # licznik kosza policzy się od nowa
     os.makedirs(os.path.dirname(do), exist_ok=True)
     try:
         os.rename(z, do)

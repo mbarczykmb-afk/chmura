@@ -53,26 +53,61 @@ def _odlozone_foldery(korzenie: list[str]) -> list[tuple[str, str]]:
     return wynik
 
 
+def _licz_folder(sciezka: str) -> tuple[int, int]:
+    """(plików, bajtów) — os.scandir: na Windows rozmiar przychodzi razem z listą plików (bez pytania o każdy
+    plik osobno), co przy dziesiątkach tysięcy plików na dysku sieciowym to sekundy zamiast minut."""
+    plikow = bajty = 0
+    stos = [sciezka]
+    while stos:
+        try:
+            with os.scandir(stos.pop()) as it:
+                for e in it:
+                    try:
+                        if e.is_dir(follow_symlinks=False):
+                            stos.append(e.path)
+                        elif e.is_file(follow_symlinks=False):
+                            bajty += e.stat(follow_symlinks=False).st_size
+                            plikow += 1
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+    return plikow, bajty
+
+
+_PAMIEC_ODLOZONYCH: dict = {}
+WAZNOSC_ODLOZONYCH = 120  # s — kosz liczony najwyżej co 2 minuty (zmiany programu kasują pamięć)
+
+
+def zmiana_odlozonych() -> None:
+    _PAMIEC_ODLOZONYCH.clear()
+
+
 def odlozone(korzenie: list[str]) -> dict:
     """Ile plików i bajtów czeka w folderach Odłożone (po kategoriach)."""
+    import time
+    klucz = tuple(korzenie)
+    p = _PAMIEC_ODLOZONYCH.get(klucz)
+    if p and time.time() - p[0] < WAZNOSC_ODLOZONYCH:
+        return p[1]
     kat: dict[str, dict] = {}
     for sciezka, nazwa in _odlozone_foldery(korzenie):
         d = kat.setdefault(nazwa, {"nazwa": nazwa, "plikow": 0, "bajty": 0, "foldery": []})
         d["foldery"].append(sciezka)
-        for gdzie, _, pliki in os.walk(sciezka):
-            for n in pliki:
-                try:
-                    d["bajty"] += os.path.getsize(os.path.join(gdzie, n))
-                    d["plikow"] += 1
-                except OSError:
-                    continue
+        n, b = _licz_folder(sciezka)
+        d["plikow"] += n
+        d["bajty"] += b
     lista = sorted(kat.values(), key=lambda d: -d["bajty"])
-    return {"kategorie": lista, "plikow": sum(d["plikow"] for d in lista), "bajty": sum(d["bajty"] for d in lista)}
+    wynik = {"kategorie": lista, "plikow": sum(d["plikow"] for d in lista), "bajty": sum(d["bajty"] for d in lista)}
+    _PAMIEC_ODLOZONYCH.clear()
+    _PAMIEC_ODLOZONYCH[klucz] = (time.time(), wynik)
+    return wynik
 
 
 def usun_odlozone(db: sqlite3.Connection, korzenie: list[str], kategorie_: list[str] | None = None,
                   postep=None, przerwij=None) -> dict:
     """Usuwa NA STAŁE pliki z <folder>/Odłożone/<kategoria> (tylko tam — nigdzie indziej)."""
+    zmiana_odlozonych()
     duplikaty.przygotuj(db)
     cele = [(s, n) for s, n in _odlozone_foldery(korzenie) if kategorie_ is None or n in kategorie_]
     wszystkie = sum(len(p) for s, _ in cele for _, _, p in os.walk(s))
@@ -165,6 +200,7 @@ def przenies_do_celu(db: sqlite3.Connection, zrodla: list[str], docelowy: str, p
 
 def usun_partie(db: sqlite3.Connection, partia: int, postep=None, przerwij=None) -> dict:
     """Usuwa NA STAŁE tylko pliki odłożone w jednej operacji (np. „od razu usuń na stałe” w Duplikatach)."""
+    zmiana_odlozonych()
     duplikaty.przygotuj(db)
     ops = db.execute("SELECT id, do_ FROM operacje WHERE partia=? AND cofnieta=0", (int(partia),)).fetchall()
     usuniete, bajty, bledy, foldery = 0, 0, [], set()

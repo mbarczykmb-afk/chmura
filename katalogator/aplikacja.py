@@ -869,6 +869,10 @@ class Stan:
               "Foldery przychodzące: " + "; ".join(self.projekt.get("przychodzace") or []),
               f"Harmonogram: {self.projekt.get('harmonogram') or 'wyłączony'}", ""]
         try:
+            wt = zapytania_w_toku()
+            w += ["=== Okno czeka na (dłużej niż 2 s) ==="] + (wt or ["nic — wszystkie zapytania szybkie"])
+            w += [f"Podsumowania: {'liczę' if self._licze_podsumowania.locked() else 'gotowe'} · "
+                  f"przeglądarka: {'skanuje' if self.przegladarka.stan.get('trwa') else 'spokój'}", ""]
             st = self.stan()
             w.append("=== Stan ===")
             for k in ("skan", "dup"):
@@ -1030,6 +1034,9 @@ def _handler(stan: Stan, token: str, zamknij):
             self._bezpiecznie(self._post)
 
         def _bezpiecznie(self, f):
+            klucz = threading.get_ident()
+            sciezka = urlparse(self.path).path
+            W_TOKU[klucz] = (self.command, sciezka, time.time())
             try:
                 f()
             except (ConnectionError, BrokenPipeError):
@@ -1041,6 +1048,10 @@ def _handler(stan: Stan, token: str, zamknij):
                                           f"— użyj „Zgłoś problem”."}, kod=HTTPStatus.INTERNAL_SERVER_ERROR)
                 except Exception:
                     pass
+            finally:
+                start = W_TOKU.pop(klucz, (0, 0, time.time()))[2]
+                if time.time() - start > 8 and not sciezka.startswith(("/plik", "/film", "/api/g/film")):
+                    LOG.info("Wolne zapytanie: %s %s — %.1f s", self.command, sciezka, time.time() - start)
 
         def _get(self):
             u = urlparse(self.path)
@@ -1467,6 +1478,28 @@ def _podobne_hurtem(db, tryb) -> list[int]:
             continue
         ids += [w["id"] for w in (g[1:] if tryb == "najlepsze" else g) if tryb == "najlepsze" or w.get("kopia")]
     return ids
+
+
+W_TOKU: dict[int, tuple] = {}  # wątek -> (metoda, ścieżka, start) — zapytania okna w toku (do raportu)
+
+
+def zapytania_w_toku(min_s: float = 2.0) -> list[str]:
+    """Zapytania okna trwające dłużej niż min_s — z miejscem w kodzie, w którym akurat są (raport diagnostyczny)."""
+    import sys
+    import traceback
+    ramki = sys._current_frames()
+    wynik = []
+    for watek, (metoda, sciezka, start) in list(W_TOKU.items()):
+        t = time.time() - start
+        if t < min_s or sciezka.startswith(("/plik", "/film", "/api/g/film")):
+            continue
+        gdzie = ""
+        if watek in ramki:
+            st = [f"{os.path.basename(f.filename)}:{f.lineno} {f.name}" for f in traceback.extract_stack(ramki[watek])
+                  if "katalogator" in f.filename.replace("\\", "/")]
+            gdzie = " ← ".join(reversed(st[-4:]))
+        wynik.append(f"{metoda} {sciezka}: {t:.0f} s · {gdzie}")
+    return wynik
 
 
 def _int(q: dict, klucz: str, domyslnie: int) -> int:

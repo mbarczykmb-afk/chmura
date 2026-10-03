@@ -73,7 +73,8 @@
   }, 400);
 
   // --- zapytania do programu trwające dłużej niż chwilę (lista duplikatów, dokumenty, mapa…) ---
-  const POMIJAJ = /\/api\/(stan|ping|pilot|przegladarka)(\?|$)/;  // ciągłe odpytywanie o stan — to nie „praca”
+  // ciągłe odpytywanie o stan i liczniki w tle (kosz) — to nie „praca”, na którą czekasz
+  const POMIJAJ = /\/api\/(stan|ping|pilot|przegladarka|odlozone)(\?|$)/;
   let trwa = 0, zegar = null;
   const staryFetch = window.fetch.bind(window);
   window.fetch = async (wejscie, opcje) => {

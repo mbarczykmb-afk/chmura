@@ -305,4 +305,9 @@ def test_przegladarka_czeka_na_katalogator(tmp_path):
     p._zapisz_ust(ostatni_skan=__import__("time").time())
     assert not p.teraz_odswiezyc()
     p.zglos_zmiany()                                                  # Katalogator przeniósł pliki
+    assert not p.teraz_odswiezyc()  # seria decyzji trwa — czekamy na 5 min ciszy, nie skanujemy po każdej
+    p._zmiany -= p.CISZA_PO_ZMIANACH
     assert p.teraz_odswiezyc() and not p.teraz_odswiezyc(zajety=lambda: True)
+    p._po_zmianach = __import__("time").time()                       # niedawno odświeżone po zmianach
+    p.zglos_zmiany(); p._zmiany -= p.CISZA_PO_ZMIANACH
+    assert not p.teraz_odswiezyc()                                    # nie częściej niż co 30 min
