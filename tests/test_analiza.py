@@ -161,3 +161,26 @@ def test_podobne_kopie_w_wielu_folderach_to_jedno_zdjecie(tmp_path):
     zostaja = [w for w in grupy[0] if w["id"] not in ids]
     assert sorted(analiza._rdzen_nazwy(w["sciezka"]) for w in zostaja) == ["img_1", "img_2"]
     assert len(aplikacja._podobne_hurtem(db, "najlepsze")) == 5
+
+
+def test_podobne_po_odlozeniu_bez_liczenia_od_nowa(tmp_path, monkeypatch):
+    import os
+    k = tmp_path / "dysk"
+    (k / "A").mkdir(parents=True)
+    for z in (1, 2):
+        a = _zdjecie(k / "A" / f"IMG_{z}1.jpg", ziarno=z)
+        a.filter(ImageFilter.GaussianBlur(1.5)).save(k / "A" / f"IMG_{z}2.jpg", quality=90)
+        a.filter(ImageFilter.GaussianBlur(2.5)).save(k / "A" / f"IMG_{z}3.jpg", quality=80)
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    duplikaty.przygotuj(db)
+    analiza.analizuj(db)
+    grupy = analiza.grupy_podobnych(db)
+    assert sorted(len(g) for g in grupy) == [3, 3]
+    duplikaty.odloz(db, [grupy[0][1]["id"], grupy[1][1]["id"], grupy[1][2]["id"]], "podobne")
+
+    def nie_licz(*_a, **_k):
+        raise AssertionError("liczone od nowa")
+    monkeypatch.setattr(analiza, "_grupy_podobnych", nie_licz)
+    po = analiza.grupy_podobnych(db)
+    assert [len(g) for g in po] == [2]  # druga grupa (zostało 1 zdjęcie) znika

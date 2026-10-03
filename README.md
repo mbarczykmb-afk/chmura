@@ -174,6 +174,11 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.24.2:** wspólny kosz w miejscu docelowym tylko dla źródeł z tego samego dysku (np. Z:\mbarczykmb → Z:\Uporządkowane)
+— z innych dysków (Y:, C:) odłożenie zostaje w ich „Odłożone”, bo przeniesienie między dyskami to kopiowanie przez
+sieć · licznik kosza z bazy (natychmiast), pełne liczenie po otwarciu okna · Podobne po odłożeniu bez liczenia od nowa
+· zapis decyzji czeka na swoją kolej zamiast „database is locked”.
+
 **1.24:** filmy z nieczytelnym nagłówkiem („Invalid argument”, stare 3GP/MP4) — data i GPS z ffmpeg (przy
 następnym skanie; filmy z datą „z pliku” czytane jednorazowo jeszcze raz) · Podobne: *▣ Jedna grupa na ekran*
 (←/→, Z, **Enter** — odłóż i następna, **S** — zostaw wszystkie; zapis w tle) · Przeglądarka doczytuje zdjęcia

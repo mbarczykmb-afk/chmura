@@ -194,6 +194,11 @@ function rysujKosz() {
     const d = document.createElement("div"); d.className = "info"; d.style.marginTop = "10px";
     d.append("Wszystko, co odkładasz, trafia do: ");
     const c = document.createElement("code"); c.textContent = o.docelowy; d.append(c);
+    if (o.inne_dyski && o.inne_dyski.length) {
+      d.append(document.createElement("br"),
+        `Z innych dysków (${o.inne_dyski.join(", ")}) kosz zostaje na miejscu — w ich folderze „Odłożone”: przeniesienie na inny dysk ` +
+        "to kopiowanie każdego pliku przez sieć, a te pliki i tak są do usunięcia.");
+    }
     if (o.poza_celem) {
       d.append(document.createElement("br"), `W folderach źródłowych leżą jeszcze stare „Odłożone” (${o.poza_celem} folderów). `);
       const b = document.createElement("button"); b.className = "maly"; b.textContent = "📦 Przenieś je tam";
@@ -214,7 +219,11 @@ function rysujKosz() {
   bt.disabled = !wyb.length || zajety();
   bt.textContent = wyb.length ? `🗑 Usuń na stałe ${plikow(wyb.reduce((a, k) => a + k.plikow, 0))} (${rozmiar(wyb.reduce((a, k) => a + k.bajty, 0))})…` : "🗑 Opróżnij zaznaczone…";
 }
-$("kosz-btn").onclick = async () => { $("okno-kosz").hidden = false; rysujKosz(); await odswiezKosz(); rysujKosz(); };
+$("kosz-btn").onclick = async () => {  // okno kosza: najpierw szybki licznik, potem dokładnie z dysku
+  $("okno-kosz").hidden = false; rysujKosz();
+  try { koszStan = await api("/api/odlozone?pelne=1"); } catch (e) { /* zostaje szybki */ }
+  rysujKosz();
+};
 $("kosz-zamknij").onclick = () => { $("okno-kosz").hidden = true; };
 $("okno-kosz").onclick = e => { if (e.target.id === "okno-kosz") $("okno-kosz").hidden = true; };
 $("kosz-oproznij").onclick = async () => {

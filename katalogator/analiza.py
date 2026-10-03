@@ -420,7 +420,9 @@ def grupy_podobnych(db: sqlite3.Connection, prog: int = PROG_PODOBNE, postep=Non
     with _LICZE_PODOBNE:
         if klucz in _PAMIEC_PODOBNYCH:
             return _PAMIEC_PODOBNYCH[klucz]
-        wynik = _z_dysku(db, klucz)
+        wynik = _po_usunieciu(db, klucz)
+        if wynik is None:
+            wynik = _z_dysku(db, klucz)
         if wynik is None:
             wynik = _grupy_podobnych(db, prog, postep)
             _na_dysk(db, klucz, wynik)
@@ -430,6 +432,40 @@ def grupy_podobnych(db: sqlite3.Connection, prog: int = PROG_PODOBNE, postep=Non
 
 
 _LICZE_PODOBNE = threading.Lock()
+
+
+def _po_usunieciu(db: sqlite3.Connection, klucz: tuple):
+    """Zdjęcia tylko ubyły (odłożone, usunięte) i analiza bez zmian — poprzednie grupy bez nich, zamiast liczyć
+    wszystko od nowa (przy 90 tys. zdjęć to dziesiątki sekund po każdym „Odłóż”)."""
+    if not _PAMIEC_PODOBNYCH:
+        return None
+    (stary, wynik), = _PAMIEC_PODOBNYCH.items()
+    if stary[:4] != klucz[:4] or klucz[4] > stary[4] or (klucz[5] or 0) > (stary[5] or 0):
+        # inna baza / próg / analiza albo przybyło zdjęć — liczymy od nowa
+        return None
+    ids = {w["id"] for g in wynik for w in g}
+    jest = set()
+    lista = list(ids)
+    for i in range(0, len(lista), 900):
+        cz = lista[i:i + 900]
+        jest.update(r[0] for r in db.execute(
+            f"SELECT rowid FROM pliki WHERE rodzaj='zdjecie' AND rowid IN ({','.join('?' * len(cz))})", cz))
+    if len(jest) == len(ids):
+        return wynik  # ubyły zdjęcia spoza grup — grupy te same
+    nowe = []
+    for g in wynik:
+        g2 = [w for w in g if w["id"] in jest]
+        if len(g2) < 2 or len({w.get("pelny") or f"{w['rozmiar']}:{w['dhash']}" for w in g2}) < 2:
+            continue
+        widziane = set()
+        g3 = []
+        for w in g2:  # pierwszy z każdego „tego samego zdjęcia” nie jest kopią
+            k = w.get("wezel", w["id"])
+            g3.append({**w, "kopia": k in widziane})
+            widziane.add(k)
+        nowe.append(g3)
+    nowe.sort(key=lambda g: -len(g))
+    return nowe
 WERSJA_PODOBNYCH = 2  # 1.22: kopie z wielu folderów = jedno zdjęcie
 
 

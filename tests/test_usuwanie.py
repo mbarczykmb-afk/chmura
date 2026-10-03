@@ -209,6 +209,9 @@ def test_wspolny_kosz_w_miejscu_docelowym(tmp_path):
     w = duplikaty.odloz(db, [ids["Wakacje/p1.jpg".replace("/", __import__("os").sep)]], "duplikat")
     assert w["przeniesione"] == 1
     assert (cel / "Odłożone" / "Duplikaty" / etyk / "Wakacje" / "p1.jpg").exists()
+    szybko = sprzatanie.odlozone_z_bazy(db)  # licznik kosza bez chodzenia po dysku
+    assert szybko["plikow"] == 2 and {k["nazwa"] for k in szybko["kategorie"]} == {"Podobne", "Duplikaty"}
+    assert szybko["bajty"] == sprzatanie.odlozone([str(zr), str(cel)])["bajty"]
     # przeniesienie starego kosza
     m = sprzatanie.przenies_do_celu(db, [str(zr)], str(cel))
     assert m["przeniesione"] == 1 and not (zr / "Odłożone").exists()
@@ -231,3 +234,31 @@ def test_przenies_plik_miedzy_dyskami(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "rename", rename)
     duplikaty.przenies_plik(str(z), str(tmp_path / "x" / "b.jpg"))
     assert not z.exists() and (tmp_path / "x" / "b.jpg").read_bytes() == b"abc" * 1000
+
+
+def test_decyzja_w_trakcie_odkladania(tmp_path):
+    """Kliknięcie kategorii, gdy równolegle zapisuje odkładanie: decyzja czeka na swoją kolej zamiast błędu."""
+    import threading
+    import time
+    from katalogator import duplikaty, kategorie, skaner
+    k = tmp_path / "dysk"
+    k.mkdir()
+    for i in range(3):
+        (k / f"p{i}.jpg").write_bytes(b"x" * (100 + i))
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    duplikaty.przygotuj(db)
+    kategorie.przygotuj(db)
+    __import__("katalogator.analiza").analiza.przygotuj(db)
+    db.commit()
+    import sqlite3
+    inne = sqlite3.connect(str(tmp_path / "k.db"), check_same_thread=False, isolation_level=None)
+    inne.execute("BEGIN IMMEDIATE")  # „odkładanie” trzyma zapis przez chwilę
+    inne.execute("UPDATE pliki SET blad=NULL")
+
+    def puść():
+        time.sleep(0.5)
+        inne.commit()
+    threading.Thread(target=puść).start()
+    w = kategorie.zapisz(db, {1: "smieci"})
+    assert w["zapisane"] == 1

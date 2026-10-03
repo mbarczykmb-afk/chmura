@@ -428,8 +428,28 @@ def kosz_docelowy(db: sqlite3.Connection) -> str | None:
     return r[0] if r and r[0] and os.path.isdir(r[0]) else None
 
 
+_TEN_SAM_DYSK: dict = {}
+
+
+def _kosz_dla(korzen: str, docelowy: str | None) -> str | None:
+    """Wspólny kosz tylko na tym samym dysku co źródło: tam odłożenie to błyskawiczne przeniesienie. Z innego dysku
+    (np. Y: → Z:, nawet na tym samym My Cloud) byłoby to kopiowanie każdego pliku przez sieć — wtedy kosz zostaje
+    w folderze źródłowym (<źródło>/Odłożone)."""
+    if not docelowy:
+        return None
+    k = (korzen, docelowy)
+    if k not in _TEN_SAM_DYSK:
+        from .wykonawca import ten_sam_wolumin
+        try:
+            _TEN_SAM_DYSK[k] = ten_sam_wolumin(korzen, docelowy)
+        except OSError:
+            _TEN_SAM_DYSK[k] = False
+    return docelowy if _TEN_SAM_DYSK[k] else None
+
+
 def _cel_przeniesienia(korzen: str, wzgledna: str, typ: str = "duplikat", docelowy: str | None = None) -> str:
     """<korzeń>/Odłożone/<typ>/<ścieżka> — albo, przy wspólnym koszu, <cel>/Odłożone/<typ>/<źródło>/<ścieżka>."""
+    docelowy = _kosz_dla(korzen, docelowy)
     if docelowy:
         zrodlo = "" if os.path.normcase(os.path.normpath(korzen)) == os.path.normcase(os.path.normpath(docelowy)) \
             else etykieta_korzenia(korzen)  # pliki z samej biblioteki — bez podfolderu źródła

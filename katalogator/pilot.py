@@ -104,7 +104,7 @@ class Pilot:
                 k["opis"] = (f"Zostało {zostalo} plików · zrobione: {p.get('zrobione', 0)}" +
                              (f" · błędy: {p['bledy']}" if p.get("bledy") else ""))
         elif klucz == "usuwanie":
-            o = sprzatanie.odlozone([z["sciezka"] for z in d.get("zrodla") or []])
+            o = self.stan.z_db(sprzatanie.odlozone_z_bazy)  # bez chodzenia po dysku (pilot odpytuje co kilka s)
             k["dostepny"] = bool(o["plikow"])
             k["opis"] = (f"W „Odłożone” czeka {o['plikow']} plików ({_r(o['bajty'])})" if o["plikow"]
                          else "Nic nie czeka w „Odłożone” — odkładasz na komputerze (Duplikaty, Śmieci…)")

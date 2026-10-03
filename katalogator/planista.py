@@ -701,6 +701,10 @@ def zastosuj_kategorie(db: sqlite3.Connection) -> dict:
     if not istnieje(db):
         return {"zmienione": 0}
     przygotuj(db)
+    if not db.in_transaction:
+        # od razu blokada zapisu (czeka w kolejce do 30 s): transakcja zaczęta odczytem nie może potem zapisać,
+        # jeśli w międzyczasie zapisał ktoś inny (np. odkładanie) — wtedy SQLite od razu zgłaszał „database is locked”
+        db.execute("BEGIN IMMEDIATE")
     dok = analiza.dokumenty_potwierdzone(db)
     dec = kategorie.decyzje(db)
     zmiany_kat: dict[int, str | None] = {}

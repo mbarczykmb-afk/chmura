@@ -83,6 +83,30 @@ def zmiana_odlozonych() -> None:
     _PAMIEC_ODLOZONYCH.clear()
 
 
+def odlozone_z_bazy(db: sqlite3.Connection) -> dict:
+    """Szybko (bez chodzenia po dysku): co leży w koszu wg zapisu operacji odłożenia — licznik 🗑, pilot.
+    Pełne liczenie z dysku (odlozone) — dopiero po otwarciu okna kosza."""
+    duplikaty.przygotuj(db)
+    kat: dict[str, dict] = {}
+    for do_, rozmiar in db.execute("SELECT do_, json_extract(wiersz, '$.rozmiar') FROM operacje WHERE cofnieta = 0"):
+        cz = do_.replace("\\", "/").split("/")
+        if duplikaty.FOLDER_ODLOZONE not in cz:
+            continue
+        i = cz.index(duplikaty.FOLDER_ODLOZONE)
+        if i + 1 >= len(cz) - 1:
+            continue
+        nazwa = cz[i + 1]
+        folder = os.sep.join(cz[:i + 2]) if os.sep != "/" else "/".join(cz[:i + 2])
+        d = kat.setdefault(nazwa, {"nazwa": nazwa, "plikow": 0, "bajty": 0, "foldery": []})
+        if folder not in d["foldery"]:
+            d["foldery"].append(folder)
+        d["plikow"] += 1
+        d["bajty"] += int(rozmiar or 0)
+    lista = sorted(kat.values(), key=lambda d: -d["bajty"])
+    return {"kategorie": lista, "plikow": sum(d["plikow"] for d in lista), "bajty": sum(d["bajty"] for d in lista),
+            "szybko": True}
+
+
 def odlozone(korzenie: list[str]) -> dict:
     """Ile plików i bajtów czeka w folderach Odłożone (po kategoriach)."""
     import time
@@ -156,6 +180,8 @@ def przenies_do_celu(db: sqlite3.Connection, zrodla: list[str], docelowy: str, p
     for k in zrodla:
         if os.path.normcase(os.path.normpath(k)) == os.path.normcase(os.path.normpath(docelowy)):
             continue
+        if not duplikaty._kosz_dla(k, docelowy):
+            continue  # inny dysk — przenoszenie to kopiowanie przez sieć; kosz zostaje w źródle
         baza = os.path.join(k, duplikaty.FOLDER_ODLOZONE)
         if not os.path.isdir(baza):
             continue

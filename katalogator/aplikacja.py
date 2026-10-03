@@ -1152,12 +1152,17 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/smieci":
                 return self._wyslij({"pliki": stan.z_db(sprzatanie.lista_smieci)})
             if u.path == "/api/odlozone":
-                w = sprzatanie.odlozone(stan.korzenie_kosza())
+                # licznik i pilot: z bazy (natychmiast); okno kosza: ?pelne=1 — policzone na dysku
+                w = sprzatanie.odlozone(stan.korzenie_kosza()) if q.get("pelne") == ["1"] \
+                    else stan.z_db(sprzatanie.odlozone_z_bazy)
                 cel = stan.kosz_w_celu()
-                if cel:  # kosz ma być jeden — w miejscu docelowym; ile jeszcze leży w źródłach
+                if cel:  # kosz w miejscu docelowym — z tego samego dysku; ile jeszcze leży w źródłach na tym dysku
                     w["docelowy"] = os.path.join(cel, duplikaty.FOLDER_ODLOZONE)
-                    w["poza_celem"] = sum(1 for k in w["kategorie"] for f in k["foldery"]
-                                          if not dyski.zawiera(cel, f))
+                    zrodla_kosza = {os.path.dirname(os.path.dirname(f)) for k in w["kategorie"] for f in k["foldery"]
+                                    if not dyski.zawiera(cel, f)}
+                    w["poza_celem"] = sum(1 for k in w["kategorie"] for f in k["foldery"] if not dyski.zawiera(cel, f)
+                                          and duplikaty._kosz_dla(os.path.dirname(os.path.dirname(f)), cel))
+                    w["inne_dyski"] = sorted(z for z in zrodla_kosza if not duplikaty._kosz_dla(z, cel))
                 return self._wyslij(w)
             if u.path == "/api/nieostre":
                 pliki = stan.z_db(analiza.najmniej_ostre, min(_int(q, "ile", 120), 500))
