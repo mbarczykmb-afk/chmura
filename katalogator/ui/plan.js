@@ -47,7 +47,10 @@ function rysujPlanLewa() {
   for (const n of ["plan", "wykonanie"]) {
     const z = (stan.zad || {})[n] || {};
     if (plan["trwa_" + n] && !z.trwa && zakladka === "drzewo") wczytajDrzewo();
-    if (plan["trwa_" + n] && !z.trwa && n === "plan") { plan.folder = ""; plan.wczytany = false; }
+    if (plan["trwa_" + n] && !z.trwa && n === "plan") {
+      plan.folder = ""; plan.wczytany = false;
+      if (zakladka === "drzewo") wczytajDrzewo();  // nowe drzewo od razu na ekranie
+    }
     plan["trwa_" + n] = !!z.trwa;
   }
 }
@@ -59,7 +62,14 @@ $("generuj").onclick = async () => {
   try { stan = await api("/api/plan/generuj", {}); rysuj(); } catch (e) { toast(e.message); }
 };
 $("k3").onclick = () => { if (stan.plan) pokazZakladke("drzewo"); };
-$("k4").onclick = () => { if (stan.plan) otworzWykonanie(); };
+$("k4").onclick = async () => {  // przed porządkowaniem — drzewo musi znać odłożone / usunięte pliki
+  if (!stan.plan) return;
+  try {
+    const a = await api("/api/plan/aktualnosc");
+    if (a.nieaktualny) { pokazZakladke("drzewo"); return; }
+  } catch (e) { /* bez sprawdzenia */ }
+  otworzWykonanie();
+};
 $("cofnij-wyk").onclick = async () => {
   if (!confirm("Cofnąć ostatnie porządkowanie?\n\nKopie zostaną usunięte, a przeniesione pliki wrócą na swoje miejsca.")) return;
   try { stan = await api("/api/wykonanie/cofnij", {}); rysuj(); } catch (e) { toast(e.message); }
@@ -105,7 +115,34 @@ $("wyk-start").onclick = async () => {
 $("plan-wykonaj").onclick = otworzWykonanie;
 
 // ---------- edytor: drzewo folderów ----------
-przyPokazaniu.drzewo = () => { if (!plan.wczytany) wczytajDrzewo(); };
+przyPokazaniu.drzewo = async () => {
+  if (!plan.wczytany) wczytajDrzewo();
+  await sprawdzAktualnosc();
+};
+// Po odkładaniu / usuwaniu (duplikaty, podobne…) albo nowym skanie drzewo pamięta stary stan — tworzymy je od nowa:
+// samo, gdy nie ma Twoich ręcznych poprawek; inaczej pytamy (utworzenie od nowa by je skasowało).
+async function sprawdzAktualnosc() {
+  const b = $("plan-nieaktualny");
+  let a;
+  try { a = await api("/api/plan/aktualnosc"); } catch (e) { return; }
+  b.hidden = !a.nieaktualny || zajety();
+  if (!a.nieaktualny || zajety()) return;
+  if (!a.reczne && !a.wykonane) {
+    b.hidden = true;
+    toast(`🌳 Tworzę drzewo od nowa po Twoich zmianach (${a.powod}).`);
+    try { stan = await api("/api/plan/generuj", {}); rysuj(); } catch (e) { toast(e.message); }
+    return;
+  }
+  b.replaceChildren(`⚠ Drzewo jest starsze niż Twoje zmiany (${a.powod}). `);
+  const p = document.createElement("button"); p.className = "maly"; p.textContent = "Utwórz drzewo od nowa";
+  p.onclick = async () => {
+    if (!confirm(`Utworzyć drzewo od nowa?\n\n` + (a.reczne ? `Przepadnie ${a.reczne} Twoich ręcznych poprawek w drzewie ` +
+        "(zmiany nazw, przeniesienia, daty, miejsca).\n" : "") + (a.wykonane ? "Wyniki poprzedniego porządkowania znikną z listy (pliki zostają).\n" : ""))) return;
+    b.hidden = true;
+    try { stan = await api("/api/plan/generuj", {}); rysuj(); } catch (e) { toast(e.message); }
+  };
+  b.append(p);
+}
 
 async function wczytajDrzewo() {
   if (!stan.plan) {

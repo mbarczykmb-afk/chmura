@@ -385,6 +385,12 @@ Kopiowane **z zachowaniem dotychczasowych nazw folderów** (np. `Praca/…`).
     `/api/stan` czeka na podsumowania najwyżej 0,25 s; miniatury na dysku (`<dane>/miniatury`, do 1,5 GB, także
     Biblioteka) i przygotowywane w tle (3 wątki) dla list: duplikaty, podobne (+ następna strona), dokumenty, nie z
     aparatu, nieostre. Pomiar 200 tys.: stan 4,06→0,26 s, duplikaty 4,21→0,38 s, 60 miniatur 2,94→0,11 s.
+45. **1.20** ✅: `duplikaty.zwin_kopie` (Dokumenty, Nie z aparatu — kopie = jedna karta, `kopie: [id]`), w Podobnych
+    `kopia: true`; ułożone chowane przed kolejnymi (`dokNastepne`, `inneNastepne`); `planista.opisz_foldery_dokumentow`
+    (dopisek folderów źródłowych, ≤110 znaków + „i N innych”, unikalne nazwy przy łączeniu), `_bez_opisu` w
+    `zastosuj_kategorie`; `planista.aktualnosc` (operacje / skan po utworzeniu, ręczne poprawki, wykonane) →
+    `/api/plan/aktualnosc`, samoczynne utworzenie od nowa przy wejściu w Drzewo i przed Porządkowaniem; mini-mapa w
+    podglądzie galerii.
 
 Dane miejscowości: © GeoNames (https://www.geonames.org), licencja CC BY 4.0 —
 plik `katalogator/dane/miejsca.tsv.gz` budowany skryptem `narzedzia/zbuduj_miejsca.py`.

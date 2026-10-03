@@ -126,57 +126,81 @@ const dokSugestia = d => d.zaznacz ? "dokument" : "zdjecie";
 przyPokazaniu.dok = async () => {
   if (an.dokWczytane) return;
   const r = await api("/api/dokumenty");
-  // najpierw jeszcze nieprzejrzane, potem już zapisane decyzje
-  an.dok = r.kandydaci.filter(k => !dokZapisana(k)).concat(r.kandydaci.filter(k => dokZapisana(k)));
+  // już ułożone (z decyzją) są schowane — „↺ pokaż przejrzane” je przywraca
+  const zrob = r.kandydaci.filter(k => dokZapisana(k));
+  an.dok = an.dokPokazUkryte ? r.kandydaci.filter(k => !dokZapisana(k)).concat(zrob) : r.kandydaci.filter(k => !dokZapisana(k));
+  an.dokUkryte = an.dokPokazUkryte ? 0 : zrob.length; an.dokPokazUkryte = false;
   an.dokIle = DOK_NA_STRONE;
   an.dokWczytane = true; rysujDokumenty();
 };
 
 const DOK_NA_STRONE = 100;
 const dokWidoczne = () => an.dok.slice(0, an.dokIle || DOK_NA_STRONE);
+// ułożone znikają przed wczytaniem kolejnych — na ekranie zostają tylko te do zdecydowania
+function dokNastepne() {
+  const zrob = an.dok.filter(dokZapisana).length;
+  an.dokUkryte = (an.dokUkryte || 0) + zrob;
+  an.dok = an.dok.filter(d => !dokZapisana(d)); an.dokIle = DOK_NA_STRONE;
+  rysujDokumenty(); $("dok-siatka").scrollTop = 0; $("dok-siatka").scrollIntoView({block: "nearest"});
+}
+const kopieTxt = d => d.kopie && d.kopie.length ? ` · +${plikow(d.kopie.length, ["kopia", "kopie", "kopii"])}` : "";
+function przyciskUkryte(n, akcja) {
+  const b = document.createElement("button"); b.className = "maly"; b.style.marginLeft = "8px";
+  b.textContent = `↺ pokaż ${n} przejrzanych`; b.onclick = akcja; return b;
+}
 function dokStopka() {
-  const zrobione = an.dok.filter(dokZapisana).length, bez = dokWidoczne().filter(d => !dokZapisana(d));
-  $("dok-stopka").innerHTML = !an.dok.length ? "" :
-    `<b>Przejrzane: ${zrobione} z ${an.dok.length}</b>` +
-    (zrobione === an.dok.length ? " · ✓ wszystko zdecydowane" : ` · zostało ${an.dok.length - zrobione}`) +
+  const zrobione = an.dok.filter(dokZapisana).length + (an.dokUkryte || 0), razem = an.dok.length + (an.dokUkryte || 0);
+  const bez = dokWidoczne().filter(d => !dokZapisana(d));
+  $("dok-stopka").innerHTML = !razem ? "" :
+    `<b>Przejrzane: ${zrobione} z ${razem}</b>` +
+    (zrobione === razem ? " · ✓ wszystko zdecydowane" : ` · zostało ${razem - zrobione}`) +
     " · decyzja zapisuje się od razu po kliknięciu";
+  if (an.dokUkryte) $("dok-stopka").append(przyciskUkryte(an.dokUkryte, () => { an.dokPokazUkryte = true; an.dokWczytane = false; przyPokazaniu.dok(); }));
   $("dok-zapisz").disabled = !bez.length;
   $("dok-zapisz").textContent = bez.length ? `Zatwierdź propozycje dla pozostałych (${bez.length})` : "Wszystko zdecydowane ✓";
 }
 function rysujDokumenty() {
   const s = $("dok-siatka"); s.replaceChildren(); s.classList.add("duze");
   if (!stan.analiza) s.innerHTML = BRAK_ANALIZY();
-  else if (!an.dok.length) s.innerHTML = '<div class="pusto">Nie znaleziono zdjęć przypominających dokumenty. 🎉</div>';
+  else if (!an.dok.length) s.innerHTML = an.dokUkryte ? '<div class="pusto">✓ Wszystkie dokumenty przejrzane.</div>'
+    : '<div class="pusto">Nie znaleziono zdjęć przypominających dokumenty. 🎉</div>';
   for (const d of dokWidoczne()) {
-    const k = karta(d.id, "zdjecie", d.wzgledna, `${(d.data || "").slice(0, 10)} · pewność ${Math.round(d.ocena * 100)}%`,
+    const k = karta(d.id, "zdjecie", d.wzgledna, `${(d.data || "").slice(0, 10)} · pewność ${Math.round(d.ocena * 100)}%` + kopieTxt(d),
                     false, () => undefined, true);
     k.querySelector("input").remove(); k.onclick = null; k.style.cursor = "default";
-    k.append(przyciskiKategorii([d.id], dokZapisana(d), v => { d.kat = v; d.decyzja = null; dokStopka(); }, dokSugestia(d)));
+    k.append(przyciskiKategorii([d.id, ...(d.kopie || [])], dokZapisana(d), v => { d.kat = v; d.decyzja = null; dokStopka(); dokDalej(); }, dokSugestia(d)));
     s.append(k);
   }
-  const reszta = an.dok.length - dokWidoczne().length;
-  if (reszta > 0) {
-    const b = document.createElement("button"); b.className = "wiecej"; b.style.gridColumn = "1/-1";
-    b.textContent = `Pokaż kolejne ${Math.min(DOK_NA_STRONE, reszta)} (zostało ${reszta})`;
-    b.onclick = () => { an.dokIle = (an.dokIle || DOK_NA_STRONE) + DOK_NA_STRONE; rysujDokumenty(); };
-    s.append(b);
-  }
+  dokDalej();
   dokStopka();
+}
+// „Schowaj przejrzane i pokaż kolejne” — odświeżany przy każdej decyzji (bez przerysowania kart)
+function dokDalej() {
+  const s = $("dok-siatka"); s.querySelectorAll(":scope > .wiecej").forEach(b => b.remove());
+  const zrobione = dokWidoczne().filter(dokZapisana).length;
+  const reszta = an.dok.length - dokWidoczne().length;
+  if (!(reszta > 0 || zrobione)) return;
+  const b = document.createElement("button"); b.className = "wiecej"; b.style.gridColumn = "1/-1";
+  const dalej = an.dok.filter(d => !dokZapisana(d)).length - dokWidoczne().filter(d => !dokZapisana(d)).length;
+  b.textContent = zrobione ? `Schowaj przejrzane (${zrobione}) i pokaż kolejne` + (dalej > 0 ? ` (zostało ${dalej})` : "")
+                           : `Pokaż kolejne ${Math.min(DOK_NA_STRONE, reszta)} (zostało ${reszta})`;
+  b.onclick = () => zrobione ? dokNastepne() : (an.dokIle = (an.dokIle || DOK_NA_STRONE) + DOK_NA_STRONE, rysujDokumenty());
+  s.append(b);
 }
 // zbiorczo — tylko zdjęcia jeszcze bez decyzji (wyświetlone); zapis od razu, z „Cofnij”
 async function dokZbiorczo(kat) {
   const bez = dokWidoczne().filter(d => !dokZapisana(d));
   if (!bez.length) { toast("Wszystkie wyświetlone zdjęcia mają już decyzję."); return; }
   const wybor = {}, bylo = {};
-  for (const d of bez) { wybor[d.id] = kat || dokSugestia(d); bylo[d.id] = ""; }
+  for (const d of bez) for (const id of [d.id, ...(d.kopie || [])]) { wybor[id] = kat || dokSugestia(d); bylo[id] = ""; }
   try {
     const w = await api("/api/nie-z-aparatu/zapisz", {wybor});
     const n = Object.values(wybor).filter(k => k === "dokument").length;
-    toast(`✓ Zapisano ${plikow(w.zapisane, ["decyzję", "decyzje", "decyzji"])}: dokumenty ${n}, zdjęcia ${bez.length - n}.` +
+    toast(`✓ Zapisano ${plikow(w.zapisane, ["decyzję", "decyzje", "decyzji"])}: dokumenty ${n}, zdjęcia ${Object.keys(wybor).length - n}.` +
           (w.plan && w.plan.zmienione ? ` Przełożono w drzewie: ${plikow(w.plan.zmienione)}.` : ""), () => cofnijZapis(bylo));
     if (typeof inne !== "undefined") inne.wczytane = false;
     for (const d of bez) { d.kat = wybor[d.id]; d.decyzja = null; }
-    plan.wczytany = false; rysujDokumenty();
+    plan.wczytany = false; dokNastepne();  // zatwierdzone znikają — od razu następne do przejrzenia
     stan = await api("/api/stan"); rysuj();
   } catch (e) { toast(e.message); }
 }
@@ -249,7 +273,8 @@ function rysujPodobne() {
         const em = document.createElement("em"); em.textContent = cz.length ? cz.join("\\") + "\\" : "";
         sc.append("\u200E", em, nazwa);
         const z = document.createElement("span"); z.className = "znak";
-        z.textContent = (i === 0 ? "★ " : "") + (zost ? "zostaje" : "odłożę");
+        z.textContent = (i === 0 ? "★ " : "") + (zost ? "zostaje" : "odłożę") + (w.kopia ? " · = identyczna kopia" : "");
+        if (w.kopia) z.title = "Ten sam plik co inne zdjęcie w tej grupie (bajt w bajt) — spokojnie do odłożenia";
         const gora = document.createElement("div"); gora.className = "gora"; gora.append(c, z);
         const op = document.createElement("span"); op.className = "zn2"; op.textContent = opisZdjecia(w);
         r.append(gora, img, sc, op, przyciskiKategorii([w.id], w.kat, v => { w.kat = v; }),
@@ -386,51 +411,68 @@ const inne = {lista: [], wybor: new Map(), ile: INNE_NA_STRONE, wczytane: false}
 przyPokazaniu.inne = async () => {
   if (inne.wczytane) return;
   const r = await api("/api/nie-z-aparatu");
-  inne.lista = r.pliki; inne.wybor = new Map(r.pliki.filter(p => p.decyzja).map(p => [p.id, p.decyzja]));
+  // już zdecydowane są schowane — „↺ pokaż przejrzane” je przywraca
+  inne.lista = inne.pokazUkryte ? r.pliki : r.pliki.filter(p => !p.decyzja);
+  inne.ukryte = inne.pokazUkryte ? 0 : r.pliki.length - inne.lista.length; inne.pokazUkryte = false;
+  inne.wybor = new Map(inne.lista.filter(p => p.decyzja).map(p => [p.id, p.decyzja]));
   inne.ile = INNE_NA_STRONE; inne.wczytane = true; rysujInne();
 };
 const inneWidoczne = () => inne.lista.slice(0, inne.ile);
+function inneNastepne() {
+  const zrob = inne.lista.filter(p => inne.wybor.has(p.id)).length;
+  inne.ukryte = (inne.ukryte || 0) + zrob;
+  inne.lista = inne.lista.filter(p => !inne.wybor.has(p.id)); inne.ile = INNE_NA_STRONE;
+  rysujInne(); $("inne-siatka").scrollIntoView({block: "nearest"});
+}
 function inneStopka() {
-  const n = inne.lista.filter(p => inne.wybor.has(p.id)).length;
-  $("inne-stopka").innerHTML = !inne.lista.length ? "" :
-    `<b>Przejrzane: ${n} z ${inne.lista.length}</b>` + (n === inne.lista.length ? " · ✓ wszystko zdecydowane" : ` · zostało ${inne.lista.length - n}`) +
+  const n = inne.lista.filter(p => inne.wybor.has(p.id)).length + (inne.ukryte || 0), razem = inne.lista.length + (inne.ukryte || 0);
+  $("inne-stopka").innerHTML = !razem ? "" :
+    `<b>Przejrzane: ${n} z ${razem}</b>` + (n === razem ? " · ✓ wszystko zdecydowane" : ` · zostało ${razem - n}`) +
     " · decyzja zapisuje się od razu; bez decyzji zostają w drzewie jako zdjęcia „do sprawdzenia”";
+  if (inne.ukryte) $("inne-stopka").append(przyciskUkryte(inne.ukryte, () => { inne.pokazUkryte = true; inne.wczytane = false; przyPokazaniu.inne(); }));
 }
 function kartaInne(p) {
   const k = karta(p.id, "zdjecie", p.wzgledna, (p.data || "").slice(0, 10) + (p.szer ? ` · ${p.szer}×${p.wys}` : "") +
-                  ` · ${rozmiar(p.rozmiar)}`, false, () => undefined, true);
+                  ` · ${rozmiar(p.rozmiar)}` + kopieTxt(p), false, () => undefined, true);
   k.querySelector("input").remove(); k.onclick = null; k.style.cursor = "default";
   const pw = document.createElement("div"); pw.className = "m powod"; pw.textContent = "❔ " + p.powod;
   k.querySelector(".op").append(pw);
-  k.append(przyciskiKategorii([p.id], inne.wybor.get(p.id), kat => {
-    kat ? inne.wybor.set(p.id, kat) : inne.wybor.delete(p.id); p.decyzja = kat || null; inneStopka();
+  k.append(przyciskiKategorii([p.id, ...(p.kopie || [])], inne.wybor.get(p.id), kat => {
+    kat ? inne.wybor.set(p.id, kat) : inne.wybor.delete(p.id); p.decyzja = kat || null; inneStopka(); inneDalej();
   }));
   return k;
 }
 function rysujInne() {
   const s = $("inne-siatka"); s.replaceChildren();
-  if (!inne.lista.length) s.innerHTML = '<div class="pusto">Nie ma podejrzanych obrazów — wszystko wygląda na zdjęcia z aparatu. 🎉</div>';
+  if (!inne.lista.length) s.innerHTML = inne.ukryte ? '<div class="pusto">✓ Wszystko przejrzane.</div>'
+    : '<div class="pusto">Nie ma podejrzanych obrazów — wszystko wygląda na zdjęcia z aparatu. 🎉</div>';
   for (const p of inneWidoczne()) s.append(kartaInne(p));
-  const reszta = inne.lista.length - inneWidoczne().length;
-  if (reszta > 0) {
-    const b = document.createElement("button"); b.className = "wiecej"; b.style.gridColumn = "1/-1";
-    b.textContent = `Pokaż kolejne ${Math.min(INNE_NA_STRONE, reszta)} (zostało ${reszta})`;
-    b.onclick = () => { inne.ile += INNE_NA_STRONE; rysujInne(); };
-    s.append(b);
-  }
+  inneDalej();
   inneStopka();
+}
+function inneDalej() {
+  const s = $("inne-siatka"); s.querySelectorAll(":scope > .wiecej").forEach(b => b.remove());
+  const zrobione = inneWidoczne().filter(p => inne.wybor.has(p.id)).length;
+  const reszta = inne.lista.length - inneWidoczne().length;
+  if (!(reszta > 0 || zrobione)) return;
+  const b = document.createElement("button"); b.className = "wiecej"; b.style.gridColumn = "1/-1";
+  const dalej = inne.lista.filter(p => !inne.wybor.has(p.id)).length - inneWidoczne().filter(p => !inne.wybor.has(p.id)).length;
+  b.textContent = zrobione ? `Schowaj przejrzane (${zrobione}) i pokaż kolejne` + (dalej > 0 ? ` (zostało ${dalej})` : "")
+                           : `Pokaż kolejne ${Math.min(INNE_NA_STRONE, reszta)} (zostało ${reszta})`;
+  b.onclick = () => zrobione ? inneNastepne() : (inne.ile += INNE_NA_STRONE, rysujInne());
+  s.append(b);
 }
 async function inneZbiorczo(kat) {
   const bez = inneWidoczne().filter(p => !inne.wybor.has(p.id));
   if (!bez.length) { toast("Wszystkie wyświetlone obrazy mają już decyzję."); return; }
   const wybor = {}, bylo = {};
-  for (const p of bez) { wybor[p.id] = kat; bylo[p.id] = ""; }
+  for (const p of bez) for (const id of [p.id, ...(p.kopie || [])]) { wybor[id] = kat; bylo[id] = ""; }
   try {
     const w = await api("/api/nie-z-aparatu/zapisz", {wybor});
     toast(`✓ Zapisano ${plikow(w.zapisane, ["decyzję", "decyzje", "decyzji"])}: ${KAT_NAZWY[kat]}.` +
           (w.plan && w.plan.zmienione ? ` Przełożono w drzewie: ${plikow(w.plan.zmienione)}.` : ""), () => cofnijZapis(bylo));
     for (const p of bez) { inne.wybor.set(p.id, kat); p.decyzja = kat; }
-    an.dokWczytane = false; plan.wczytany = false; rysujInne();
+    an.dokWczytane = false; plan.wczytany = false; inneNastepne();  // zatwierdzone znikają — następne
     stan = await api("/api/stan"); rysuj();
   } catch (e) { toast(e.message); }
 }

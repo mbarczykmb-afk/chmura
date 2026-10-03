@@ -63,7 +63,7 @@ def test_propozycja(swiat):
     assert "bez GPS" in c["IMG_hel_bez_gps.jpg"][3]
     assert c["VID_20230711_120000.mp4"][0] == "Filmy/Filmy z 2023/Lipiec na Helu/VID_20230711_120000.mp4"
     assert c["IMG_rzym.jpg"][1] == "juz_jest"                              # identyczny plik jest już w celu
-    assert c["paragon.jpg"][0] == "Dokumenty/Dokumenty z 2023/paragon.jpg"
+    assert c["paragon.jpg"][0] == "Dokumenty/Dokumenty z 2023 (Telefon)/paragon.jpg"
     assert c["DSC_0001.xmp"][0] == z23 + "Marzec w domu/DSC_0001.xmp"       # idzie za zdjęciem
     assert c["DSC_0001.dng"][0] == z23 + "Marzec w domu/DSC_0001.dng"
     assert c["01.mp3"][0] == "Muzyka/Dżem/Detox/01.mp3"
@@ -119,7 +119,7 @@ def test_wykonanie_kopiuj_i_cofnij(swiat):
     planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
     w = wykonawca.wykonaj(db)
     assert w["zrobione"] == 17 and w["bledy"] == 0
-    doc = cel / "Dokumenty" / "Dokumenty z 2023" / "paragon.jpg"
+    doc = cel / "Dokumenty" / "Dokumenty z 2023 (Telefon)" / "paragon.jpg"
     assert doc.read_bytes() == (k / "Telefon" / "paragon.jpg").read_bytes()
     assert os.path.getmtime(doc) == pytest.approx(os.path.getmtime(k / "Telefon" / "paragon.jpg"), abs=1)
     assert (k / "Telefon" / "paragon.jpg").exists()          # kopiowanie zostawia oryginał
@@ -276,3 +276,44 @@ def test_przelaczenie_na_przenies_po_kopiowaniu_bez_nowej_propozycji(swiat):
     assert sorted(p.relative_to(cel) for p in cel.rglob("*") if p.is_file()) == przed
     wykonawca.cofnij(db)
     assert (k / "Telefon" / "paragon.jpg").exists()
+
+
+def test_foldery_dokumentow_z_nazwami_zrodel(tmp_path):
+    """„Dokumenty z 2023 (Faktury, Skany)” — w nawiasie foldery, z których pochodzą dokumenty; nazwy plików unikalne."""
+    from katalogator import planista as pl
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    pl.przygotuj(db)
+    wiersze = [("/d/Skany/a.jpg", "Dokumenty/Dokumenty z 2023/a.jpg"), ("/d/Faktury/b.jpg", "Dokumenty/Dokumenty z 2023/b.jpg"),
+               ("/d/Faktury/c.jpg", "Dokumenty/Dokumenty z 2023/c.jpg"),
+               ("/d/Inne/a.jpg", "Dokumenty/Dokumenty z 2023 (Stare)/a.jpg"),  # dawny dopisek — złączony, a.jpg → a (2).jpg
+               ("/d/X/z.jpg", "Moje/Dokumenty/z.jpg")]
+    for sc, cel in wiersze:
+        db.execute("INSERT INTO plan(plik_id, sciezka, rodzaj, rozmiar, cel, tryb, stan, kat) VALUES (1,?,?,?,?,?,?,?)",
+                   (sc, "zdjecie", 1, cel, "kopiuj", "nowy", "dokument"))
+    assert pl.opisz_foldery_dokumentow(db) == 4
+    cele = sorted(r[0] for r in db.execute("SELECT cel FROM plan"))
+    f = "Dokumenty/Dokumenty z 2023 (Faktury, Inne, Skany)"
+    assert cele == sorted(["Moje/Dokumenty/z.jpg", f + "/a (2).jpg", f + "/a.jpg", f + "/b.jpg", f + "/c.jpg"])
+    assert pl.opisz_foldery_dokumentow(db) == 0  # drugi raz — bez zmian
+
+
+def test_aktualnosc_drzewa_po_odlozeniu(tmp_path):
+    from katalogator import duplikaty, planista as pl
+    k = tmp_path / "zdj"
+    k.mkdir()
+    _jpg_z_exif(k / "a.jpg", data="2021:05:01 12:00:00", gps=None)
+    (k / "kopia.jpg").write_bytes((k / "a.jpg").read_bytes())
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    duplikaty.szukaj(db)
+    pl.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(tmp_path / "cel"))
+    a = pl.aktualnosc(db)
+    assert a["jest"] and not a["nieaktualny"] and a["reczne"] == 0
+    g = duplikaty.grupy(db, None, 0, 5)[0]
+    duplikaty.przenies(db, [{"zostaw": g["zostaw"], "usun": [p["id"] for p in g["pliki"] if p["id"] != g["zostaw"]]}])
+    a = pl.aktualnosc(db)
+    assert a["nieaktualny"] and "odłożono" in a["powod"]
+    pl.zmien_nazwe_folderu(db, "Zdjęcia", "Moje zdjęcia")  # ręczna poprawka — utworzenie od nowa by ją skasowało
+    assert pl.aktualnosc(db)["reczne"] == 1
+    pl.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(tmp_path / "cel"))
+    assert not pl.aktualnosc(db)["nieaktualny"]

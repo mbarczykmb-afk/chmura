@@ -482,6 +482,8 @@ header .wersja,#biblioteka-btn,.tryby button{white-space:nowrap}
   #aktywnosc{bottom:70px}
 }
 body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
+#plan-nieaktualny.komunikat{background:color-mix(in srgb,#f59e0b 16%,var(--panel));border:1px solid color-mix(in srgb,#f59e0b 45%,transparent);color:var(--fg);padding:8px 12px;border-radius:10px}
+#plan-nieaktualny{margin:8px 12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -697,6 +699,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
       <iframe id="ramka" title="Raport" hidden></iframe>
     </div>
     <div id="widok-drzewo" class="widok" hidden>
+      <div class="komunikat ostrz" id="plan-nieaktualny" hidden></div>
       <div class="pasek-edytora">
         <button class="maly" id="plan-cofnij" title="Cofnij (Ctrl+Z)">↶ Cofnij</button>
         <button class="maly" id="plan-ponow" title="Ponów (Ctrl+Y)">↷ Ponów</button>

@@ -58,6 +58,52 @@ def folder_dokumentow(data: str | None) -> str:
     return f"{DOKUMENTY}/{DOKUMENTY} z {d.year}" if d else f"{DOKUMENTY}/Bez daty"
 
 
+_FOLDER_DOK = re.compile(rf"^{DOKUMENTY}/({DOKUMENTY} z \d{{4}}|Bez daty)(?: \(.*\))?$")
+
+
+def _bez_opisu(folder: str) -> str:
+    """„Dokumenty/Dokumenty z 2023 (Faktury, Skany)” -> „Dokumenty/Dokumenty z 2023”."""
+    m = _FOLDER_DOK.match(folder)
+    return f"{DOKUMENTY}/{m.group(1)}" if m else folder
+
+
+def opisz_foldery_dokumentow(db: sqlite3.Connection) -> int:
+    """Foldery dokumentów z nazwami folderów, z których pochodzą: „Dokumenty z 2023 (Faktury, Skany, Pobrane)”
+    — od najczęstszego; gdy nazwa byłaby za długa: „… i N innych”. Zwraca liczbę zmienionych wpisów."""
+    grupy: dict[str, list] = defaultdict(list)
+    for r in db.execute("SELECT id, sciezka, cel FROM plan WHERE kat='dokument' AND tryb!='istniejacy'"):
+        folder, _, nazwa = r["cel"].rpartition("/")
+        baza = _bez_opisu(folder)
+        if _FOLDER_DOK.match(baza):  # tylko foldery dokumentów (ręcznie przemianowanych nie ruszamy)
+            grupy[baza].append((r["id"], nazwa, r["sciezka"], r["cel"]))
+    zmiany = []
+    for baza, el in grupy.items():
+        licz: dict[str, int] = defaultdict(int)
+        for _, _, sc, _ in el:
+            n = czysta_nazwa(os.path.basename(os.path.dirname(sc)))
+            if n and not re.fullmatch(r"[A-Za-z]:?", n) and n.lower() != DOKUMENTY.lower():
+                licz[n] += 1
+        nazwy = sorted(licz, key=lambda n: (-licz[n], n.lower()))
+        wziete = []
+        for n in nazwy:
+            if len(", ".join(wziete + [n])) > 110:
+                break
+            wziete.append(n)
+        opis = ", ".join(wziete) + (f" i {len(nazwy) - len(wziete)} innych" if len(wziete) < len(nazwy) else "")
+        nowy = f"{baza} ({opis})" if wziete else baza
+        uzyte: set[str] = set()
+        for id_, nazwa, _, cel in sorted(el, key=lambda e: e[0]):
+            rdzen, roz = os.path.splitext(nazwa)
+            n, i = nazwa, 2
+            while n.lower() in uzyte:  # dwa foldery złączone w jeden — bez dwóch plików o tej samej nazwie
+                n, i = f"{rdzen} ({i}){roz}", i + 1
+            uzyte.add(n.lower())
+            if f"{nowy}/{n}" != cel:
+                zmiany.append((f"{nowy}/{n}", id_))
+    db.executemany("UPDATE plan SET cel=? WHERE id=?", zmiany)
+    return len(zmiany)
+
+
 def folder_smieci(p: dict) -> str:
     """Odłożone/Śmieci/<nazwa folderu, z którego pochodzi plik>."""
     nad = os.path.basename(os.path.dirname(p["sciezka"]))
@@ -244,6 +290,7 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
         [(w["p"]["id"], w["p"]["sciezka"], w["p"]["rodzaj"], w["p"]["rozmiar"], w["p"]["data"], w["cel"], w["tryb"],
           w["stan"], 1 if w["stan"] in ("juz_jest", "duplikat") else 0, w["uwaga"], w.get("alt"), w.get("kat"),
           w.get("jest")) for w in wpisy])
+    opisz_foldery_dokumentow(db)
     db.execute("DELETE FROM plan_meta")
     db.executemany("INSERT INTO plan_meta VALUES (?,?)",
                    [("cel", cel), ("utworzono", str(time.time())), ("dom", dom or "")])
@@ -382,6 +429,24 @@ def _wolna_nazwa(cel: str, zajete: set[str]) -> str:
 def istnieje(db: sqlite3.Connection) -> bool:
     przygotuj(db)
     return db.execute("SELECT 1 FROM plan LIMIT 1").fetchone() is not None
+
+
+def aktualnosc(db: sqlite3.Connection) -> dict:
+    """Czy drzewo pamięta stan sprzed odłożeń / usunięć / nowego skanu (wtedy warto utworzyć je od nowa)?
+    „reczne” — Twoje poprawki w drzewie, które utworzenie od nowa by skasowało."""
+    if not istnieje(db):
+        return {"jest": False, "nieaktualny": False}
+    utw = float(meta(db).get("utworzono") or 0)
+    try:
+        odl = db.execute("SELECT COUNT(*) FROM operacje WHERE czas > ?", (utw,)).fetchone()[0]
+    except sqlite3.OperationalError:
+        odl = 0
+    skan = db.execute("SELECT MAX(koniec) FROM skany").fetchone()[0] or 0
+    reczne = db.execute("SELECT COUNT(*) FROM plan_ops WHERE cofnieta=0 AND opis NOT LIKE 'Kategorie%'").fetchone()[0]
+    wykonane = db.execute("SELECT COUNT(*) FROM plan WHERE wynik IS NOT NULL").fetchone()[0]
+    powody = ([f"odłożono / usunięto {odl} plików"] if odl else []) + (["nowy skan"] if skan > utw else [])
+    return {"jest": True, "nieaktualny": bool(powody), "powod": ", ".join(powody), "reczne": reczne,
+            "wykonane": wykonane}
 
 
 def meta(db: sqlite3.Connection) -> dict:
@@ -640,6 +705,8 @@ def zastosuj_kategorie(db: sqlite3.Connection) -> dict:
             cel_f, k = (folder if folder.startswith(kategorie.SMIECI) else folder_smieci(w)), "smieci"
         elif d_uz == "dokument" or (w["sciezka"] in dok and d_uz != "zdjecie"):
             cel_f, k = folder_dokumentow(w["data"]), "dokument"
+            if _bez_opisu(folder) == cel_f:  # już w swoim folderze dokumentów (z dopiskiem skąd) — bez zmian
+                cel_f = folder
         elif d_uz == "zdjecie" or (w["kat"] == "dokument" and w["sciezka"] not in dok) or (
                 w["kat"] == "smieci" and d_uz is None and not (w["uwaga"] or "").startswith("śmieci:")):
             # decyzja cofnięta albo zmieniona na zdjęcie — wraca tam, gdzie trafiłby zwykły plik
@@ -664,9 +731,14 @@ def zastosuj_kategorie(db: sqlite3.Connection) -> dict:
         uw = _UWAGA_PODEJRZANE.sub("", uw).strip("; ") or None  # decyzja podjęta — pytanie znika
         db.execute("UPDATE plan SET kat=?, uwaga=? WHERE id=?", (k, uw, i))
     if not zmiany:
+        if zmiany_kat:
+            opisz_foldery_dokumentow(db)
         db.commit()
         return {"zmienione": 0}
-    return _zastosuj(db, f"Kategorie (dokumenty / śmieci / zdjęcia): {len(zmiany)} plików", zmiany)
+    w = _zastosuj(db, f"Kategorie (dokumenty / śmieci / zdjęcia): {len(zmiany)} plików", zmiany)
+    opisz_foldery_dokumentow(db)  # nowe dokumenty — dopisek „(skąd)” w nazwie folderu
+    db.commit()
+    return w
 
 
 # --- wyszukiwanie i zmiany zbiorcze --------------------------------------------------

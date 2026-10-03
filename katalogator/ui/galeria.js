@@ -259,15 +259,39 @@ async function pokazPelny(lista, poz) {
   }
   $("pelny-opis").textContent = `${p.nazwa} · ${dataTxt(p.data)}`;
   $("pelny-opis").title = "Kółko myszy / szczypanie = powiększenie · dwuklik = 250% · przeciągnij, żeby przesunąć · 0 = całe";
-  narzedziaPelnego(p);
+  narzedziaPelnego(p); miniMapa(p);
   if (p.miejsce === undefined) {
-    try { const d = await api("/api/g/plik", {id: p.id}); p.miejsce = d.miejsce; p.ulubione = d.ulubione; }
+    try {
+      const d = await api("/api/g/plik", {id: p.id}); p.miejsce = d.miejsce; p.ulubione = d.ulubione;
+      if (p.lat == null && d.lat != null) { p.lat = d.lat; p.lon = d.lon; }
+    }
     catch (e) { p.miejsce = null; }
   }
-  if (g.lista[g.poz] === p) narzedziaPelnego(p);
+  if (g.lista[g.poz] === p) { narzedziaPelnego(p); miniMapa(p); }
   if (g.lista[g.poz] === p && p.miejsce) $("pelny-opis").textContent += " · " + p.miejsce;
   $("pelny").querySelector(".pop").hidden = poz <= 0;
   $("pelny").querySelector(".nast").hidden = poz >= lista.length - 1;
+}
+// mała mapa w rogu podglądu: gdzie zrobiono zdjęcie; klik = duża mapa w tym miejscu
+function miniMapa(p) {
+  const el = $("mini-mapa");
+  if (!p || p.lat == null || typeof L === "undefined") { el.hidden = true; return; }
+  el.hidden = false;
+  if (!g.miniMapa) {
+    g.miniMapa = L.map("mini-mapa-m", {zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false,
+                                       doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false});
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19}).addTo(g.miniMapa);
+    g.miniZnacznik = L.marker([p.lat, p.lon]).addTo(g.miniMapa);
+    el.onclick = e => {
+      e.stopPropagation();
+      const q = g.lista[g.poz]; if (!q || q.lat == null) return;
+      zamknijPelny(); widok("mapa");
+      setTimeout(() => { if (g.mapa) g.mapa.setView([q.lat, q.lon], 16); }, 400);
+    };
+  }
+  g.miniZnacznik.setLatLng([p.lat, p.lon]);
+  setTimeout(() => { g.miniMapa.invalidateSize(); g.miniMapa.setView([p.lat, p.lon], 13); }, 30);
+  $("mini-mapa-t").textContent = p.miejsce ? "📍 " + p.miejsce : "📍 miejsce zdjęcia";
 }
 function zamknijPelny() { stopPokaz(); $("pelny").hidden = true; $("pelny-tresc").replaceChildren(); zoomReset(); zamknijMenuAlb(); }
 
@@ -644,7 +668,7 @@ async function ustawLokalizacje(ids, lat, lon, poprzednie, cicho = false) {
   }
   if (g.widok !== "mapa") g.punkty = null;  // mapa wczyta się na nowo
   wczytajLata(true).catch(() => {});
-  if (!$("pelny").hidden) narzedziaPelnego(biezacy());
+  if (!$("pelny").hidden) { narzedziaPelnego(biezacy()); miniMapa(biezacy()); }
   if (cicho) return true;
   const n = w.zmienione, co = n === 1 ? "zdjęcia" : `${n} zdjęć`;
   toastG((lat === null ? `📍 Usunięto lokalizację ${co}` : `📍 Zapisano lokalizację ${co}`) +

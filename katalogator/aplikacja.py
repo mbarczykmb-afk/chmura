@@ -1032,6 +1032,8 @@ def _handler(stan: Stan, token: str, zamknij):
                     return self._wyslij(w[0], w[1]) if w[0] is not None else \
                         self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
                 return self._wyslij(w[0])
+            if u.path == "/api/plan/aktualnosc":
+                return self._wyslij(stan.z_db(planista.aktualnosc))
             if u.path == "/api/plan/drzewo":
                 return self._wyslij({"foldery": stan.z_db(planista.drzewo),
                                      "podsumowanie": stan.z_db(planista.podsumowanie),
@@ -1057,11 +1059,11 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/plan/sprawdz":
                 return self._wyslij(stan.z_db(wykonawca.sprawdz))
             if u.path == "/api/nie-z-aparatu":
-                pliki = stan.z_db(kategorie.do_sprawdzenia)
+                pliki = stan.z_db(duplikaty.zwin_kopie, stan.z_db(kategorie.do_sprawdzenia))  # kopie = 1 karta
                 stan.przygotuj_miniatury([p["id"] for p in pliki[:400]], srednia=True)
                 return self._wyslij({"pliki": pliki})
             if u.path == "/api/dokumenty":
-                kand = stan.z_db(analiza.kandydaci_dokumentow)
+                kand = stan.z_db(duplikaty.zwin_kopie, stan.z_db(analiza.kandydaci_dokumentow))  # kopie = 1 karta
                 kat = stan.z_db(kategorie.kategorie_plikow, [k["id"] for k in kand])
                 for k in kand:
                     k["kat"] = kat.get(k["id"])
@@ -1074,11 +1076,15 @@ def _handler(stan: Stan, token: str, zamknij):
                 od, ile = _int(q, "od", 0), min(_int(q, "ile", 30), 200)
                 wycinek = grupy[od:od + ile]
                 kat = stan.z_db(kategorie.kategorie_plikow, [w["id"] for g in wycinek for w in g])
+                odc = stan.z_db(duplikaty.odciski_wg_id, [w["id"] for g in wycinek for w in g])
                 # ta strona i następna — w tle, zanim okno o nie poprosi
                 stan.przygotuj_miniatury([w["id"] for g in grupy[od:od + 2 * ile] for w in g], srednia=True)
                 return self._wyslij({"razem": len(grupy), "przejrzane": len(przejrz), "grupy": [
                     [{**{k: w[k] for k in ("id", "sciezka", "wzgledna", "mtime", "rozmiar", "szer", "wys", "ostrosc")},
-                      "kat": kat.get(w["id"])} for w in g] for g in wycinek]})
+                      "kat": kat.get(w["id"]),
+                      # identyczna kopia innego zdjęcia z tej grupy (ten sam odcisk zawartości)
+                      "kopia": bool(odc.get(w["id"]) and any(odc.get(x["id"]) == odc[w["id"]] for x in g[:i]))}
+                     for i, w in enumerate(g)] for g in wycinek]})
             if u.path == "/api/smieci":
                 return self._wyslij({"pliki": stan.z_db(sprzatanie.lista_smieci)})
             if u.path == "/api/odlozone":

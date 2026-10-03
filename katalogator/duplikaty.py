@@ -347,6 +347,38 @@ def _odciski_plikow(db: sqlite3.Connection, ids) -> set:
         f"AND p.rowid IN ({','.join('?' * len(ids))})", ids)}
 
 
+def odciski_wg_id(db: sqlite3.Connection, ids) -> dict[int, str]:
+    """{id pliku: pełny odcisk} — tylko aktualne odciski (plik nie zmienił się od sprawdzenia)."""
+    ids = [int(i) for i in ids]
+    wynik: dict[int, str] = {}
+    for c in range(0, len(ids), 500):
+        cz = ids[c:c + 500]
+        for r in db.execute(
+                f"""SELECT p.rowid, o.pelny FROM pliki p JOIN odciski o ON o.sciezka = p.sciezka
+                    AND o.rozmiar = p.rozmiar AND o.mtime = p.mtime
+                    WHERE o.pelny IS NOT NULL AND p.rowid IN ({','.join('?' * len(cz))})""", cz):
+            wynik[r[0]] = r[1]
+    return wynik
+
+
+def zwin_kopie(db: sqlite3.Connection, pozycje: list[dict]) -> list[dict]:
+    """Identyczne pliki na liście (Dokumenty, Nie z aparatu) — jedna karta z listą kopii („kopie”: [id…]);
+    decyzja dla karty dotyczy wszystkich kopii."""
+    przygotuj(db)
+    odc = odciski_wg_id(db, [p["id"] for p in pozycje])
+    pierwszy: dict[str, dict] = {}
+    wynik = []
+    for p in pozycje:
+        h = odc.get(p["id"])
+        if h and h in pierwszy:
+            pierwszy[h].setdefault("kopie", []).append(p["id"])
+            continue
+        if h:
+            pierwszy[h] = p
+        wynik.append(p)
+    return wynik
+
+
 def grupy(db: sqlite3.Connection, rodzaj: str | None = None, od: int = 0, ile: int = 50,
           cele: set[str] | None = None) -> list[dict]:
     przygotuj(db)

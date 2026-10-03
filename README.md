@@ -155,6 +155,13 @@ folderu („2004 Zakopane”), a na końcu „w domu”.
      wtedy telefon tylko ogląda. *✎ Ustaw swój PIN* — stały PIN (4–12 cyfr), a telefon zostaje zalogowany
      także po ponownym uruchomieniu programu. Działa, dopóki Katalogator jest otwarty.
 
+**Szybsze przeglądanie list** — w *Dokumentach* i *Nie z aparatu* ułożone pliki chowają się przed wczytaniem
+kolejnych (*Schowaj przejrzane i pokaż kolejne*, *↺ pokaż przejrzane*); identyczne kopie są jedną kartą („+2 kopie”) —
+decyzja obejmuje wszystkie; w *Podobnych* identyczna kopia jest oznaczona. Foldery dokumentów w drzewie mają w nawiasie
+foldery, z których pochodzą: *Dokumenty z 2023 (Faktury, Skany, Pobrane)*. Po odłożeniu / usunięciu plików albo nowym
+skanie drzewo tworzy się od nowa przy wejściu w 🌳 Drzewo (gdy masz w nim ręczne poprawki — najpierw pyta).
+W podglądzie zdjęcia w Bibliotece i Przeglądarce — **mała mapa** z miejscem zrobienia (klik = duża mapa).
+
 **🖥 Pełny program z telefonu** (gdy Katalogator działa na komputerze): 📱 → kod QR + PIN → na pilocie *🖥 Pełny
 program* — wszystkie zakładki (Duplikaty, Dokumenty, Podobne, Drzewo, kosz…) w układzie na telefon. Serwer telefonu
 po PIN-ie przekazuje zapytania do programu na komputerze; wymaga *Pozwól sterować z telefonu*; zamknąć programu ani
