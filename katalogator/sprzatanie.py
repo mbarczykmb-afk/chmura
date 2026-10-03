@@ -113,6 +113,56 @@ def usun_odlozone(db: sqlite3.Connection, korzenie: list[str], kategorie_: list[
     return {"usuniete": usuniete, "bajty": bajty, "bledy": bledy[:50]}
 
 
+def przenies_do_celu(db: sqlite3.Connection, zrodla: list[str], docelowy: str, postep=None, przerwij=None) -> dict:
+    """Jednorazowo: foldery <źródło>/Odłożone/<kategoria>/… → <docelowy>/Odłożone/<kategoria>/<źródło>/…
+    Zapis operacji jest poprawiany, więc „Cofnij” dalej przywraca pliki na miejsce."""
+    duplikaty.przygotuj(db)
+    pliki = []
+    for k in zrodla:
+        if os.path.normcase(os.path.normpath(k)) == os.path.normcase(os.path.normpath(docelowy)):
+            continue
+        baza = os.path.join(k, duplikaty.FOLDER_ODLOZONE)
+        if not os.path.isdir(baza):
+            continue
+        for kat in os.scandir(baza):
+            if not kat.is_dir(follow_symlinks=False):
+                continue
+            for gdzie, _, nazwy in os.walk(kat.path):
+                for n in nazwy:
+                    z = os.path.join(gdzie, n)
+                    pliki.append((k, z, os.path.join(docelowy, duplikaty.FOLDER_ODLOZONE, kat.name,
+                                                     duplikaty.etykieta_korzenia(k), os.path.relpath(z, kat.path))))
+    przeniesione, bajty, bledy = 0, 0, []
+    for i, (k, z, do) in enumerate(pliki, 1):
+        if przerwij is not None and przerwij.is_set():
+            raise Przerwano(z)
+        baza_do, ext = os.path.splitext(do)
+        n = 2
+        while os.path.exists(do):
+            do = f"{baza_do} ({n}){ext}"
+            n += 1
+        try:
+            r = os.path.getsize(z)
+            duplikaty.przenies_plik(z, do)
+        except OSError as e:
+            bledy.append(f"{z}: {e.strerror or e}")
+            continue
+        db.execute("UPDATE operacje SET do_=? WHERE do_=?", (do, z))
+        db.commit()
+        przeniesione += 1
+        bajty += r
+        if postep and (i % 20 == 0 or i == len(pliki)):
+            postep("przenoszenie do miejsca docelowego", i, len(pliki), bajty, plik=z)
+    for k in zrodla:  # puste foldery po przeniesieniu (łącznie z samym „Odłożone”)
+        baza = os.path.join(k, duplikaty.FOLDER_ODLOZONE)
+        for gdzie, _, _ in sorted(os.walk(baza), key=lambda w: -len(w[0])) if os.path.isdir(baza) else []:
+            try:
+                os.rmdir(gdzie)
+            except OSError:
+                pass
+    return {"przeniesione": przeniesione, "bajty": bajty, "bledy": bledy[:50], "wszystkie": len(pliki)}
+
+
 def usun_partie(db: sqlite3.Connection, partia: int, postep=None, przerwij=None) -> dict:
     """Usuwa NA STAŁE tylko pliki odłożone w jednej operacji (np. „od razu usuń na stałe” w Duplikatach)."""
     duplikaty.przygotuj(db)

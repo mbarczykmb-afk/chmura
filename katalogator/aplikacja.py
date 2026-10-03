@@ -148,6 +148,7 @@ class Stan:
         self.miniatury: dict[int, bytes] = {}
         self.projekty.ustaw_ostatni(pid)
         self.wersja_danych += 1
+        self._ustaw_kosz()
 
     def otworz_projekt(self, pid: str) -> str | None:
         if self.zajety():
@@ -187,6 +188,36 @@ class Stan:
         if cel and os.path.isdir(cel) and not any(dyski.zawiera(z, cel) for z in k):
             k.append(cel)
         return k
+
+    def kosz_w_celu(self) -> str | None:
+        """Porządkowanie z miejscem docelowym: wszystko, co odkładasz, trafia do <cel>/Odłożone (jeden kosz)."""
+        if (self.projekt.get("typ") or "porzadkowanie") == "porzadkowanie" and self.ustawienia.get("cel"):
+            return self.ustawienia["cel"]
+        return None
+
+    def _ustaw_kosz(self) -> None:
+        try:
+            self.z_db(duplikaty.ustaw_kosz, self.kosz_w_celu())
+        except Exception:
+            LOG.exception("Nie udało się ustawić kosza")
+
+    def przenies_kosz(self) -> str | None:
+        """Istniejące foldery Odłożone ze źródeł → <cel>/Odłożone (z zachowaniem „Cofnij”)."""
+        cel = self.kosz_w_celu()
+        if not cel or not os.path.isdir(cel):
+            return "Najpierw wybierz dostępne miejsce docelowe („Dokąd?”)."
+        zrodla = [z["sciezka"] for z in self.ustawienia["zrodla"]]
+
+        def f(db, postep, przerwij):
+            w = sprzatanie.przenies_do_celu(db, zrodla, cel, postep, przerwij)
+            if not w["wszystkie"]:
+                return "W folderach źródłowych nie ma już nic w „Odłożone”."
+            k = (f"Przeniesiono {w['przeniesione']} plików ({raport.rozmiar_txt(w['bajty'])}) "
+                 f"do {os.path.join(cel, duplikaty.FOLDER_ODLOZONE)}.")
+            if w["bledy"]:
+                k += f" Nie udało się: {len(w['bledy'])} (np. {w['bledy'][0]})."
+            return k
+        return self.uruchom("usuwanie", f)
 
     def usun_partie(self, partia: int) -> str | None:
         def f(db, postep, przerwij):
@@ -261,6 +292,7 @@ class Stan:
         if "przychodzace" in dane:
             zmiany["przychodzace"] = [os.path.normpath(str(p)) for p in dane["przychodzace"] if str(p).strip()]
         self.projekt = self.projekty.zapisz(self.pid, zmiany)
+        self._ustaw_kosz()
 
     def ma_wyniki(self) -> bool:
         if not self.baza.exists():
@@ -1106,7 +1138,13 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/smieci":
                 return self._wyslij({"pliki": stan.z_db(sprzatanie.lista_smieci)})
             if u.path == "/api/odlozone":
-                return self._wyslij(sprzatanie.odlozone(stan.korzenie_kosza()))
+                w = sprzatanie.odlozone(stan.korzenie_kosza())
+                cel = stan.kosz_w_celu()
+                if cel:  # kosz ma być jeden — w miejscu docelowym; ile jeszcze leży w źródłach
+                    w["docelowy"] = os.path.join(cel, duplikaty.FOLDER_ODLOZONE)
+                    w["poza_celem"] = sum(1 for k in w["kategorie"] for f in k["foldery"]
+                                          if not dyski.zawiera(cel, f))
+                return self._wyslij(w)
             if u.path == "/api/nieostre":
                 pliki = stan.z_db(analiza.najmniej_ostre, min(_int(q, "ile", 120), 500))
                 stan.przygotuj_miniatury([p["id"] for p in pliki])
@@ -1218,6 +1256,11 @@ def _handler(stan: Stan, token: str, zamknij):
                                     kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
             if u.path == "/api/tryb":
                 blad = stan.przelacz_tryb(str(dane.get("tryb", "")))
+                stan._ustaw_kosz()
+                return self._wyslij({"blad": blad} if blad else stan.stan(),
+                                    kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
+            if u.path == "/api/odlozone/do-celu":  # Odłożone ze źródeł → jeden kosz w miejscu docelowym
+                blad = stan.przenies_kosz()
                 return self._wyslij({"blad": blad} if blad else stan.stan(),
                                     kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
             if u.path == "/api/odlozone/usun" and dane.get("partia"):  # tylko ta jedna operacja odłożenia

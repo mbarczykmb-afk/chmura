@@ -190,6 +190,25 @@ function rysujKosz() {
     const b = document.createElement("b"); b.textContent = `${plikow(k.plikow)} · ${rozmiar(k.bajty)}`;
     w.append(c, `${IKONY_KOSZA[k.nazwa] || "📦"} ${k.nazwa}`, b); l.append(w);
   }
+  if (o.docelowy) {  // porządkowanie: jeden kosz w miejscu docelowym
+    const d = document.createElement("div"); d.className = "info"; d.style.marginTop = "10px";
+    d.append("Wszystko, co odkładasz, trafia do: ");
+    const c = document.createElement("code"); c.textContent = o.docelowy; d.append(c);
+    if (o.poza_celem) {
+      d.append(document.createElement("br"), `W folderach źródłowych leżą jeszcze stare „Odłożone” (${o.poza_celem} folderów). `);
+      const b = document.createElement("button"); b.className = "maly"; b.textContent = "📦 Przenieś je tam";
+      b.disabled = zajety();
+      b.title = "Pliki trafią do <miejsce docelowe>\\Odłożone\\<kategoria>\\<źródło>\\… — ↶ Cofnij dalej działa";
+      b.onclick = async () => {
+        if (!confirm(`Przenieść wszystkie pliki z folderów „Odłożone” w źródłach do ${o.docelowy}?\n\n` +
+                     "Między dyskami (np. Y: → Z:) to kopiowanie i usuwanie oryginału — może potrwać.")) return;
+        try { stan = await api("/api/odlozone/do-celu", {}); rysuj(); $("okno-kosz").hidden = true; toast("Przenoszę kosz do miejsca docelowego — postęp u góry okna."); }
+        catch (e) { toast(e.message); }
+      };
+      d.append(b);
+    }
+    l.append(d);
+  }
   const wyb = o.kategorie.filter(k => koszZazn.get(k.nazwa));
   const bt = $("kosz-oproznij");
   bt.disabled = !wyb.length || zajety();

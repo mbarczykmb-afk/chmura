@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sqlite3
 import threading
 import time
@@ -401,8 +402,40 @@ def grupy(db: sqlite3.Connection, rodzaj: str | None = None, od: int = 0, ile: i
     return wynik
 
 
-def _cel_przeniesienia(korzen: str, wzgledna: str, typ: str = "duplikat") -> str:
-    cel = os.path.join(korzen, FOLDER_ODLOZONE, PODFOLDERY.get(typ, "Inne"), wzgledna)
+def etykieta_korzenia(korzen: str) -> str:
+    """Nazwa podfolderu dla plików z danego źródła w jednym wspólnym koszu: Y:\\ → „Y”,
+    Z:\\mbarczykmb → „Z - mbarczykmb”, \\\\serwer\\zdjecia → „serwer - zdjecia”."""
+    czesci = [c for c in re.split(r"[\\/]+", korzen.replace(":", "")) if c]
+    return " - ".join(czesci) or "folder"
+
+
+def ustaw_kosz(db: sqlite3.Connection, docelowy: str | None) -> None:
+    """Wspólny kosz w miejscu docelowym (<cel>/Odłożone/…) — albo None: kosz w każdym folderze źródłowym."""
+    przygotuj(db)
+    if docelowy:
+        db.execute("INSERT OR REPLACE INTO dup_meta VALUES ('kosz_docelowy', ?)", (docelowy,))
+    else:
+        db.execute("DELETE FROM dup_meta WHERE klucz='kosz_docelowy'")
+    db.commit()
+
+
+def kosz_docelowy(db: sqlite3.Connection) -> str | None:
+    """Miejsce docelowe z koszem — tylko gdy jest dostępne (dysk sieciowy odłączony: kosz w źródle)."""
+    try:
+        r = db.execute("SELECT wartosc FROM dup_meta WHERE klucz='kosz_docelowy'").fetchone()
+    except sqlite3.OperationalError:
+        return None
+    return r[0] if r and r[0] and os.path.isdir(r[0]) else None
+
+
+def _cel_przeniesienia(korzen: str, wzgledna: str, typ: str = "duplikat", docelowy: str | None = None) -> str:
+    """<korzeń>/Odłożone/<typ>/<ścieżka> — albo, przy wspólnym koszu, <cel>/Odłożone/<typ>/<źródło>/<ścieżka>."""
+    if docelowy:
+        zrodlo = "" if os.path.normcase(os.path.normpath(korzen)) == os.path.normcase(os.path.normpath(docelowy)) \
+            else etykieta_korzenia(korzen)  # pliki z samej biblioteki — bez podfolderu źródła
+        cel = os.path.join(docelowy, FOLDER_ODLOZONE, PODFOLDERY.get(typ, "Inne"), zrodlo, wzgledna)
+    else:
+        cel = os.path.join(korzen, FOLDER_ODLOZONE, PODFOLDERY.get(typ, "Inne"), wzgledna)
     baza, ext = os.path.splitext(cel)
     i = 2
     while os.path.exists(cel):
@@ -411,10 +444,36 @@ def _cel_przeniesienia(korzen: str, wzgledna: str, typ: str = "duplikat") -> str
     return cel
 
 
+def przenies_plik(z: str, do: str) -> None:
+    """Przeniesienie pliku — także między dyskami (Y: → Z:): kopia, sprawdzenie rozmiaru, usunięcie oryginału."""
+    os.makedirs(os.path.dirname(do), exist_ok=True)
+    try:
+        os.rename(z, do)
+        return
+    except OSError as e:
+        if not (getattr(e, "winerror", None) == 17 or e.errno == 18):  # inny dysk (Windows / EXDEV)
+            raise
+    tmp = do + ".katalogator-tmp"
+    try:
+        shutil.copy2(z, tmp)
+        if os.path.getsize(tmp) != os.path.getsize(z):
+            raise OSError("kopia niepełna")
+        os.replace(tmp, do)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+    os.remove(z)
+
+
 def przenies(db: sqlite3.Connection, decyzje: list[dict]) -> dict:
-    """decyzje: [{"zostaw": id, "usun": [id, ...]}]. Przenosi do <korzeń>/Odłożone/Duplikaty/."""
+    """decyzje: [{"zostaw": id, "usun": [id, ...]}]. Przenosi do <korzeń>/Odłożone/Duplikaty/
+    (przy wspólnym koszu: <miejsce docelowe>/Odłożone/Duplikaty/<źródło>/)."""
     przygotuj(db)
     partia = nowa_partia(db)
+    docelowy = kosz_docelowy(db)
     przeniesione, pominiete, bajty = 0, [], 0
     aktualna = _aktualna_pamiec(db)
     zmienione = _odciski_plikow(db, [i for d in decyzje for i in d.get("usun", [])]) if aktualna else set()
@@ -449,7 +508,7 @@ def przenies(db: sqlite3.Connection, decyzje: list[dict]) -> dict:
                     continue
             except OSError:
                 pass
-            blad = _odloz_wiersz(db, wiersze[i], partia, "duplikat")
+            blad = _odloz_wiersz(db, wiersze[i], partia, "duplikat", docelowy)
             if blad:
                 pominiete.append(blad)
             else:
@@ -460,15 +519,14 @@ def przenies(db: sqlite3.Connection, decyzje: list[dict]) -> dict:
     return {"przeniesione": przeniesione, "bajty": bajty, "pominiete": pominiete, "partia": partia}
 
 
-def _odloz_wiersz(db: sqlite3.Connection, w, partia: int, typ: str) -> str | None:
+def _odloz_wiersz(db: sqlite3.Connection, w, partia: int, typ: str, docelowy: str | None = None) -> str | None:
     """Przenosi plik do <korzeń>/Odłożone/<Duplikaty|Podobne|Nieostre>/<ścieżka>. Zwraca opis błędu albo None."""
     try:
         st = os.stat(w["sciezka"])
         if (st.st_size, st.st_mtime) != (w["rozmiar"], w["mtime"]):
             return f"Zmieniony od skanu: {w['wzgledna']}"
-        cel = _cel_przeniesienia(w["korzen"], w["wzgledna"], typ)
-        os.makedirs(os.path.dirname(cel), exist_ok=True)
-        os.rename(w["sciezka"], cel)
+        cel = _cel_przeniesienia(w["korzen"], w["wzgledna"], typ, docelowy)
+        przenies_plik(w["sciezka"], cel)
     except OSError as e:
         return f"{w['wzgledna']}: {e.strerror or e}"
     dane = {k: w[k] for k in w.keys() if k != "rowid"}
@@ -487,6 +545,7 @@ def odloz(db: sqlite3.Connection, ids: list[int], typ: str) -> dict:
     przygotuj(db)
     partia = nowa_partia(db)
     przeniesione, pominiete, bajty = 0, [], 0
+    docelowy = kosz_docelowy(db)
     aktualna = _aktualna_pamiec(db)
     zmienione = _odciski_plikow(db, ids) if aktualna else set()
     for i in dict.fromkeys(int(x) for x in ids):
@@ -494,7 +553,7 @@ def odloz(db: sqlite3.Connection, ids: list[int], typ: str) -> dict:
         if not w:
             pominiete.append("Plik nieaktualny — przeskanuj ponownie.")
             continue
-        blad = _odloz_wiersz(db, w, partia, typ)
+        blad = _odloz_wiersz(db, w, partia, typ, docelowy)
         if blad:
             pominiete.append(blad)
         else:
@@ -524,8 +583,7 @@ def cofnij(db: sqlite3.Connection, partia: int | None = None) -> dict:
         try:
             if os.path.exists(op["z_"]):
                 raise OSError(f"w miejscu oryginału jest już plik: {op['z_']}")
-            os.makedirs(os.path.dirname(op["z_"]), exist_ok=True)
-            os.rename(op["do_"], op["z_"])
+            przenies_plik(op["do_"], op["z_"])
         except OSError as e:
             bledy.append(str(e))
             continue

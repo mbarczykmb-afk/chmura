@@ -186,3 +186,48 @@ def test_odkladanie_nie_blokuje_bazy(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "rename", wolny_rename)
     w = duplikaty.odloz(db, ids, "podobne")
     assert w["przeniesione"] == 3 and len(zapisy) == 2
+
+
+def test_wspolny_kosz_w_miejscu_docelowym(tmp_path):
+    """Porządkowanie: odkładane pliki trafiają do <cel>/Odłożone/<kategoria>/<źródło>/…; stare Odłożone ze źródeł
+    da się tam przenieść, a „Cofnij” dalej przywraca pliki na miejsce."""
+    from katalogator import duplikaty, skaner, sprzatanie
+    zr, cel = tmp_path / "Y", tmp_path / "Uporzadkowane"
+    (zr / "Wakacje").mkdir(parents=True)
+    cel.mkdir()
+    for i in range(3):
+        (zr / "Wakacje" / f"p{i}.jpg").write_bytes(b"x" * (100 + i))
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(zr), db, wypisz=lambda *_: None)
+    duplikaty.przygotuj(db)
+    ids = {r[1]: r[0] for r in db.execute("SELECT rowid, wzgledna FROM pliki")}
+    # stary kosz w źródle (sprzed wspólnego kosza)
+    stary = duplikaty.odloz(db, [ids["Wakacje/p0.jpg".replace("/", __import__("os").sep)]], "podobne")
+    assert (zr / "Odłożone" / "Podobne" / "Wakacje" / "p0.jpg").exists()
+    duplikaty.ustaw_kosz(db, str(cel))
+    etyk = duplikaty.etykieta_korzenia(str(zr))
+    w = duplikaty.odloz(db, [ids["Wakacje/p1.jpg".replace("/", __import__("os").sep)]], "duplikat")
+    assert w["przeniesione"] == 1
+    assert (cel / "Odłożone" / "Duplikaty" / etyk / "Wakacje" / "p1.jpg").exists()
+    # przeniesienie starego kosza
+    m = sprzatanie.przenies_do_celu(db, [str(zr)], str(cel))
+    assert m["przeniesione"] == 1 and not (zr / "Odłożone").exists()
+    assert (cel / "Odłożone" / "Podobne" / etyk / "Wakacje" / "p0.jpg").exists()
+    # cofnięcie obu operacji
+    assert duplikaty.cofnij(db, stary["partia"])["przywrocone"] == 1
+    assert duplikaty.cofnij(db, w["partia"])["przywrocone"] == 1
+    assert sorted(p.name for p in (zr / "Wakacje").iterdir()) == ["p0.jpg", "p1.jpg", "p2.jpg"]
+
+
+def test_przenies_plik_miedzy_dyskami(tmp_path, monkeypatch):
+    import errno
+    import os
+    from katalogator import duplikaty
+    z = tmp_path / "a.jpg"
+    z.write_bytes(b"abc" * 1000)
+
+    def rename(a, b):
+        raise OSError(errno.EXDEV, "Invalid cross-device link")
+    monkeypatch.setattr(os, "rename", rename)
+    duplikaty.przenies_plik(str(z), str(tmp_path / "x" / "b.jpg"))
+    assert not z.exists() and (tmp_path / "x" / "b.jpg").read_bytes() == b"abc" * 1000

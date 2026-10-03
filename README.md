@@ -174,6 +174,12 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**Jeden kosz w miejscu docelowym** (od 1.23): przy porządkowaniu wszystko, co odkładasz (duplikaty, podobne,
+nieostre, śmieci, 🗑 usunięte), trafia do `<miejsce docelowe>\Odłożone\<kategoria>\<źródło>\…` (np.
+`Z:\Uporządkowane\Odłożone\Duplikaty\Y\…`). Między dyskami: kopia + sprawdzenie rozmiaru + usunięcie oryginału.
+🗑 Kosz → *📦 Przenieś je tam* — jednorazowo przenosi stare „Odłożone” ze źródeł (↶ Cofnij dalej działa).
+Gdy miejsce docelowe jest niedostępne, kosz jest jak dawniej w folderze źródłowym. Sprzątanie — bez zmian.
+
 **1.22.1 — audyt:** odkładanie / cofanie / usuwanie zapisuje bazę po każdym pliku (wcześniej przenoszenie setek
 plików po sieci blokowało bazę na minuty i decyzje 📷/📄/🗑 kończyły się „database is locked”); grupy podobnych
 liczone raz naraz i zapamiętane w bazie projektu (po ponownym uruchomieniu od razu); szybsza lista śmieci.
