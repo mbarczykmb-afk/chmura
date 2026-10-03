@@ -132,3 +132,32 @@ def test_odloz_podobne_i_cofnij(tmp_path):
     assert w["przeniesione"] == 1 and (k / "Odłożone" / "Podobne" / "b.jpg").exists()
     assert duplikaty.ostatnia_partia(db)["typ"] == "podobne"
     assert duplikaty.cofnij(db)["przywrocone"] == 1 and (k / "b.jpg").exists()
+
+
+def test_podobne_kopie_w_wielu_folderach_to_jedno_zdjecie(tmp_path):
+    """Ta sama seria w kilku folderach (kopia zapasowa, zapisana na nowo) — jedna grupa, kopie oznaczone,
+    a „⚡ odłóż same kopie” zostawia po jednym egzemplarzu każdego zdjęcia z serii."""
+    import os
+    from katalogator import aplikacja
+    k = tmp_path / "dysk"
+    for f in ("Wakacje", "Kopia zapasowa", "Stary telefon"):
+        (k / f).mkdir(parents=True)
+    a = _zdjecie(k / "Wakacje" / "IMG_1.jpg", ziarno=1)
+    a.filter(ImageFilter.GaussianBlur(1.5)).save(k / "Wakacje" / "IMG_2.jpg", quality=90)  # drugie ujęcie serii
+    for f, q in (("Kopia zapasowa", 70), ("Stary telefon", 60)):
+        for n in ("IMG_1.jpg", "IMG_2.jpg"):
+            Image.open(k / "Wakacje" / n).save(k / f / (n.replace(".jpg", " (1).jpg") if q == 60 else n), quality=q)
+    for p in k.rglob("*.jpg"):  # ta sama data zrobienia dla kopii
+        os.utime(p, (1_600_000_000 + int(p.name[4]), 1_600_000_000 + int(p.name[4])))
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    duplikaty.przygotuj(db)
+    analiza.analizuj(db)
+    grupy = analiza.grupy_podobnych(db)
+    assert len(grupy) == 1 and len(grupy[0]) == 6
+    assert sum(w["kopia"] for w in grupy[0]) == 4 and not grupy[0][0]["kopia"]
+    ids = aplikacja._podobne_hurtem(db, "kopie")
+    assert len(ids) == 4
+    zostaja = [w for w in grupy[0] if w["id"] not in ids]
+    assert sorted(analiza._rdzen_nazwy(w["sciezka"]) for w in zostaja) == ["img_1", "img_2"]
+    assert len(aplikacja._podobne_hurtem(db, "najlepsze")) == 5

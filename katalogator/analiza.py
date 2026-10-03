@@ -433,12 +433,62 @@ def _odcisk_danych(db: sqlite3.Connection, prog: int) -> tuple:
     return (plik or id(db), prog, *a, *p, *o)
 
 
+_KOPIA_NAZWY = re.compile(r"(\s*\(\d+\)|\s*-\s*(kopia|copy)(\s*\(\d+\))?|_copy|~\d+)$", re.IGNORECASE)
+
+
+def _rdzen_nazwy(sciezka: str) -> str:
+    """IMG_1234.JPG, IMG_1234 (1).jpg, IMG_1234 - kopia.jpg → img_1234."""
+    nazwa = re.split(r"[\\/]", sciezka)[-1]
+    rdzen = nazwa.rsplit(".", 1)[0] if "." in nazwa else nazwa
+    return _KOPIA_NAZWY.sub("", rdzen).strip().lower()
+
+
+def _to_samo_zdjecie(hashe: list) -> list[int]:
+    """Korzeń „tego samego zdjęcia” dla każdego elementu: kopie w różnych folderach (bajt w bajt albo zapisane
+    na nowo — inny rozmiar, inna miniatura w EXIF) liczą się jako jedno zdjęcie. Rozpoznanie: ten sam odcisk
+    zawartości albo ta sama nazwa (bez „(1)”, „- kopia”) i ta sama data zrobienia co do sekundy."""
+    rodzic = list(range(len(hashe)))
+
+    def korzen(i):
+        while rodzic[i] != i:
+            rodzic[i] = rodzic[rodzic[i]]
+            i = rodzic[i]
+        return i
+
+    def polacz(i, j):
+        a, b = korzen(i), korzen(j)
+        if a != b:
+            rodzic[max(a, b)] = min(a, b)
+
+    pierwszy: dict = {}
+    for i, (h, w) in enumerate(hashe):
+        klucze = []
+        if w.get("pelny"):
+            klucze.append(("p", w["pelny"]))
+        if w.get("data"):
+            klucze.append(("n", w["data"], _rdzen_nazwy(w["sciezka"])))
+        for k in klucze:
+            j = pierwszy.setdefault(k, i)
+            if j == i:
+                continue
+            # ta sama nazwa i data z pliku (nie z EXIF) — tylko gdy obraz też się zgadza
+            if k[0] == "n" and (w.get("zrodlo_daty") == "plik" or hashe[j][1].get("zrodlo_daty") == "plik") \
+                    and (h ^ hashe[j][0]).bit_count() > 12:
+                continue
+            polacz(i, j)
+    return [korzen(i) for i in range(len(hashe))]
+
+
+def _jakosc(w: dict) -> tuple:
+    return (-(w["szer"] or 0) * (w["wys"] or 0), -(w["ostrosc"] or 0), w["mtime"])
+
+
 def _grupy_podobnych(db: sqlite3.Connection, prog: int, postep=None) -> list[list[dict]]:
     odc = ", o.pelny" if _ma_odciski(db) else ", NULL pelny"
     zl = ("LEFT JOIN odciski o ON o.sciezka = p.sciezka AND o.rozmiar = p.rozmiar AND o.mtime = p.mtime"
           if _ma_odciski(db) else "")
     wiersze = [dict(w) for w in db.execute(
-        f"""SELECT p.rowid id, p.sciezka, p.korzen, p.wzgledna, p.mtime, p.rozmiar, p.data,
+        f"""SELECT p.rowid id, p.sciezka, p.korzen, p.wzgledna, p.mtime, p.rozmiar, p.data, p.zrodlo_daty,
                    a.dhash, a.ostrosc, a.szer, a.wys, a.podpis {odc}
             FROM pliki p JOIN analiza a ON {_AKTUALNE} {zl}
             WHERE p.rodzaj='zdjecie' AND a.dhash IS NOT NULL AND a.podpis IS NOT NULL""")]
@@ -487,22 +537,46 @@ def _grupy_podobnych(db: sqlite3.Connection, prog: int, postep=None) -> list[lis
                         si = sasiedzi[i]
                     else:
                         odrzucone.add((i, j))
+    # Kopie tego samego zdjęcia (np. ten sam album w kilku folderach / kopiach zapasowych) = jeden „węzeł”:
+    # grupy budujemy z węzłów, więc ta sama seria nie wraca osobno dla każdego folderu.
+    wezel = _to_samo_zdjecie(hashe)
+    czlonkowie_w: dict[int, list[int]] = {}
+    for i, k in enumerate(wezel):
+        czlonkowie_w.setdefault(k, []).append(i)
+    sas_w: dict[int, set[int]] = {}
+    for i, s_i in sasiedzi.items():
+        for j in s_i:
+            a, b = wezel[i], wezel[j]
+            if a != b:
+                sas_w.setdefault(a, set()).add(b)
+    for k, cz in czlonkowie_w.items():  # kilka wersji tego samego zdjęcia — też do przejrzenia
+        if len(cz) > 1:
+            sas_w.setdefault(k, set())
+
+    def rozwin(wezly: list[int]) -> list[dict]:
+        """Węzły od najlepszego; w węźle najlepsza kopia pierwsza, pozostałe oznaczone jako „kopia”."""
+        bloki = []
+        for k in wezly:
+            cz = sorted((hashe[i][1] for i in czlonkowie_w[k]), key=_jakosc)
+            bloki.append([{**w, "kopia": n > 0, "wezel": k} for n, w in enumerate(cz)])
+        bloki.sort(key=lambda b: _jakosc(b[0]))
+        return [w for b in bloki for w in b]
+
     wykorzystane: set[int] = set()
     wynik = []
-    for wzor in sorted(sasiedzi, key=lambda i: -len(sasiedzi[i])):
+    for wzor in sorted(sas_w, key=lambda k: (-len(sas_w[k]), -len(czlonkowie_w[k]))):
         if wzor in wykorzystane:
             continue
-        czlonkowie = [wzor] + [j for j in sasiedzi[wzor] if j not in wykorzystane]
-        if len(czlonkowie) < 2:
+        wezly = [wzor] + [j for j in sas_w[wzor] if j not in wykorzystane]
+        g = rozwin(wezly)
+        if len(g) < 2:
             continue
-        g = [hashe[i][1] for i in czlonkowie]
         # same identyczne pliki (np. zdjęcie i jego kopia w bibliotece) — to zakładka „Duplikaty”, nie „Podobne”;
         # bez pełnego odcisku rozpoznajemy je po rozmiarze w bajtach i odcisku obrazu
         tozsamosc = {w["pelny"] or f"{w['rozmiar']}:{w['dhash']}" for w in g}
         if len(tozsamosc) == 1:
             continue
-        wykorzystane.update(czlonkowie)
-        g.sort(key=lambda w: (-(w["szer"] or 0) * (w["wys"] or 0), -(w["ostrosc"] or 0), w["mtime"]))
+        wykorzystane.update(wezly)
         wynik.append(g)
     wynik.sort(key=lambda g: -len(g))
     return wynik

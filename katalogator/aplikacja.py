@@ -1094,11 +1094,14 @@ def _handler(stan: Stan, token: str, zamknij):
                 odc = stan.z_db(duplikaty.odciski_wg_id, [w["id"] for g in wycinek for w in g])
                 # ta strona i następna — w tle, zanim okno o nie poprosi
                 stan.przygotuj_miniatury([w["id"] for g in grupy[od:od + 2 * ile] for w in g], srednia=True)
-                return self._wyslij({"razem": len(grupy), "przejrzane": len(przejrz), "grupy": [
+                return self._wyslij({"razem": len(grupy), "przejrzane": len(przejrz),
+                                     "ile_kopii": sum(w.get("kopia", False) for g in grupy for w in g),
+                                     "ile_reszty": sum(len(g) - 1 for g in grupy), "grupy": [
                     [{**{k: w[k] for k in ("id", "sciezka", "wzgledna", "mtime", "rozmiar", "szer", "wys", "ostrosc")},
                       "kat": kat.get(w["id"]),
                       # identyczna kopia innego zdjęcia z tej grupy (ten sam odcisk zawartości)
-                      "kopia": bool(odc.get(w["id"]) and any(odc.get(x["id"]) == odc[w["id"]] for x in g[:i]))}
+                      "kopia": bool(w.get("kopia")) or bool(odc.get(w["id"]) and any(odc.get(x["id"]) == odc[w["id"]]
+                                                                                   for x in g[:i]))}
                      for i, w in enumerate(g)] for g in wycinek]})
             if u.path == "/api/smieci":
                 return self._wyslij({"pliki": stan.z_db(sprzatanie.lista_smieci)})
@@ -1304,15 +1307,17 @@ def _handler(stan: Stan, token: str, zamknij):
                 "/api/nie-z-aparatu/zapisz": lambda db: {
                     **kategorie.zapisz(db, {int(k): str(v) for k, v in (dane.get("wybor") or {}).items()}),
                     "plan": planista.zastosuj_kategorie(db)},
+                # ⚡ Podobne hurtem: „kopie” — tylko kopie tych samych zdjęć; „najlepsze” — w każdej grupie zostaje ★
+                "/api/podobne/auto": lambda db: duplikaty.odloz(db, _podobne_hurtem(db, dane.get("tryb")), "podobne"),
                 "/api/odloz": lambda db: duplikaty.odloz(db, [int(i) for i in dane.get("ids") or []],
                                                          dane.get("typ") if dane.get("typ") in ("podobne", "smieci")
                                                          else "nieostre"),
             }
             if u.path in edycja:
-                if u.path == "/api/odloz" and stan.zajety():
+                if u.path in ("/api/odloz", "/api/podobne/auto") and stan.zajety():
                     return self._wyslij({"blad": "Poczekaj, aż skończy się bieżące zadanie."}, kod=HTTPStatus.BAD_REQUEST)
                 w = stan.z_db(edycja[u.path])
-                if u.path == "/api/odloz":
+                if u.path in ("/api/odloz", "/api/podobne/auto"):
                     stan.przegladarka.zglos_zmiany()
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/przejrzane":  # „zostaw wszystkie” — grupa znika z Duplikatów / Podobnych
@@ -1399,6 +1404,17 @@ def ustaw_autostart(wlacz: bool) -> str | None:
         return f"Nie udało się zmienić autostartu: {e}"
     LOG.info("Autostart z Windows: %s", wlacz)
     return None
+
+
+def _podobne_hurtem(db, tryb) -> list[int]:
+    """Pliki do odłożenia ze WSZYSTKICH nieprzejrzanych grup podobnych."""
+    przejrz = duplikaty.przejrzane_klucze(db, "podobne")
+    ids = []
+    for g in analiza.grupy_podobnych(db):
+        if "|".join(sorted(w["sciezka"] for w in g)) in przejrz:
+            continue
+        ids += [w["id"] for w in (g[1:] if tryb == "najlepsze" else g) if tryb == "najlepsze" or w.get("kopia")]
+    return ids
 
 
 def _int(q: dict, klucz: str, domyslnie: int) -> int:

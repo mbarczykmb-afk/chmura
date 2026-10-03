@@ -238,6 +238,20 @@ i.b-kol{background:#f7e3a1;color:#7a5a00} i.b-pom{background:var(--blad-miekki);
 .karta.duza input{width:18px;height:18px;top:8px;left:8px}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:13px;z-index:20;max-width:80vw;display:flex;gap:14px;align-items:center;box-shadow:0 4px 16px rgba(0,0,0,.25)}
 .toast-cofnij{background:transparent;color:var(--bg);border:1px solid color-mix(in srgb,var(--bg) 50%,transparent);padding:3px 10px;font-weight:600;white-space:nowrap}
+.przelacznik{display:inline-flex}.przelacznik button{border-radius:0}.przelacznik button:first-child{border-radius:8px 0 0 8px}
+.przelacznik button:last-child{border-radius:0 8px 8px 0;margin-left:-1px}.przelacznik button.akt{background:var(--akc);color:var(--akc-fg);border-color:var(--akc)}
+.hurt{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;margin-bottom:10px;border-radius:10px;
+  border:1px solid color-mix(in srgb,var(--akc) 35%,var(--lin));background:color-mix(in srgb,var(--akc) 7%,var(--bg));font-size:13px}
+.hurt .info{margin:0}
+.grupa-inne{border:1px solid var(--lin);border-radius:10px;padding:10px;background:var(--bg);grid-column:1/-1}
+.grupa-inne .gl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
+.grupa-inne .gl strong{flex:1;min-width:200px;overflow:hidden;text-overflow:ellipsis}
+.grupa-inne .gl em{font-style:normal;color:var(--mut)}
+.grupa-inne .siatka{max-height:none}
+.grupa-inne .gl button.glowny{width:auto;flex:none;padding:6px 16px;font-size:13px}
+.grupa-inne .karta:not(.zazn){opacity:.75}
+.grupa-inne .karta:not(.zazn) .m.st{color:var(--ok);font-weight:600}
+.grupa-inne .karta.zazn .m.st{color:var(--blad);font-weight:600}
 .grupa-pod{border:1px solid var(--lin);border-radius:10px;padding:10px;background:var(--bg)}
 .grupa-pod .gl{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
 .grupa-pod .gl strong{flex:1}
@@ -773,6 +787,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
         <span class="info" style="margin-left:0;flex:1">Obrazy, które chyba <b>nie są zdjęciami z aparatu</b> (grafiki, zrzuty ekranu,
           pobrane z internetu, małe obrazki bez danych aparatu). Zdecyduj: 📷 zdjęcie, 📄 dokument albo 🗑 śmieci
           (→ <b>Odłożone/Śmieci</b>). Dwuklik = powiększenie.</span>
+        <span class="przelacznik" id="inne-tryb"><button class="maly akt" data-t="grupy" title="Obrazy pogrupowane według folderu — cała grupa zaznaczona, odznaczasz zdjęcia">▦ Grupy</button><button class="maly" data-t="pojedynczo" title="Każdy obraz osobno: 📷 / 📄 / 🗑">Pojedynczo</button></span>
         <button class="maly" id="inne-wsz-zdj" title="Tylko obrazy jeszcze bez decyzji">Pozostałe: zdjęcia</button>
         <button class="maly" id="inne-wsz-smieci" title="Tylko obrazy jeszcze bez decyzji">Pozostałe: śmieci</button>
       </div>

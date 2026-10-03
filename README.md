@@ -168,6 +168,12 @@ po PIN-ie przekazuje zapytania do programu na komputerze; wymaga *Pozwól sterow
 zainstalować aktualizacji z telefonu się nie da. **Spoza domu**: VPN do domu (WireGuard na domowym serwerze albo
 Tailscale) i ten sam adres — program nie jest wystawiany wprost do internetu.
 
+**Podobne — kopie w wielu folderach** (od 1.22): to samo zdjęcie w kilku folderach (kopia zapasowa, zapisane na nowo,
+„IMG_1 (1).jpg”) liczy się jako jedno — seria nie wraca osobno dla każdego folderu; kopie mają znacznik „= kopia tego
+samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (bezpieczne) i *2) We wszystkich grupach zostaw
+tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
+grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
+
 **Po restarcie komputera** (od 1.21): włączony telefon jest zapamiętany — po starcie programu włącza się sam, z tym
 samym PIN-em i adresem; zamknięcie okna go nie wyłącza (program pracuje w tle, okno otwiera zwykły skrót).
 W oknie 📱 opcja *Uruchamiaj Katalogator razem z Windows* (wpis w HKCU\…\Run, `Katalogator.exe --w-tle`,

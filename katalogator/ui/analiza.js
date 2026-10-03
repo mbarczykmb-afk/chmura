@@ -215,6 +215,7 @@ async function wczytajPodobne(wiecej) {
   if (an.tryb === "podobne") {
     const r = await api(`/api/podobne?od=${wiecej ? an.grupy.length : 0}&ile=30`);
     an.grupy = wiecej ? an.grupy.concat(r.grupy) : r.grupy; an.razem = r.razem; an.przejrzane = r.przejrzane || 0;
+    an.ileKopii = r.ile_kopii || 0; an.ileReszty = r.ile_reszty || 0;
   } else {
     const r = await api("/api/nieostre?ile=150");
     an.nieostre = r.pliki;
@@ -244,6 +245,7 @@ function rysujPodobne() {
       $("pod-info").append(a);
     }
     if (!an.grupy.length) l.innerHTML = '<div class="pusto">Nie znaleziono podobnych zdjęć.</div>';
+    else l.append(podobneHurtem());
     for (const g of an.grupy) {
       const d = an.decyzje.get(g.map(w => w.id).join("-"));
       const k = document.createElement("div"); k.className = "grupa pod" + (d.pomin ? " pominieta" : "");
@@ -273,8 +275,9 @@ function rysujPodobne() {
         const em = document.createElement("em"); em.textContent = cz.length ? cz.join("\\") + "\\" : "";
         sc.append("\u200E", em, nazwa);
         const z = document.createElement("span"); z.className = "znak";
-        z.textContent = (i === 0 ? "★ " : "") + (zost ? "zostaje" : "odłożę") + (w.kopia ? " · = identyczna kopia" : "");
-        if (w.kopia) z.title = "Ten sam plik co inne zdjęcie w tej grupie (bajt w bajt) — spokojnie do odłożenia";
+        z.textContent = (i === 0 ? "★ " : "") + (zost ? "zostaje" : "odłożę") + (w.kopia ? " · = kopia tego samego zdjęcia" : "");
+        if (w.kopia) z.title = "To samo zdjęcie co wcześniejsze w tej grupie (ta sama nazwa i data zrobienia albo ten sam plik), " +
+          "tylko w innym folderze lub zapisane na nowo — spokojnie do odłożenia";
         const gora = document.createElement("div"); gora.className = "gora"; gora.append(c, z);
         const op = document.createElement("span"); op.className = "zn2"; op.textContent = opisZdjecia(w);
         r.append(gora, img, sc, op, przyciskiKategorii([w.id], w.kat, v => { w.kat = v; }),
@@ -306,6 +309,36 @@ function rysujPodobne() {
   const pomPod = an.tryb === "podobne" ? an.grupy.filter(g => (an.decyzje.get(g.map(w => w.id).join("-")) || {}).pomin).length : 0;
   $("pod-odloz").disabled = !doOdl.length && !pomPod;
   $("pod-odloz").textContent = an.tryb === "podobne" ? (doOdl.length ? "Odłóż zaznaczone kopie i pokaż kolejne" : "Oznacz jako przejrzane i pokaż kolejne") : "Odłóż zaznaczone";
+}
+// ⚡ szybko przez tysiące grup: najpierw same kopie (bezpieczne), potem — jeśli ufasz ★ — wszystko naraz
+function podobneHurtem() {
+  const k = document.createElement("div"); k.className = "hurt";
+  k.innerHTML = `<b>⚡ Szybciej:</b> <span class="info">zamiast przeglądać ${an.razem} grup po kolei —</span>`;
+  const przycisk = (tekst, tytul, tryb, ile, pytanie) => {
+    const b = document.createElement("button"); b.className = "maly"; b.textContent = tekst; b.title = tytul; b.disabled = !ile;
+    b.onclick = async () => {
+      if (!confirm(pytanie + "\n\nNic nie jest kasowane — trafią do folderu Odłożone, a operację można cofnąć.")) return;
+      b.disabled = true; b.textContent = "Odkładam…";
+      try {
+        const w = await api("/api/podobne/auto", {tryb});
+        toast(`Odłożono ${w.przeniesione} zdjęć (${rozmiar(w.bajty || 0)}).` + (w.pominiete.length ? ` Pominięto: ${w.pominiete.length}.` : ""), async () => {
+          const c = await api("/api/duplikaty/cofnij", {});
+          toast(`Przywrócono ${c.przywrocone} zdjęć.`);
+          stan = await api("/api/stan"); rysuj(); an.podWczytane = false; wczytajPodobne();
+        });
+      } catch (e) { toast(e.message); }
+      stan = await api("/api/stan"); rysuj(); an.podWczytane = false; wczytajPodobne();
+    };
+    return b;
+  };
+  k.append(
+    przycisk(`1) Odłóż same kopie tych samych zdjęć (${an.ileKopii})`,
+             "Bezpieczne: to samo zdjęcie w kilku folderach / zapisane na nowo — zostaje najlepsza wersja, inne zdjęcia z serii zostają",
+             "kopie", an.ileKopii, `Odłożyć ${an.ileKopii} kopii tych samych zdjęć ze wszystkich grup? W każdej zostaje najlepsza wersja.`),
+    przycisk(`2) We wszystkich grupach zostaw tylko ★ (${an.ileReszty})`,
+             "Szybko, ale hurtem: z każdej grupy zostaje jedno zdjęcie — najwyższa rozdzielczość i ostrość. Najpierw przejrzyj kilka grup, czy ★ pasuje.",
+             "najlepsze", an.ileReszty, `Z każdej z ${an.razem} grup zostawić tylko ★ i odłożyć ${an.ileReszty} zdjęć?`));
+  return k;
 }
 function doOdlozenia() {
   if (an.tryb !== "podobne") return [...an.odloz];
@@ -407,7 +440,9 @@ $("pod-odloz").onclick = async () => {
 
 // ---------- nie z aparatu: zdjęcie / dokument / śmieci ----------
 const INNE_NA_STRONE = 100;
-const inne = {lista: [], wybor: new Map(), ile: INNE_NA_STRONE, wczytane: false};
+const inne = {lista: [], wybor: new Map(), ile: INNE_NA_STRONE, wczytane: false,
+              tryb: (() => { try { return localStorage.getItem("kat_inne_tryb") || "grupy"; } catch (e) { return "grupy"; } })(),
+              odzn: new Set(), katGrupy: new Map(), ileGrup: 0};
 przyPokazaniu.inne = async () => {
   if (inne.wczytane) return;
   const r = await api("/api/nie-z-aparatu");
@@ -443,6 +478,8 @@ function kartaInne(p) {
   return k;
 }
 function rysujInne() {
+  document.querySelectorAll("#inne-tryb button").forEach(b => b.classList.toggle("akt", b.dataset.t === inne.tryb));
+  if (inne.tryb === "grupy") return rysujGrupyInne();
   const s = $("inne-siatka"); s.replaceChildren();
   if (!inne.lista.length) s.innerHTML = inne.ukryte ? '<div class="pusto">✓ Wszystko przejrzane.</div>'
     : '<div class="pusto">Nie ma podejrzanych obrazów — wszystko wygląda na zdjęcia z aparatu. 🎉</div>';
@@ -462,6 +499,117 @@ function inneDalej() {
   b.onclick = () => zrobione ? inneNastepne() : (inne.ile += INNE_NA_STRONE, rysujInne());
   s.append(b);
 }
+// ---------- nie z aparatu: grupy (folder) — cała grupa zaznaczona, odznaczasz prawdziwe zdjęcia ----------
+const INNE_KARTY_NA_STRONE = 150;
+function grupyInne() {
+  const wg = new Map();
+  for (const p of inne.lista) {
+    if (inne.wybor.has(p.id)) continue;
+    const f = p.wzgledna.split(/[\\/]/).slice(0, -1).join("\\") || "(główny folder)";
+    if (!wg.has(f)) wg.set(f, []); wg.get(f).push(p);
+  }
+  const grupy = [], pojedyncze = new Map();
+  for (const [f, pl] of wg) {
+    if (pl.length >= 3) { grupy.push({klucz: "f:" + f, tytul: "📁 " + f, pliki: pl}); continue; }
+    for (const p of pl) {  // pojedyncze z różnych folderów — razem, wg powodu
+      const pw = p.powod.replace(/\s+\d+×\d+.*$/, "").replace(/\s+[A-Z0-9]{2,5}\s+bez danych aparatu$/, "");
+      if (!pojedyncze.has(pw)) pojedyncze.set(pw, []); pojedyncze.get(pw).push(p);
+    }
+  }
+  grupy.sort((a, b) => b.pliki.length - a.pliki.length);
+  for (const [pw, pl] of pojedyncze) grupy.push({klucz: "p:" + pw, tytul: `🧩 Pojedyncze z różnych folderów — ${pw}`, pliki: pl});
+  return grupy;
+}
+function rysujGrupyInne() {
+  const s = $("inne-siatka"); s.replaceChildren();
+  const grupy = grupyInne();
+  if (!grupy.length) {
+    s.innerHTML = inne.ukryte || inne.wybor.size ? '<div class="pusto">✓ Wszystko przejrzane.</div>'
+      : '<div class="pusto">Nie ma podejrzanych obrazów — wszystko wygląda na zdjęcia z aparatu. 🎉</div>';
+    inneStopka(); return;
+  }
+  const info = document.createElement("div"); info.className = "hurt"; info.style.gridColumn = "1/-1";
+  info.innerHTML = `<span><b>${grupy.length} grup</b> · ${grupy.reduce((a, g) => a + g.pliki.length, 0)} obrazów bez decyzji.
+    Cała grupa jest <b>zaznaczona</b> — <b>odznacz</b> to, co jest prawdziwym zdjęciem (zostanie jako 📷 zdjęcie), potem
+    „✓ Zatwierdź grupę”. Dwuklik = powiększenie.</span>`;
+  const wsz = document.createElement("button"); wsz.className = "maly"; wsz.textContent = "✓ Zatwierdź wszystkie widoczne grupy";
+  info.append(wsz); s.append(info);
+  let karty = 0; const widoczne = [];
+  for (const g of grupy) {
+    if (karty && karty + g.pliki.length > INNE_KARTY_NA_STRONE) break;
+    karty += g.pliki.length; widoczne.push(g);
+    s.append(blokGrupyInne(g));
+  }
+  wsz.onclick = () => zatwierdzGrupyInne(widoczne);
+  if (widoczne.length < grupy.length) {
+    const d = document.createElement("div"); d.className = "info"; d.style.gridColumn = "1/-1"; d.style.textAlign = "center";
+    d.textContent = `Kolejne grupy (${grupy.length - widoczne.length}) pojawią się po zatwierdzeniu tych.`; s.append(d);
+  }
+  inneStopka();
+}
+function blokGrupyInne(g) {
+  const kat = inne.katGrupy.get(g.klucz) || "smieci";
+  const b = document.createElement("div"); b.className = "grupa-inne";
+  const gl = document.createElement("div"); gl.className = "gl";
+  const zazn = g.pliki.filter(p => !inne.odzn.has(p.id)).length;
+  const t = document.createElement("strong"); t.title = g.tytul; t.textContent = g.tytul + " ";
+  const em = document.createElement("em"); em.textContent = `· ${g.pliki.length} · zaznaczone ${zazn}`; t.append(em);
+  const sel = document.createElement("select"); sel.className = "maly"; sel.title = "Co zrobić z zaznaczonymi";
+  for (const [v, n] of [["smieci", "zaznaczone → 🗑 śmieci"], ["dokument", "zaznaczone → 📄 dokumenty"], ["zdjecie", "zaznaczone → 📷 zdjęcia"]]) {
+    const o = document.createElement("option"); o.value = v; o.textContent = n; sel.append(o);
+  }
+  sel.value = kat; sel.onchange = () => { inne.katGrupy.set(g.klucz, sel.value); rysujGrupyInne(); };
+  const wszystkie = (v) => { for (const p of g.pliki) v ? inne.odzn.delete(p.id) : inne.odzn.add(p.id); rysujGrupyInne(); };
+  const bz = document.createElement("button"); bz.className = "maly"; bz.textContent = "zaznacz wszystkie"; bz.onclick = () => wszystkie(true);
+  const bo = document.createElement("button"); bo.className = "maly"; bo.textContent = "odznacz wszystkie"; bo.onclick = () => wszystkie(false);
+  const ok = document.createElement("button"); ok.className = "glowny maly"; ok.textContent = "✓ Zatwierdź grupę";
+  ok.onclick = () => zatwierdzGrupyInne([g]);
+  gl.append(t, sel, bz, bo, ok); b.append(gl);
+  const siatka = document.createElement("div"); siatka.className = "siatka duze";
+  const nazwy = {smieci: "🗑 śmieci", dokument: "📄 dokument", zdjecie: "📷 zdjęcie"};
+  for (const p of g.pliki) {
+    const z = !inne.odzn.has(p.id);
+    const k = karta(p.id, "zdjecie", p.wzgledna, (p.data || "").slice(0, 10) + (p.szer ? ` · ${p.szer}×${p.wys}` : "") + kopieTxt(p), z, v => {
+      v ? inne.odzn.delete(p.id) : inne.odzn.add(p.id);
+      st.textContent = v ? nazwy[sel.value] : "📷 zdjęcie — zostaje";
+      em.textContent = `· ${g.pliki.length} · zaznaczone ${g.pliki.filter(x => !inne.odzn.has(x.id)).length}`;
+      return true;
+    }, true);
+    const st = document.createElement("div"); st.className = "m st"; st.textContent = z ? nazwy[kat] : "📷 zdjęcie — zostaje";
+    const pw = document.createElement("div"); pw.className = "m powod"; pw.textContent = "❔ " + p.powod;
+    k.querySelector(".op").append(st, pw);
+    siatka.append(k);
+  }
+  b.append(siatka);
+  return b;
+}
+async function zatwierdzGrupyInne(grupy) {
+  const wybor = {}, bylo = {}, ile = {};
+  for (const g of grupy) {
+    const kat = inne.katGrupy.get(g.klucz) || "smieci";
+    for (const p of g.pliki) {
+      const k = inne.odzn.has(p.id) ? "zdjecie" : kat;
+      ile[k] = (ile[k] || 0) + 1;
+      for (const id of [p.id, ...(p.kopie || [])]) { wybor[id] = k; bylo[id] = ""; }
+    }
+  }
+  if (!Object.keys(wybor).length) return;
+  try {
+    const w = await api("/api/nie-z-aparatu/zapisz", {wybor});
+    for (const g of grupy) for (const p of g.pliki) {
+      const k = wybor[p.id]; inne.wybor.set(p.id, k); p.decyzja = k; inne.odzn.delete(p.id);
+    }
+    toast("✓ " + Object.entries(ile).map(([k, n]) => `${KAT_NAZWY[k]}: ${n}`).join(" · ") +
+          (w.plan && w.plan.zmienione ? ` · przełożono w drzewie: ${plikow(w.plan.zmienione)}` : ""), () => cofnijZapis(bylo));
+    an.dokWczytane = false; plan.wczytany = false; inneNastepne();
+    stan = await api("/api/stan"); rysuj();
+  } catch (e) { toast(e.message); }
+}
+$("inne-tryb").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  inne.tryb = b.dataset.t; try { localStorage.setItem("kat_inne_tryb", inne.tryb); } catch (er) { /* bez pamięci */ }
+  rysujInne();
+};
 async function inneZbiorczo(kat) {
   const bez = inneWidoczne().filter(p => !inne.wybor.has(p.id));
   if (!bez.length) { toast("Wszystkie wyświetlone obrazy mają już decyzję."); return; }
