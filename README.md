@@ -174,6 +174,13 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.24:** filmy z nieczytelnym nagłówkiem („Invalid argument”, stare 3GP/MP4) — data i GPS z ffmpeg (przy
+następnym skanie; filmy z datą „z pliku” czytane jednorazowo jeszcze raz) · Podobne: *▣ Jedna grupa na ekran*
+(←/→, Z, **Enter** — odłóż i następna, **S** — zostaw wszystkie; zapis w tle) · Przeglądarka doczytuje zdjęcia
+przy przewijaniu · Drzewo: *🔵 Uwagi hurtem* — każdy rodzaj uwag („data z pliku”, „bez GPS”…) przyjmowany jednym
+kliknięciem, nie wraca po nowym drzewie, z cofaniem · Drzewo: *▶ Próba: tylko ten folder* — porządkowanie
+jednego folderu (z podfolderami), żeby sprawdzić wynik przed całością.
+
 **Jeden kosz w miejscu docelowym** (od 1.23): przy porządkowaniu wszystko, co odkładasz (duplikaty, podobne,
 nieostre, śmieci, 🗑 usunięte), trafia do `<miejsce docelowe>\Odłożone\<kategoria>\<źródło>\…` (np.
 `Z:\Uporządkowane\Odłożone\Duplikaty\Y\…`). Między dyskami: kopia + sprawdzenie rozmiaru + usunięcie oryginału.

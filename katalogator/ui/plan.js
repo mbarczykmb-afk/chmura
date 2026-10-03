@@ -79,15 +79,21 @@ $("cofnij-wyk").onclick = async () => {
 function ileDoZrobienia(p) { return (p.kopiuj || 0) + (p.przenies || 0) + (p.oryginaly || 0); }
 
 // ---------- wykonanie ----------
-async function otworzWykonanie() {
+let wykFolder = null;  // próba: tylko jeden folder drzewa
+async function otworzWykonanie(folder = null) {
+  wykFolder = typeof folder === "string" && folder ? folder : null;
   let s;
-  try { s = await api("/api/plan/sprawdz"); } catch (e) { toast(e.message); return; }
+  try { s = await api("/api/plan/sprawdz" + (wykFolder ? "?folder=" + encodeURIComponent(wykFolder) : "")); }
+  catch (e) { toast(e.message); return; }
   const p = stan.plan || {};
   const opis = $("wyk-opis");
   if (s.blad) { opis.innerHTML = ""; opis.textContent = s.blad; $("wyk-start").disabled = true; }
   else {
-    opis.innerHTML = `Miejsce docelowe: <b></b><br>
-      Skopiuję <b>${p.kopiuj}</b> plików (${rozmiar(p.kopiuj_b)}), przeniosę <b>${p.przenies}</b> (${rozmiar(p.przenies_b)}).<br>` +
+    opis.innerHTML = `Miejsce docelowe: <b></b><br>` + (wykFolder
+      ? `<span class="gdzie"><b>Próba — tylko folder „${wykFolder.replace(/[<&]/g, "")}”</b> (z podfolderami): ${s.plikow} plików
+         (${rozmiar(s.bajtow)}). Potem sprawdź wynik w 📚 Bibliotece i w Eksploratorze — reszta drzewa czeka.
+         Gdy coś nie tak: „↶ Cofnij porządkowanie”.</span><br>`
+      : `Skopiuję <b>${p.kopiuj}</b> plików (${rozmiar(p.kopiuj_b)}), przeniosę <b>${p.przenies}</b> (${rozmiar(p.przenies_b)}).<br>`) +
       (s.oryginaly ? `<label class="oryg"><input type="checkbox" id="wyk-oryginaly" checked> Usuń <b>${s.oryginaly}</b>
         ${plikow(s.oryginaly, ["oryginał", "oryginały", "oryginałów"]).replace(/^\d+ /, "")} (${rozmiar(s.oryginaly_b)}),
         które już są w bibliotece (np. skopiowane wcześniej) — każdy dopiero po sprawdzeniu, że kopia jest
@@ -109,10 +115,18 @@ $("wyk-anuluj").onclick = () => { $("okno-wyk").hidden = true; };
 $("wyk-start").onclick = async () => {
   $("okno-wyk").hidden = true;
   const oryg = $("wyk-oryginaly");
-  try { stan = await api("/api/wykonaj", {usun_puste: $("wyk-puste").checked, usun_oryginaly: oryg ? oryg.checked : true}); rysuj(); }
+  try {
+    stan = await api("/api/wykonaj", {usun_puste: $("wyk-puste").checked, usun_oryginaly: oryg ? oryg.checked : true,
+                                      folder: wykFolder || ""});
+    rysuj();
+  }
   catch (e) { toast(e.message); }
 };
-$("plan-wykonaj").onclick = otworzWykonanie;
+$("plan-wykonaj").onclick = () => otworzWykonanie();
+$("f-proba").onclick = () => {
+  if (!plan.folder) { toast("Wybierz folder w drzewie po lewej."); return; }
+  otworzWykonanie(plan.folder);
+};
 
 // ---------- edytor: drzewo folderów ----------
 przyPokazaniu.drzewo = async () => {

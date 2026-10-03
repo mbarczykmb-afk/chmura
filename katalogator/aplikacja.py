@@ -820,11 +820,12 @@ class Stan:
             return f"Propozycja gotowa: {w['kopiuj'] + w['przenies']} plików do uporządkowania."
         return self.uruchom("plan", f)
 
-    def wykonaj(self, usun_puste: bool, usun_oryginaly: bool = True) -> str | None:
+    def wykonaj(self, usun_puste: bool, usun_oryginaly: bool = True, folder: str | None = None) -> str | None:
         def f(db, postep, przerwij):
             w = wykonawca.wykonaj(db, postep=postep, przerwij=przerwij, usun_puste=usun_puste,
-                                  usun_oryginaly=usun_oryginaly)
-            k = f"Gotowe: {w['zrobione']} plików ({raport.rozmiar_txt(w['bajty'])})."
+                                  usun_oryginaly=usun_oryginaly, folder=folder)
+            k = (f"Próba — folder „{folder}”: " if folder else "") + \
+                f"Gotowe: {w['zrobione']} plików ({raport.rozmiar_txt(w['bajty'])})."
             if w["bledy"]:
                 k += f" Błędy: {w['bledy']} — szczegóły w drzewie (czerwone)."
             if w["usuniete_foldery"]:
@@ -1106,7 +1107,7 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij(stan.z_db(planista.szukaj, q.get("q", [""])[0], q.get("filtr", [""])[0],
                                               _int(q, "od", 0), min(_int(q, "ile", 200), 500)))
             if u.path == "/api/plan/sprawdz":
-                return self._wyslij(stan.z_db(wykonawca.sprawdz))
+                return self._wyslij(stan.z_db(wykonawca.sprawdz, True, q.get("folder", [""])[0] or None))
             if u.path == "/api/nie-z-aparatu":
                 pliki = stan.z_db(duplikaty.zwin_kopie, stan.z_db(kategorie.do_sprawdzenia))  # kopie = 1 karta
                 stan.przygotuj_miniatury([p["id"] for p in pliki[:400]], srednia=True)
@@ -1249,7 +1250,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 "/api/analiza/start": lambda: stan.analizuj(),
                 "/api/plan/generuj": lambda: stan.generuj_plan(),
                 "/api/wykonaj": lambda: stan.wykonaj(bool(dane.get("usun_puste", True)),
-                                                     bool(dane.get("usun_oryginaly", True))),
+                                                     bool(dane.get("usun_oryginaly", True)),
+                                                     str(dane.get("folder") or "") or None),
                 "/api/wykonanie/cofnij": lambda: stan.cofnij_wykonanie(),
             }
             if u.path in proste:

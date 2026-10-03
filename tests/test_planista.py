@@ -337,3 +337,15 @@ def test_uwagi_hurtem(swiat):
     planista.cofnij_uwagi(db, r0["rodzaj"])
     planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
     assert r0["rodzaj"] in {r["rodzaj"] for r in planista.rodzaje_uwag(db)}
+
+
+def test_proba_na_jednym_folderze(swiat):
+    k, cel, db = swiat
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
+    f = "Zdjęcia"  # cała gałąź zdjęć, bez dokumentów i reszty
+    wszystkie = len(wykonawca.do_zrobienia(db))
+    proba = wykonawca.do_zrobienia(db, folder=f)
+    assert 0 < len(proba) < wszystkie and all(w["cel"].startswith(f + "/") for w in proba)
+    w = wykonawca.wykonaj(db, folder=f)
+    assert w["zrobione"] == len(proba) and w["bledy"] == 0
+    assert len(wykonawca.do_zrobienia(db)) == wszystkie - len(proba)

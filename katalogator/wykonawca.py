@@ -210,19 +210,24 @@ def _wolna(cel: str) -> str:
     return f"{baza} ({i}){ext}"
 
 
-def do_zrobienia(db: sqlite3.Connection, oryginaly: bool = True) -> list[sqlite3.Row]:
+def do_zrobienia(db: sqlite3.Connection, oryginaly: bool = True, folder: str | None = None) -> list[sqlite3.Row]:
     """Pliki do skopiowania/przeniesienia; oryginaly=True — także „przenieś” plików, które już są w miejscu
-    docelowym (np. po wcześniejszym kopiowaniu): oryginał znika po sprawdzeniu, że kopia jest identyczna."""
+    docelowym (np. po wcześniejszym kopiowaniu): oryginał znika po sprawdzeniu, że kopia jest identyczna.
+    folder: tylko ten folder drzewa (z podfolderami) — próba przed porządkowaniem całości."""
     przygotuj(db)
+    gdzie, arg = "", []
+    if folder:
+        f = folder.strip("/")
+        gdzie, arg = " AND cel LIKE ? ESCAPE '\\'", [planista._like(f + "/") + "%"]
     return db.execute(
         "SELECT * FROM plan WHERE tryb IN ('kopiuj','przenies') AND (wynik IS NULL OR wynik LIKE 'blad%') AND "
-        "((pominiety=0 AND stan='nowy') OR (? AND stan='juz_jest' AND tryb='przenies' AND jest IS NOT NULL)) "
-        "ORDER BY id", (int(oryginaly),)).fetchall()
+        "((pominiety=0 AND stan='nowy') OR (? AND stan='juz_jest' AND tryb='przenies' AND jest IS NOT NULL))"
+        + gdzie + " ORDER BY id", (int(oryginaly), *arg)).fetchall()
 
 
-def sprawdz(db: sqlite3.Connection, oryginaly: bool = True) -> dict:
+def sprawdz(db: sqlite3.Connection, oryginaly: bool = True, folder: str | None = None) -> dict:
     """Ile trzeba skopiować i czy starczy miejsca."""
-    wiersze = do_zrobienia(db, oryginaly)
+    wiersze = do_zrobienia(db, oryginaly, folder)
     cel = planista.meta(db).get("cel", "")
     potrzeba = sum(w["rozmiar"] for w in wiersze if w["stan"] == "nowy"
                    and (w["tryb"] == "kopiuj" or not ten_sam_wolumin(w["sciezka"], cel)))
@@ -273,16 +278,16 @@ def system_plikow(sciezka: str) -> str:
 
 
 def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool = True,
-            usun_oryginaly: bool = True) -> dict:
+            usun_oryginaly: bool = True, folder: str | None = None) -> dict:
     przygotuj(db)
-    spr = sprawdz(db, usun_oryginaly)
+    spr = sprawdz(db, usun_oryginaly, folder)
     if spr.get("blad"):
         raise OSError(spr["blad"])
     if not spr["starczy"]:
         raise OSError(f"Za mało miejsca w miejscu docelowym: potrzeba {spr['potrzeba'] / 1e9:.1f} GB, "
                       f"wolne {spr['wolne'] / 1e9:.1f} GB.")
     cel_root = spr["cel"]
-    wiersze = do_zrobienia(db, usun_oryginaly)
+    wiersze = do_zrobienia(db, usun_oryginaly, folder)
     # granice sprzątania pustych folderów: foldery źródłowe sprzed porządkowania (potem ich wpisy znikają z bazy)
     korzenie = [r[0] for r in db.execute("SELECT DISTINCT korzen FROM pliki")]
     partia = int(time.time() * 1000)
