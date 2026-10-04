@@ -1136,10 +1136,18 @@ def _handler(stan: Stan, token: str, zamknij):
                          if "|".join(sorted(w["sciezka"] for w in g)) not in przejrz]
                 od, ile = _int(q, "od", 0), min(_int(q, "ile", 30), 200)
                 wycinek = grupy[od:od + ile]
+                zdjec = _int(q, "zdjec", 0)  # ok. tylu zdjęć na stronę (grupy w całości)
+                if zdjec:
+                    n = 0
+                    for i, g in enumerate(wycinek):
+                        n += len(g)
+                        if n >= zdjec:
+                            wycinek = wycinek[:i + 1]
+                            break
                 kat = stan.z_db(kategorie.kategorie_plikow, [w["id"] for g in wycinek for w in g])
                 odc = stan.z_db(duplikaty.odciski_wg_id, [w["id"] for g in wycinek for w in g])
                 # ta strona i następna — w tle, zanim okno o nie poprosi
-                stan.przygotuj_miniatury([w["id"] for g in grupy[od:od + 2 * ile] for w in g], srednia=True)
+                stan.przygotuj_miniatury([w["id"] for g in grupy[od:od + 2 * len(wycinek)] for w in g], srednia=True)
                 return self._wyslij({"razem": len(grupy), "przejrzane": len(przejrz),
                                      "ile_kopii": sum(w.get("kopia", False) for g in grupy for w in g),
                                      "ile_reszty": sum(len(g) - 1 for g in grupy), "grupy": [

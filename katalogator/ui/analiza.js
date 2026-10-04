@@ -213,7 +213,7 @@ przyPokazaniu.pod = async () => { if (!an.podWczytane) await wczytajPodobne(); }
 
 async function wczytajPodobne(wiecej) {
   if (an.tryb === "podobne") {
-    const r = await api(`/api/podobne?od=${wiecej ? an.grupy.length : 0}&ile=30`);
+    const r = await api(`/api/podobne?od=${wiecej ? an.grupy.length : 0}&ile=200&zdjec=300`);
     an.grupy = wiecej ? an.grupy.concat(r.grupy) : r.grupy; an.razem = r.razem; an.przejrzane = r.przejrzane || 0;
     an.ileKopii = r.ile_kopii || 0; an.ileReszty = r.ile_reszty || 0;
   } else {
@@ -233,7 +233,17 @@ function opisZdjecia(w) {
     .filter(Boolean).join(" · ");
 }
 
+// przerysowanie listy (klik w zdjęcie, „zostaw wszystkie”) nie przewija na górę: zapamiętujemy przewinięcie
+// wszystkich przewijanych rodziców listy i przywracamy je po narysowaniu
 function rysujPodobne() {
+  const przew = [];
+  for (let e = $("pod-lista"); e; e = e.parentElement) if (e.scrollTop) przew.push([e, e.scrollTop]);
+  const okno = window.scrollY;
+  rysujPodobneTresc();
+  for (const [e, y] of przew) e.scrollTop = y;
+  if (okno) window.scrollTo(0, okno);
+}
+function rysujPodobneTresc() {
   const l = $("pod-lista"); l.replaceChildren();
   $("widok-pod").classList.toggle("jedna-tryb", !!an.jedna && an.tryb === "podobne");
   if (!stan.analiza) { l.innerHTML = BRAK_ANALIZY(); }
@@ -298,15 +308,27 @@ function rysujPodobne() {
       b.onclick = () => wczytajPodobne(true); l.append(b);
     }
   } else {
-    $("pod-info").textContent = "Najmniej ostre zdjęcia (od najbardziej rozmazanych). Sprawdź przed odłożeniem — nocne i celowo rozmyte też tu trafią.";
+    $("pod-info").textContent = "Najmniej ostre zdjęcia (od najbardziej rozmazanych). Sprawdź przed odłożeniem — nocne i celowo rozmyte też tu trafią. ";
+    const wsz = an.nieostre.length && an.nieostre.every(w => an.odloz.has(w.id));
+    const zb = document.createElement("button"); zb.className = "maly";
+    zb.textContent = wsz ? "Odznacz wszystkie" : `Zaznacz wszystkie (${an.nieostre.length})`;
+    zb.onclick = () => {
+      for (const w of an.nieostre) wsz ? an.odloz.delete(w.id) : an.odloz.add(w.id);
+      rysujPodobne();
+    };
+    if (an.nieostre.length) $("pod-info").append(zb);
     const s = document.createElement("div"); s.className = "siatka"; s.style.maxHeight = "none";
     for (const w of an.nieostre) {
+      // klik zmienia tylko tę kartę i stopkę — lista się nie przerysowuje (zostajesz w tym samym miejscu)
       s.append(karta(w.id, "zdjecie", w.wzgledna, `${(w.data || "").slice(0, 10)} · ostrość ${Math.round(w.ostrosc)}`,
-                     an.odloz.has(w.id), v => { v ? an.odloz.add(w.id) : an.odloz.delete(w.id); rysujPodobne(); }));
+                     an.odloz.has(w.id), v => { v ? an.odloz.add(w.id) : an.odloz.delete(w.id); stopkaPodobnych(); return true; }));
     }
     if (!an.nieostre.length) s.innerHTML = '<div class="pusto">Brak przeanalizowanych zdjęć.</div>';
     l.append(s);
   }
+  stopkaPodobnych();
+}
+function stopkaPodobnych() {
   const doOdl = doOdlozenia();
   const bajty = an.tryb === "podobne"
     ? an.grupy.flat().filter(w => doOdl.includes(w.id)).reduce((a, w) => a + w.rozmiar, 0) : 0;
