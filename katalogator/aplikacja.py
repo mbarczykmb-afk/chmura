@@ -149,6 +149,11 @@ class Stan:
         self.projekty.ustaw_ostatni(pid)
         self.wersja_danych += 1
         self._ustaw_kosz()
+        try:  # decyzje sprzed porządkowania — pod nowymi ścieżkami (pliki w bibliotece)
+            if self.baza.exists():
+                self.z_db(wykonawca.przenies_decyzje)
+        except Exception:
+            LOG.exception("Przeniesienie decyzji do biblioteki")
 
     def otworz_projekt(self, pid: str) -> str | None:
         if self.zajety():

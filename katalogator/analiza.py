@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS decyzje_dok (
 );
 """
 NAGLOWEK = 256 * 1024
-WERSJA_DOKUMENTOW = 2  # 1.4: kartka + drobne znaki w wierszach (wcześniej: jasność i wiersze na całym kadrze)
+WERSJA_DOKUMENTOW = 3  # 1.25: bez faktur z długimi pasami (blacha, żaluzje). 2 — 1.4: kartka + drobne znaki w wierszach (wcześniej: jasność i wiersze na całym kadrze)
 PROG_WSTEPNY = 0.45    # etap 1 (miniatura): jasne, mało kolorowe — tylko te sprawdzamy dokładniej
 PROG_KANDYDAT = 0.6    # etap 2 (tekst): od tej oceny zdjęcie pokazujemy jako możliwy dokument
 PROG_PEWNY = 0.8       # od tej — wstępnie zaznaczone
@@ -240,6 +240,9 @@ def ocena_tekstu(im: Image.Image, bok: int = 1000, pasy: int = 6) -> float:
     s_kartka = _rampa(udzial, 0.04, 0.09) * _rampa(wyp, 0.35, 0.5)
     s_tusz = _rampa(udzial_tuszu, 0.012, 0.025) * (1 - _rampa(udzial_tuszu, 0.25, 0.35))
     s_znaki = 1 - _rampa(min(biegi), 4.5, 7.0)
+    # litery są krótkie w OBU kierunkach; długie ciągłe pasy w jednym (falista blacha, żaluzje, deski, fugi
+    # w kostce) to faktura, nie tekst
+    s_znaki *= 1 - _rampa(max(biegi), 25.0, 60.0)
     s_wiersze = _rampa(okres, 0.25, 0.45)
     return round(s_kartka * s_tusz * s_znaki * s_wiersze, 3)
 
@@ -273,7 +276,10 @@ def analizuj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4)
     db.execute("CREATE TABLE IF NOT EXISTS analiza_meta (klucz TEXT PRIMARY KEY, wartosc TEXT)")
     w = db.execute("SELECT wartosc FROM analiza_meta WHERE klucz='wersja_dokumentow'").fetchone()
     if not w or int(w[0]) < WERSJA_DOKUMENTOW:  # nowy detektor dokumentów — przelicz oceny (decyzje zostają)
-        db.execute("UPDATE analiza SET podpis=NULL, tekst=NULL")
+        if not w or int(w[0]) < 2:
+            db.execute("UPDATE analiza SET podpis=NULL, tekst=NULL")  # stary etap 1 — wszystko od nowa
+        else:
+            db.execute("UPDATE analiza SET tekst=NULL")  # tylko etap 2 (kandydaci na dokumenty) — bez czytania reszty
         db.execute("INSERT OR REPLACE INTO analiza_meta VALUES ('wersja_dokumentow', ?)", (str(WERSJA_DOKUMENTOW),))
         db.commit()
     zatwierdz = Zatwierdzanie(db)

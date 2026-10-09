@@ -188,9 +188,10 @@ function dokDalej() {
   s.append(b);
 }
 // zbiorczo — tylko zdjęcia jeszcze bez decyzji (wyświetlone); zapis od razu, z „Cofnij”
-async function dokZbiorczo(kat) {
-  const bez = dokWidoczne().filter(d => !dokZapisana(d));
+async function dokZbiorczo(kat, wszystkie = false) {  // ta strona (domyślnie) albo cała lista
+  const bez = (wszystkie ? an.dok : dokWidoczne()).filter(d => !dokZapisana(d));
   if (!bez.length) { toast("Wszystkie wyświetlone zdjęcia mają już decyzję."); return; }
+  if (wszystkie && !confirm(`Oznaczyć ${bez.length} zdjęć jako 📷 zdjęcia (nie dokumenty)?\n\nMożna cofnąć.`)) return;
   const wybor = {}, bylo = {};
   for (const d of bez) for (const id of [d.id, ...(d.kopie || [])]) { wybor[id] = kat || dokSugestia(d); bylo[id] = ""; }
   try {
@@ -206,6 +207,7 @@ async function dokZbiorczo(kat) {
 }
 $("dok-wszystkie").onclick = () => dokZbiorczo("dokument");
 $("dok-zadne").onclick = () => dokZbiorczo("zdjecie");
+$("dok-zadne-wsz").onclick = () => dokZbiorczo("zdjecie", true);
 $("dok-zapisz").onclick = () => dokZbiorczo("");
 
 // ---------- podobne / nieostre ----------

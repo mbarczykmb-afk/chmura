@@ -349,3 +349,20 @@ def test_proba_na_jednym_folderze(swiat):
     w = wykonawca.wykonaj(db, folder=f)
     assert w["zrobione"] == len(proba) and w["bledy"] == 0
     assert len(wykonawca.do_zrobienia(db)) == wszystkie - len(proba)
+
+
+def test_decyzje_ida_za_plikiem_do_biblioteki(swiat):
+    """Decyzja „to zdjęcie, nie dokument” podjęta przed porządkowaniem obowiązuje też po przeniesieniu pliku."""
+    from katalogator import kategorie
+    k, cel, db = swiat
+    analiza.przygotuj(db)
+    kategorie.przygotuj(db)
+    sc = str(k / "Telefon" / "paragon.jpg")
+    db.execute("INSERT OR REPLACE INTO decyzje_dok VALUES (?, 0)", (sc,))
+    db.execute("INSERT OR REPLACE INTO kategorie VALUES (?, 'zdjecie')", (sc,))
+    db.commit()
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "przenies"}], str(cel))
+    wykonawca.wykonaj(db)
+    nowa = db.execute("SELECT cel FROM wykonanie WHERE zrodlo=?", (sc,)).fetchone()[0]
+    assert db.execute("SELECT dokument FROM decyzje_dok WHERE sciezka=?", (nowa,)).fetchone()[0] == 0
+    assert db.execute("SELECT kategoria FROM kategorie WHERE sciezka=?", (nowa,)).fetchone()[0] == "zdjecie"

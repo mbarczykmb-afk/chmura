@@ -346,6 +346,7 @@ def wykonaj(db: sqlite3.Connection, postep=None, przerwij=None, usun_puste: bool
         db.commit()  # po każdym pliku: kopiowanie następnego może trwać minuty
     _sprzatnij_tmp(db, cel_root)
     db.commit()
+    przenies_decyzje(db)
     usuniete_foldery = _usun_puste(przeniesione_foldery, korzenie) if usun_puste else 0
     if postep:
         postep("gotowe", len(wiersze), len(wiersze), jako_bajty(bajty[0]), bajty_razem=razem)
@@ -415,6 +416,29 @@ def _wykonaj_plik(db, w, cel_root: str, partia: int, przerwij, licz, przeniesion
                "VALUES (?,?,?,?,?,?,?,?,?)",
                (partia, w["id"], w["sciezka"], dst, tryb_logu, usuniete, w["rozmiar"], st.st_mtime, time.time()))
     db.execute("UPDATE plan SET wynik='ok' WHERE id=?", (w["id"],))
+
+
+def przenies_decyzje(db: sqlite3.Connection) -> int:
+    """Twoje decyzje (dokument / zdjęcie / śmieci) i wyniki analizy idą za plikiem do biblioteki. Zapisane są pod
+    ścieżką pliku — po uporządkowaniu (nowa ścieżka) „znikały” i te same zdjęcia wracały do przejrzenia.
+    Bezpieczne do wołania wiele razy (dopisuje tylko brakujące)."""
+    przygotuj(db)
+    tabele = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    n = 0
+    if "decyzje_dok" in tabele:
+        n += db.execute("INSERT OR IGNORE INTO decyzje_dok(sciezka, dokument) SELECT w.cel, d.dokument "
+                        "FROM wykonanie w JOIN decyzje_dok d ON d.sciezka = w.zrodlo").rowcount
+    if "kategorie" in tabele:
+        n += db.execute("INSERT OR IGNORE INTO kategorie(sciezka, kategoria) SELECT w.cel, k.kategoria "
+                        "FROM wykonanie w JOIN kategorie k ON k.sciezka = w.zrodlo").rowcount
+    if "analiza" in tabele:  # bez ponownego czytania zdjęć z dysku
+        kol = [r[1] for r in db.execute("PRAGMA table_info(analiza)") if r[1] not in ("sciezka", "rozmiar", "mtime")]
+        db.execute(f"INSERT OR IGNORE INTO analiza(sciezka, rozmiar, mtime, {', '.join(kol)}) "
+                   f"SELECT w.cel, p.rozmiar, p.mtime, {', '.join('a.' + k for k in kol)} FROM wykonanie w "
+                   f"JOIN analiza a ON a.sciezka = w.zrodlo JOIN pliki p ON p.sciezka = w.cel "
+                   f"WHERE p.rozmiar = a.rozmiar")
+    db.commit()
+    return n
 
 
 def _tmp_wiersza(cel_root: str, w) -> str:

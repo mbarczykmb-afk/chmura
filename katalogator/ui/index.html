@@ -773,8 +773,9 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
       <div class="filtry">
         <span class="info" style="margin-left:0;flex:1">Zdjęcia, które wyglądają jak dokumenty (paragony, skany, kartki). Dwuklik = powiększenie.
           📄 dokument → <b>Dokumenty / Dokumenty z &lt;rok&gt;</b>, 📷 zdjęcie → zostaje zdjęciem, 🗑 śmieci → <b>Odłożone/Śmieci</b>.</span>
-        <button class="maly" id="dok-wszystkie" title="Tylko zdjęcia jeszcze bez decyzji">Pozostałe: dokumenty</button>
-        <button class="maly" id="dok-zadne" title="Tylko zdjęcia jeszcze bez decyzji">Pozostałe: zdjęcia</button>
+        <button class="maly" id="dok-wszystkie" title="Wszystkie widoczne na tej stronie, jeszcze bez decyzji — potem następna strona">Ta strona → 📄 dokumenty</button>
+        <button class="maly" id="dok-zadne" title="Wszystkie widoczne na tej stronie, jeszcze bez decyzji — potem następna strona">Ta strona → 📷 zdjęcia</button>
+        <button class="maly" id="dok-zadne-wsz" title="Wszystkie pozostałe na liście (wszystkie strony), jeszcze bez decyzji — można cofnąć">Wszystkie pozostałe → 📷 zdjęcia</button>
       </div>
       <div class="siatka" id="dok-siatka"></div>
       <div class="stopka"><span id="dok-stopka"></span><button class="glowny" id="dok-zapisz" title="Zapisuje propozycję programu (przerywana ramka) dla zdjęć jeszcze bez decyzji (można cofnąć)">Zatwierdź propozycje</button></div>
@@ -796,8 +797,8 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
           pobrane z internetu, małe obrazki bez danych aparatu). Zdecyduj: 📷 zdjęcie, 📄 dokument albo 🗑 śmieci
           (→ <b>Odłożone/Śmieci</b>). Dwuklik = powiększenie.</span>
         <span class="przelacznik" id="inne-tryb"><button class="maly akt" data-t="grupy" title="Obrazy pogrupowane według folderu — cała grupa zaznaczona, odznaczasz zdjęcia">▦ Grupy</button><button class="maly" data-t="pojedynczo" title="Każdy obraz osobno: 📷 / 📄 / 🗑">Pojedynczo</button></span>
-        <button class="maly" id="inne-wsz-zdj" title="Tylko obrazy jeszcze bez decyzji">Pozostałe: zdjęcia</button>
-        <button class="maly" id="inne-wsz-smieci" title="Tylko obrazy jeszcze bez decyzji">Pozostałe: śmieci</button>
+        <button class="maly" id="inne-wsz-zdj" title="Widoczne na tej stronie, jeszcze bez decyzji">Ta strona → 📷 zdjęcia</button>
+        <button class="maly" id="inne-wsz-smieci" title="Widoczne na tej stronie, jeszcze bez decyzji">Ta strona → 🗑 śmieci</button>
       </div>
       <div class="siatka duze" id="inne-siatka"></div>
       <div class="stopka"><span id="inne-stopka"></span></div>
