@@ -262,3 +262,33 @@ def test_decyzja_w_trakcie_odkladania(tmp_path):
     threading.Thread(target=puść).start()
     w = kategorie.zapisz(db, {1: "smieci"})
     assert w["zapisane"] == 1
+
+
+def test_przelozenie_w_drzewie_w_trakcie_innego_zapisu(tmp_path):
+    """zastosuj_kategorie (po kliknięciu 📷/📄/🗑) też czeka na swoją kolej — blokada zapisu zakładana po
+    przygotowaniu tabel (executescript zatwierdzał transakcję i blokada przepadała)."""
+    import sqlite3
+    import threading
+    import time
+    from katalogator import planista, skaner
+    k = tmp_path / "dysk"
+    k.mkdir()
+    (k / "a.jpg").write_bytes(b"x" * 100)
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(tmp_path / "cel"))
+    inne = sqlite3.connect(str(tmp_path / "k.db"), check_same_thread=False, isolation_level=None)
+    zaczal = threading.Event()
+
+    def pisz():
+        inne.execute("BEGIN IMMEDIATE")
+        inne.execute("UPDATE pliki SET blad=NULL")
+        zaczal.set()
+        time.sleep(0.5)
+        inne.commit()
+    threading.Thread(target=pisz).start()
+    zaczal.wait()
+    db.execute("INSERT OR REPLACE INTO kategorie VALUES (?, 'smieci')", (str(k / "a.jpg"),)) \
+        if db.execute("SELECT 1 FROM sqlite_master WHERE name='kategorie'").fetchone() else None
+    w = planista.zastosuj_kategorie(db)
+    assert "zmienione" in w

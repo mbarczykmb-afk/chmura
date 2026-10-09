@@ -153,8 +153,9 @@ def zapisz(db: sqlite3.Connection, wybor: dict) -> dict:
     """wybor: {id pliku: 'zdjecie'|'dokument'|'smieci'|''}. Dokument = też potwierdzenie w decyzjach dokumentów;
     '' = cofnięcie decyzji (plik wraca do tego, co zaproponował program)."""
     przygotuj(db)
-    if not db.in_transaction:
-        db.execute("BEGIN IMMEDIATE")  # od razu blokada zapisu — bez „database is locked” przy równoległym odkładaniu
+    if db.in_transaction:
+        db.commit()
+    db.execute("BEGIN IMMEDIATE")  # od razu blokada zapisu — bez „database is locked” przy równoległym odkładaniu
     n = 0
     for i, kat in wybor.items():
         if kat not in KATEGORIE and kat != "":

@@ -701,12 +701,15 @@ def zastosuj_kategorie(db: sqlite3.Connection) -> dict:
     if not istnieje(db):
         return {"zmienione": 0}
     przygotuj(db)
-    if not db.in_transaction:
-        # od razu blokada zapisu (czeka w kolejce do 30 s): transakcja zaczęta odczytem nie może potem zapisać,
-        # jeśli w międzyczasie zapisał ktoś inny (np. odkładanie) — wtedy SQLite od razu zgłaszał „database is locked”
-        db.execute("BEGIN IMMEDIATE")
     dok = analiza.dokumenty_potwierdzone(db)
     dec = kategorie.decyzje(db)
+    # od razu blokada zapisu (czeka w kolejce do 30 s): transakcja zaczęta odczytem nie może potem zapisać,
+    # jeśli w międzyczasie zapisał ktoś inny (np. odkładanie) — wtedy SQLite od razu zgłaszał „database is locked”.
+    # Dopiero tutaj: przygotuj() w analiza/kategorie zatwierdza transakcję (executescript), więc wcześniejsza
+    # blokada by przepadła.
+    if db.in_transaction:
+        db.commit()
+    db.execute("BEGIN IMMEDIATE")
     zmiany_kat: dict[int, str | None] = {}
     grupy: dict[str, list] = defaultdict(list)
     # tylko pliki, których to dotyczy: z decyzją, potwierdzone dokumenty i te już w kategorii (reszta bez zmian);
@@ -754,6 +757,7 @@ def zastosuj_kategorie(db: sqlite3.Connection) -> dict:
         db.commit()
         return {"zmienione": 0}
     w = _zastosuj(db, f"Kategorie (dokumenty / śmieci / zdjęcia): {len(zmiany)} plików", zmiany)
+    db.execute("BEGIN IMMEDIATE")  # _zastosuj zatwierdził — nowa blokada na dopisanie nazw folderów
     opisz_foldery_dokumentow(db)  # nowe dokumenty — dopisek „(skąd)” w nazwie folderu
     db.commit()
     return w
