@@ -366,3 +366,28 @@ def test_decyzje_ida_za_plikiem_do_biblioteki(swiat):
     nowa = db.execute("SELECT cel FROM wykonanie WHERE zrodlo=?", (sc,)).fetchone()[0]
     assert db.execute("SELECT dokument FROM decyzje_dok WHERE sciezka=?", (nowa,)).fetchone()[0] == 0
     assert db.execute("SELECT kategoria FROM kategorie WHERE sciezka=?", (nowa,)).fetchone()[0] == "zdjecie"
+
+
+def test_propozycja_po_uporzadkowaniu_nie_czyta_calej_biblioteki(swiat, monkeypatch):
+    """Po uporządkowaniu biblioteka jest duża, a w źródłach zostało niewiele — odciski liczone tylko dla par
+    o tym samym rozmiarze (źródło ↔ cel), nie dla każdego pliku w bibliotece."""
+    from katalogator import duplikaty
+    k, cel, db = swiat
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
+    wykonawca.wykonaj(db)
+    db.execute("DELETE FROM odciski")
+    db.commit()
+    (k / "nowy.bin").write_bytes(b"q" * 12345)  # jedyny nowy plik — rozmiar, którego nie ma w bibliotece
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    skaner.skanuj(str(cel), db, wypisz=lambda *_: None)
+    czytane = []
+    prawdziwy = duplikaty._odcisk
+    monkeypatch.setattr(duplikaty, "_odcisk", lambda s, *a, **kw: czytane.append(s) or prawdziwy(s, *a, **kw))
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel))
+    zrodla = [c for c in czytane if not c.startswith(str(cel))]
+    w_celu = [c for c in czytane if c.startswith(str(cel))]
+    # w celu czytane są tylko pliki, których rozmiar ma któryś plik ze źródła (tu: kopie oryginałów)
+    rozm_zr = {os.path.getsize(c) for c in zrodla} | {r[0] for r in db.execute(
+        "SELECT rozmiar FROM pliki WHERE korzen = ?", (str(k),))}
+    assert all(os.path.getsize(c) in rozm_zr for c in w_celu)
+    assert str(k / "nowy.bin") not in czytane

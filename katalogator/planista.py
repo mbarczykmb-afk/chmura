@@ -391,9 +391,12 @@ def _etykiety_miejsc(media: list[dict], dom_wymuszony: str | None = None
 
 def _odciski_dla_celu(db, zrodlowe: list[dict], istniejace: list[dict], przerwij) -> None:
     """Liczy pełne odciski tylko tam, gdzie plik ze źródła ma rozmiar jak plik w celu."""
-    rozmiary = {p["rozmiar"] for p in istniejace}
-    kandydaci = [p for p in zrodlowe if p["rozmiar"] in rozmiary] + [p for p in istniejace]
-    kandydaci = [p for p in kandydaci if p["rozmiar"] in rozmiary and p["rozmiar"] > 0]
+    # tylko pary o tym samym rozmiarze: plik ze źródła i plik w celu (wcześniej liczone były WSZYSTKIE pliki celu —
+    # po uporządkowaniu to cała biblioteka, setki GB czytane przez sieć, choć w źródłach zostało kilka plików)
+    w_celu = {p["rozmiar"] for p in istniejace}
+    w_zrodlach = {p["rozmiar"] for p in zrodlowe}
+    wspolne = (w_celu & w_zrodlach) - {0}
+    kandydaci = [p for p in zrodlowe + istniejace if p["rozmiar"] in wspolne]
     znane = {r["sciezka"] for r in db.execute(
         "SELECT o.sciezka FROM odciski o JOIN pliki p ON p.sciezka=o.sciezka AND p.rozmiar=o.rozmiar AND p.mtime=o.mtime "
         "WHERE o.pelny IS NOT NULL")}
@@ -409,6 +412,7 @@ def _odciski_dla_celu(db, zrodlowe: list[dict], istniejace: list[dict], przerwij
             continue
         db.execute("INSERT OR REPLACE INTO odciski(sciezka, rozmiar, mtime, szybki, pelny) VALUES (?,?,?,NULL,?)",
                    (p["sciezka"], p["rozmiar"], p["mtime"], h))
+        db.commit()  # po każdym pliku — czytanie przez sieć trwa, a baza nie może czekać zablokowana
     db.commit()
 
 
