@@ -118,10 +118,27 @@ class Galeria:
             arg = arg + [min(obszar[:2]), max(obszar[:2]), min(obszar[2:]), max(obszar[2:])]
         return w, arg
 
+    def _rodzaj(self) -> str:
+        """Filtr 📷 zdjęcia / 🎬 filmy / 📄 dokumenty z bieżącego zapytania (parametr r) — „” = wszystko."""
+        r = getattr(_FILTR, "rodzaj", "")
+        if not r:
+            return ""
+        if not hasattr(self, "_ma_dok"):
+            db = skaner.otworz_baze(self.baza)
+            try:
+                self._ma_dok = bool(db.execute("SELECT 1 FROM sqlite_master WHERE name='decyzje_dok'").fetchone())
+            finally:
+                db.close()
+        # dokument: Twoja decyzja w projekcie albo zdjęcie w folderze „Dokumenty…” (np. Dokumenty z 2023)
+        dok = "(lower(wzgledna) LIKE '%dokument%'" + \
+              (" OR sciezka IN (SELECT sciezka FROM decyzje_dok WHERE dokument=1))" if self._ma_dok else ")")
+        return {"zdjecie": f" AND rodzaj='zdjecie' AND NOT {dok}", "film": " AND rodzaj='film'",
+                "dokument": f" AND rodzaj='zdjecie' AND {dok}"}.get(r, "")
+
     def _zakres(self) -> tuple[str, list]:
         k = self.korzenie()
         if k is None:  # wszystko w bazie
-            return self.filtr, []
+            return self.filtr + self._rodzaj(), []
         if not k:  # zakres pusty (np. biblioteka, gdy nie wybrano miejsca docelowego)
             return " AND 0", []
         czesci, arg = [], []
@@ -130,7 +147,7 @@ class Galeria:
             pref = r.rstrip("\\/") + os.sep
             czesci.append("(korzen = ? OR substr(sciezka, 1, ?) = ?)")
             arg += [r, len(pref), pref]
-        return " AND (" + " OR ".join(czesci) + ")" + self.filtr, arg
+        return " AND (" + " OR ".join(czesci) + ")" + self.filtr + self._rodzaj(), arg
 
     def lata(self, obszar: tuple | None = None) -> dict:
         w, arg = self._warunek(obszar)
@@ -672,8 +689,13 @@ def wyslij_strumien(h: BaseHTTPRequestHandler, sciezka: str | None) -> None:
         pass  # przeglądarka przerwała pobieranie (np. przewinięcie) — to normalne
 
 
+_FILTR = threading.local()  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
+
+
 def obsluz_api(g: Galeria, sciezka: str, q: dict):
     """/api/g/… -> (treść, typ) albo („film”, ścieżka) albo None, gdy to nie ścieżka galerii."""
+    r = q.get("r", [""])[0]
+    _FILTR.rodzaj = r if r in ("zdjecie", "film", "dokument") else ""
     def i(k, d=0):
         try:
             return int(q.get(k, [d])[0])

@@ -26,6 +26,7 @@ function url(sciezka, param = {}) {
   return sciezka + "?" + u.toString();
 }
 async function api(sciezka, param) {
+  if (g.rodzaj) param = {...(param || {}), r: g.rodzaj};  // filtr: zdjęcia / filmy / dokumenty
   const r = await fetch(url(sciezka, param));
   if (r.status === 401 || r.status === 403) { pokazLogin(); throw new Error("Podaj PIN"); }
   const j = await r.json();
@@ -526,6 +527,29 @@ $("pelny-ekran").onclick = () => {
 document.addEventListener("fullscreenchange", () => {
   $("pelny-ekran").textContent = document.fullscreenElement ? "⛶ Zamknij pełny ekran" : "⛶ Pełny ekran";
 });
+// --- filtr rodzaju: wszystko / zdjęcia / filmy / dokumenty (zapamiętany) ---
+g.rodzaj = (() => { try { return localStorage.getItem("kat_g_rodzaj") || ""; } catch (e) { return ""; } })();
+function rysujRodzaje() {
+  document.querySelectorAll("#rodzaje button").forEach(b => b.classList.toggle("akt", b.dataset.r === g.rodzaj));
+  $("rodzaj-sel").value = g.rodzaj;
+}
+$("rodzaje").onclick = e => { const b = e.target.closest("button"); if (b) ustawRodzaj(b.dataset.r); };
+$("rodzaj-sel").onchange = () => ustawRodzaj($("rodzaj-sel").value);
+function ustawRodzaj(r) {
+  g.rodzaj = r; try { localStorage.setItem("kat_g_rodzaj", g.rodzaj); } catch (er) { /* bez pamięci */ }
+  rysujRodzaje();
+  g.punkty = null; g.rok = null; g.mies = null;
+  if (g.zrodlo.typ === "os") start(); else pokazWyniki(g.zrodlo);
+}
+rysujRodzaje();
+// --- pasek Przeglądarki chowany strzałką (zapamiętane) ---
+function ustawPasek(schowany) {
+  document.body.classList.toggle("pasek-schowany", schowany);
+  try { localStorage.setItem("kat_g_pasek", schowany ? "1" : "0"); } catch (e) { /* bez pamięci */ }
+}
+ustawPasek((() => { try { return localStorage.getItem("kat_g_pasek") === "1"; } catch (e) { return false; } })());
+$("pasek-schowaj").onclick = () => ustawPasek(true);
+$("pasek-pokaz").onclick = () => ustawPasek(false);
 $("menu-pokaz").onclick = () => { if (g.pliki.length) { pokazPelny(g.pliki, 0); startPokaz(); } };
 $("szukaj-btn").onclick = () => {
   const h = document.querySelector("header"), on = !h.classList.contains("szuka");
@@ -801,8 +825,8 @@ function oknoLokalizacji(p) {
   const dzien = (p.data || "").slice(0, 10);
   const inne = dzien ? (g.lista || []).filter(x => x.id !== p.id && x.lat == null && (x.data || "").slice(0, 10) === dzien) : [];
   $("lok-inne").hidden = !inne.length; $("lok-inne-cb").checked = false;
-  $("lok-inne-t").textContent = `także ${liczbaZdjec(inne.length)} z tego dnia bez lokalizacji`;
-  lok.inne = inne;
+  lok.inne = inne; lok.wybrane = new Set(inne.map(x => x.id));
+  rysujInneLok();
   $("lok-usun").hidden = p.lat == null;
   if (!lok.mapa) {
     lok.mapa = L.map("lok-mapa", {doubleClickZoom: false}).setView([52, 19], 6);
@@ -827,13 +851,31 @@ function ustawZnacznik(la, lo) {
   } else lok.znacznik.setLatLng([la, lo]);
   $("lok-zapisz").disabled = false;
 }
+// miniatury pozostałych zdjęć z tego dnia: widać, czego dotyczy zmiana; klik — wyłącz / włącz zdjęcie
+function rysujInneLok() {
+  const n = lok.inne.filter(x => lok.wybrane.has(x.id)).length, wsz = lok.inne.length;
+  $("lok-inne-t").textContent = `także ${liczbaZdjec(n)} z tego dnia bez lokalizacji` + (n < wsz ? ` (z ${wsz})` : "");
+  const m = $("lok-inne-min"); m.hidden = !$("lok-inne-cb").checked || !wsz;
+  if (m.hidden) return;
+  m.replaceChildren();
+  for (const x of lok.inne) {
+    const b = document.createElement("button"); b.type = "button";
+    b.className = "lok-min" + (lok.wybrane.has(x.id) ? " wyb" : "");
+    b.title = (x.nazwa || "") + (lok.wybrane.has(x.id) ? " — kliknij, żeby pominąć" : " — pominięte; kliknij, żeby dołączyć");
+    if (x.rodzaj === "film") b.textContent = "🎬";
+    else { const im = new Image(); im.loading = "lazy"; im.alt = ""; im.src = miniatura(x.id, false); b.append(im); }
+    b.onclick = () => { lok.wybrane.has(x.id) ? lok.wybrane.delete(x.id) : lok.wybrane.add(x.id); rysujInneLok(); };
+    m.append(b);
+  }
+}
+$("lok-inne-cb").onchange = rysujInneLok;
 function zamknijLok() { $("lok").hidden = true; }
 $("lok-anuluj").onclick = zamknijLok;
 $("lok").onclick = e => { if (e.target.id === "lok") zamknijLok(); };
 $("lok-zapisz").onclick = async () => {
   if (!lok.znacznik) return;
   const ll = lok.znacznik.getLatLng(), p = lok.p;
-  const cele = [p, ...($("lok-inne-cb").checked ? lok.inne : [])];
+  const cele = [p, ...($("lok-inne-cb").checked ? lok.inne.filter(x => lok.wybrane.has(x.id)) : [])];
   const pop = Object.fromEntries(cele.map(x => [x.id, [x.lat ?? null, x.lon ?? null]]));
   if (await ustawLokalizacje(cele.map(x => x.id), ll.lat, ll.lng, pop)) { lok.ostatnie = [ll.lat, ll.lng]; zamknijLok(); }
 };

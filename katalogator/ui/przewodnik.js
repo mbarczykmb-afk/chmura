@@ -251,5 +251,42 @@ naStan.push(() => {
   if (powitanieSprawdzone || stan.powitanie_widziane === undefined) return;
   powitanieSprawdzone = true;
   if (!stan.powitanie_widziane) pokazPowitanie();
+  else if (!document.body.classList.contains("zdalnie")) pokazWyborTrybu();
 });
+
+// ---------- ekran startowy: trzy duże kafelki — czym się dziś zajmujemy ----------
+function pokazWyborTrybu() {
+  if ($("wybor-trybu")) return;
+  const n = document.createElement("div"); n.className = "wybor-trybu"; n.id = "wybor-trybu"; n.setAttribute("role", "dialog");
+  const KAFLE = [
+    ["porzadkowanie", "🗂", "Porządkowanie", "Kopiuję albo przenoszę zdjęcia i filmy do jednej uporządkowanej biblioteki: Rok → Miesiąc → Miejsce."],
+    ["sprzatanie", "🧹", "Sprzątanie", "Duplikaty, podobne, nieostre i śmieci w istniejących folderach — bez kopiowania i bez nowego drzewa."],
+    ["przegladarka", "🔭", "Przeglądarka", "Oglądanie zdjęć i filmów z dowolnych dysków: oś czasu, mapa, kolekcje, „tego dnia”."],
+  ];
+  const obecny = sprzatanie() ? "sprzatanie" : "porzadkowanie";
+  n.innerHTML = `<div class="wt-okno"><h2>Czym się dziś zajmujemy?</h2>
+    <div class="wt-kafle"></div>
+    <div class="wt-dol"><span class="info">Projekt: <b></b> · tryb możesz zmienić w każdej chwili u góry okna</span>
+      <button class="maly" id="wt-zostan">Zostań przy ostatnim (Esc)</button></div></div>`;
+  n.querySelector(".wt-dol b").textContent = (stan.projekt && stan.projekt.nazwa) || "";
+  const kafle = n.querySelector(".wt-kafle");
+  for (const [t, ik, tyt, opis] of KAFLE) {
+    const b = document.createElement("button"); b.className = "wt-kafel" + (t === obecny ? " ostatni" : "");
+    b.innerHTML = `<span class="ik"></span><b></b><span class="op"></span>`;
+    b.querySelector(".ik").textContent = ik; b.querySelector("b").textContent = tyt; b.querySelector(".op").textContent = opis;
+    if (t === obecny) { const z = document.createElement("small"); z.textContent = "ostatnio"; b.append(z); }
+    b.onclick = () => { zamknij(); document.querySelector(`.tryby button[data-tryb="${t}"]`).click(); };
+    kafle.append(b);
+  }
+  const zamknij = () => { n.remove(); document.removeEventListener("keydown", klaw, true); };
+  const klaw = e => {
+    if (e.key === "Escape") { e.preventDefault(); zamknij(); }
+    const i = {"1": 0, "2": 1, "3": 2}[e.key];
+    if (i !== undefined) { e.preventDefault(); kafle.children[i].click(); }
+  };
+  document.addEventListener("keydown", klaw, true);
+  n.querySelector("#wt-zostan").onclick = zamknij;
+  document.body.append(n);
+  (kafle.querySelector(".ostatni") || kafle.firstChild).focus();
+}
 if ($("m-powitanie")) $("m-powitanie").onclick = () => { $("pomoc-menu").hidden = true; pokazPowitanie(); };

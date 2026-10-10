@@ -174,6 +174,11 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.26:** ekran startowy — trzy kafelki: 🗂 Porządkowanie, 🧹 Sprzątanie, 🔭 Przeglądarka (klawisze 1/2/3, Esc —
+zostań przy ostatnim) · Przeglądarka: pasek programu i pasek Przeglądarki chowane strzałką (▴ / ▾, zapamiętane;
+pasek programu domyślnie schowany) · filtr: Wszystko / 📷 Zdjęcia / 🎬 Filmy / 📄 Dokumenty (foldery „Dokumenty…”
+i Twoje decyzje) · lokalizacja dla wielu zdjęć: miniatury pozostałych zdjęć z tego dnia, klik — pomiń / dołącz.
+
 **1.25:** decyzje (dokument / zdjęcie / śmieci) i wyniki analizy idą za plikiem do biblioteki — po porządkowaniu
 te same zdjęcia nie wracają do przejrzenia (dla już uporządkowanych odtwarzane przy otwarciu projektu) · Dokumenty:
 *Ta strona → 📷 zdjęcia / 📄 dokumenty* i *Wszystkie pozostałe → 📷 zdjęcia* · wykrywacz dokumentów nie myli
