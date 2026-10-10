@@ -417,19 +417,29 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
 #motyw-btn{width:40px;height:36px;padding:0;display:inline-grid;place-items:center;color:var(--fg)}
 #motyw-btn svg{width:18px;height:18px}
 /* ekran startowy */
-.wybor-trybu{position:fixed;inset:0;z-index:2900;display:grid;place-items:center;padding:20px;background:rgba(3,6,15,.55);backdrop-filter:blur(6px)}
-.wt-okno{background:var(--bg);border:1px solid var(--lin);border-radius:22px;padding:28px;width:min(1040px,100%);box-shadow:0 30px 80px rgba(0,0,0,.35)}
-.wt-okno h2{margin:0 0 18px;font-size:24px}
-.wt-kafle{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.wt-kafel{display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:left;padding:26px 22px;min-height:230px;border-radius:18px;
-  border:1px solid var(--lin);background:var(--panel);color:var(--fg);cursor:pointer;position:relative;transition:transform .15s,box-shadow .15s,border-color .15s}
-.wt-kafel:hover,.wt-kafel:focus-visible{transform:translateY(-3px);border-color:var(--akc);box-shadow:0 14px 40px rgba(79,70,229,.25);outline:none}
+.wybor-trybu{position:fixed;inset:0;z-index:2900;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+  padding:20px 20px 4vh;background:#050814 url("/ui/start.webp") center/cover no-repeat;color:#eef2ff}
+/* przyciemnienie dołu tła — kafelki czytelne, logo u góry zostaje widoczne */
+.wybor-trybu::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,8,20,0) 0%,rgba(5,8,20,.15) 35%,
+  rgba(5,8,20,.72) 62%,rgba(5,8,20,.92) 100%);pointer-events:none}
+.wt-okno{position:relative;width:min(1100px,100%)}
+.wt-okno h2{margin:0 0 16px;font-size:28px;text-align:center;text-shadow:0 2px 18px rgba(0,0,0,.8)}
+.wt-kafle{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.wt-kafel{display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:left;padding:24px 22px;min-height:200px;border-radius:20px;
+  border:1px solid rgba(160,180,255,.28);background:rgba(13,20,42,.58);backdrop-filter:blur(14px) saturate(1.3);color:#eef2ff;cursor:pointer;
+  position:relative;transition:transform .15s,box-shadow .15s,border-color .15s,background .15s;box-shadow:0 10px 40px rgba(0,0,0,.45)}
+.wt-kafel:hover,.wt-kafel:focus-visible{transform:translateY(-4px);border-color:#7c9cff;background:rgba(30,44,96,.7);
+  box-shadow:0 18px 50px rgba(64,110,255,.45);outline:none}
 .wt-kafel .ik{font-size:54px;line-height:1}
-.wt-kafel b{font-size:22px}
-.wt-kafel .op{color:var(--mut);font-size:14px;line-height:1.45}
-.wt-kafel small{position:absolute;top:14px;right:14px;background:var(--akc);color:var(--akc-fg);border-radius:999px;padding:2px 10px;font-size:11.5px}
-.wt-dol{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px;flex-wrap:wrap}
-@media (max-width:760px){.wt-kafle{grid-template-columns:1fr}.wt-kafel{min-height:0;padding:18px}.wt-kafel .ik{font-size:38px}}
+.wt-kafel b{font-size:23px}
+.wt-kafel .op{color:#b9c4e4;font-size:14px;line-height:1.45}
+.wt-kafel small{position:absolute;top:14px;right:14px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;border-radius:999px;padding:2px 10px;font-size:11.5px}
+.wt-dol{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap;color:#b9c4e4;font-size:13.5px;text-shadow:0 1px 8px rgba(0,0,0,.8)}
+.wt-dol .info{color:inherit}
+.wt-dol b{color:#fff}
+.wt-dol button{background:rgba(13,20,42,.6);color:#eef2ff;border:1px solid rgba(160,180,255,.3);backdrop-filter:blur(8px)}
+@media (max-width:760px){.wt-kafle{grid-template-columns:1fr}.wt-kafel{min-height:0;padding:16px}.wt-kafel .ik{font-size:34px}
+  .wybor-trybu{justify-content:center;background-position:30% center}.wt-okno h2{font-size:22px}}
 .start{position:fixed;inset:0;z-index:5000;background:#050814;display:grid;place-items:center;overflow:hidden;transition:opacity .6s ease,visibility .6s;cursor:pointer}
 .start::before{content:"";position:absolute;inset:-40px;background:url(/ui/start.webp) center/cover;filter:blur(38px) brightness(.55);transform:scale(1.1)}
 .start img{position:relative;max-width:100%;max-height:100%;object-fit:contain;animation:start-wej 1.2s ease both}
