@@ -275,7 +275,7 @@ async function pokazPelny(lista, poz) {
   narzedziaPelnego(p); miniMapa(p);
   if (p.miejsce === undefined) {
     try {
-      const d = await api("/api/g/plik", {id: p.id}); p.miejsce = d.miejsce; p.ulubione = d.ulubione;
+      const d = await api("/api/g/plik", {id: p.id}); p.miejsce = d.miejsce; p.ulubione = d.ulubione; p.dokument = d.dokument;
       if (p.lat == null && d.lat != null) { p.lat = d.lat; p.lon = d.lon; }
     }
     catch (e) { p.miejsce = null; }
@@ -369,6 +369,7 @@ $("pelny").querySelector(".nast").onclick = e => { e.stopPropagation(); krokRecz
 $("pelny").onclick = e => { if (e.target.id === "pelny" || e.target.id === "pelny-tresc") zamknijPelny(); };
 document.addEventListener("keydown", e => {
   if ($("pelny").hidden) return;
+  if (!$("dt").hidden) { if (e.key === "Escape") $("dt").hidden = true; if (e.key === "Enter") $("dt-zapisz").click(); return; }
   if (e.key === "Escape") { if (g.pokaz) stopPokaz(); else if (zoom.s > 1) zoomReset(); else zamknijPelny(); }
   if (e.key === "ArrowLeft" && zoom.s === 1) krokRecznie(-1);
   if (e.key === "ArrowRight" && zoom.s === 1) krokRecznie(1);
@@ -377,6 +378,7 @@ document.addEventListener("keydown", e => {
   if (!$("lok").hidden) { if (e.key === "Escape") zamknijLok(); return; }
   if (e.key === "Delete" && MOZE_USUWAC) $("p-usun").click();
   if ((e.key === "l" || e.key === "L") && MOZE_USUWAC) $("p-miejsce").click();
+  if ((e.key === "d" || e.key === "D") && W_PROGRAMIE && !$("p-dok").hidden) $("p-dok").click();
   if (e.key === "+" || e.key === "=") zoomUstaw(zoom.s * 1.4);
   if (e.key === "-") zoomUstaw(zoom.s / 1.4);
   if (e.key === "0") zoomUstaw(1);
@@ -948,9 +950,64 @@ function narzedziaPelnego(p) {
   $("p-usun").hidden = !MOZE_USUWAC;
   $("p-miejsce").hidden = !MOZE_USUWAC;
   if (p) $("p-miejsce").textContent = p.lat != null ? "📍 Zmień miejsce" : "📍 Dodaj miejsce";
+  $("p-data").hidden = !MOZE_USUWAC;
+  const dk = $("p-dok"); dk.hidden = !W_PROGRAMIE || (p && p.rodzaj === "film");
+  dk.classList.toggle("akt", !!(p && p.dokument));
+  dk.textContent = p && p.dokument ? "📄 Dokument ✓" : "📄 To dokument";
+  dk.title = p && p.dokument ? "Oznaczone jako dokument — kliknij, żeby wrócić do zwykłych zdjęć (D)"
+                             : "Oznacz jako dokument — trafi do filtra 📄 Dokumenty (D)";
   $("p-pokaz").textContent = g.pokaz ? "⏸ Pauza" : "▶ Pokaz";
 }
 const biezacy = () => g.lista[g.poz];
+// 📄 zdjęcie ↔ dokument
+$("p-dok").onclick = async e => {
+  e && e.stopPropagation && e.stopPropagation();
+  const p = biezacy(); if (!p) return;
+  try {
+    const w = await post("/api/g/dokument", {ids: [p.id], tak: !p.dokument});
+    p.dokument = w.dokument; narzedziaPelnego(p);
+    toastG(p.dokument ? `📄 „${p.nazwa}” — dokument` : `📷 „${p.nazwa}” — zwykłe zdjęcie`);
+  } catch (err) { toastG(err.message); }
+};
+// 📅 zmiana daty zrobienia (w pliku: EXIF w JPEG, .xmp obok w innych formatach)
+$("p-data").onclick = e => {
+  e.stopPropagation(); const p = biezacy(); if (!p) return;
+  stopPokaz();
+  const d = (p.data || "").slice(0, 16);
+  $("dt-wart").value = d || "";
+  $("dt-tyt").textContent = `📅 ${p.nazwa || "Data"}`;
+  const dzien = (p.data || "").slice(0, 10);
+  const inne = dzien ? (g.lista || []).filter(x => x.id !== p.id && (x.data || "").slice(0, 10) === dzien) : [];
+  $("dt-inne").hidden = !inne.length; $("dt-inne-cb").checked = false;
+  $("dt-inne-t").textContent = `przesuń też ${liczbaZdjec(inne.length)} z tego samego dnia o tyle samo`;
+  $("dt").hidden = false; $("dt-wart").focus();
+  $("dt-zapisz").onclick = async () => {
+    const nowa = $("dt-wart").value;
+    if (!nowa) return;
+    const cele = [{p, data: nowa}];
+    if ($("dt-inne-cb").checked && p.data) {  // całe zdjęcia z tego dnia: to samo przesunięcie (np. zły zegar aparatu)
+      const roznica = new Date(nowa) - new Date(p.data.slice(0, 19));
+      for (const x of inne) {
+        const t = new Date(new Date(x.data.slice(0, 19)).getTime() + roznica);
+        const pad = n => String(n).padStart(2, "0");
+        cele.push({p: x, data: `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`});
+      }
+    }
+    let zm = 0, bl = [];
+    for (const c of cele) {
+      try {
+        const w = await post("/api/g/data", {ids: [c.p.id], data: c.data});
+        if (w.zmienione) { c.p.data = w.data; zm++; } else bl = bl.concat(w.bledy || []);
+      } catch (err) { bl.push(err.message); }
+    }
+    $("dt").hidden = true;
+    toastG(`📅 Zmieniono datę: ${liczbaZdjec(zm)}` + (bl.length ? ` · nie udało się: ${bl.length} (${bl[0]})` : ""));
+    if (biezacy() === p) $("pelny-opis").textContent = `${p.nazwa} · ${dataTxt(p.data)}` + (p.miejsce ? " · " + p.miejsce : "");
+    g.punkty = null; wczytajLata(true).catch(() => {});
+  };
+};
+$("dt-anuluj").onclick = () => { $("dt").hidden = true; };
+$("dt").onclick = e => { if (e.target.id === "dt") $("dt").hidden = true; };
 $("p-ulub").onclick = async e => {
   e && e.stopPropagation && e.stopPropagation();
   const p = biezacy(); if (!p) return;

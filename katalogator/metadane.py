@@ -170,12 +170,20 @@ def z_bocznych(sciezki: list[str], m: Metadane) -> None:
     """Pliki towarzyszące leżące obok zdjęcia/filmu: .json (Google), .xmp (Lightroom, darktable…).
     Lokalizacja ustawiona ręcznie w Katalogatorze (.xmp ze znacznikiem) ma pierwszeństwo przed każdym innym GPS."""
     reczna = None  # None = brak ręcznej; () = usunięta; (lat, lon) = ustawiona
+    reczna_data = None
     for s in sciezki:
         try:
             with open(s, "rb") as f:
                 dane = f.read(2_000_000)
         except OSError:
             continue
+        if s.lower().endswith(".xmp") and b"xmlns:katalogator=" in dane[:200_000]:
+            d = re.search(rb'katalogator:Data="([^"]+)"', dane)
+            if d:  # 📅 data ustawiona ręcznie w Katalogatorze
+                try:
+                    reczna_data = datetime.fromisoformat(d.group(1).decode())
+                except ValueError:
+                    pass
         if s.lower().endswith(".xmp") and b"katalogator:Lokalizacja" in dane[:200_000]:
             if b'katalogator:Lokalizacja="brak"' in dane:
                 reczna = ()
@@ -189,6 +197,8 @@ def z_bocznych(sciezki: list[str], m: Metadane) -> None:
         (z_takeout if s.lower().endswith(".json") else z_xmp)(dane, m)
     if reczna is not None:
         m.lat, m.lon = reczna if reczna else (None, None)
+    if reczna_data is not None:
+        m.data, m.zrodlo_daty = reczna_data, "exif"
 
 
 def boczne_nazwy(sciezka: str) -> list[str]:

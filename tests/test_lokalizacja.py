@@ -93,3 +93,58 @@ def test_galeria_lokalizacja_w_zakresie(tmp_path):
     assert galeria.obsluz_post(g, "/api/g/lokalizacja", {"ids": [i], "lat": None})["zmienione"] == 1
     assert g.lata()["z_gps"] == 0
     assert "blad" in galeria.Galeria(tmp_path / "k.db", lambda: [str(tmp_path / "inny")]).lokalizacja([i], 1, 1)
+
+
+def test_zmiana_daty_w_pliku_i_po_skanie(tmp_path):
+    """📅 JPEG: data w EXIF (obraz bez zmian); PNG: .xmp obok z ręczną datą, która wygrywa przy skanie;
+    ręczna lokalizacja i ręczna data w tym samym .xmp nie nadpisują się nawzajem."""
+    from PIL import Image
+    from test_katalogator import _jpg_z_exif
+    from katalogator import galeria, lokalizacja, skaner
+    k = tmp_path / "dysk"
+    k.mkdir()
+    _jpg_z_exif(k / "a.jpg", data="2010:01:01 10:00:00", gps=None)
+    Image.new("RGB", (400, 300), (10, 120, 200)).save(k / "b.png")
+    piksele = Image.open(k / "a.jpg").tobytes()
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    ids = {r[1]: r[0] for r in db.execute("SELECT rowid, wzgledna FROM pliki")}
+    g = galeria.Galeria(tmp_path / "k.db")
+    w = g.data([ids["a.jpg"], ids["b.png"]], "2015-06-07T08:09:10")
+    assert w["zmienione"] == 2 and not w["bledy"]
+    with Image.open(k / "a.jpg") as im:
+        assert im.getexif().get_ifd(0x8769)[0x9003] == "2015:06:07 08:09:10"
+        assert im.tobytes() == piksele
+    assert (k / "b.png.xmp").exists()
+    g.lokalizacja([ids["b.png"]], 50.0, 19.0)                     # lokalizacja nie kasuje ręcznej daty
+    assert b'katalogator:Data="2015-06-07T08:09:10"' in (k / "b.png.xmp").read_bytes()
+    db.execute("DELETE FROM pliki")
+    db.commit()
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)            # od nowa z dysku
+    daty = {r[0]: (r[1], r[2]) for r in db.execute("SELECT wzgledna, data, lat FROM pliki WHERE rodzaj='zdjecie'")}
+    assert daty["a.jpg"][0].startswith("2015-06-07T08:09:10")
+    assert daty["b.png"][0].startswith("2015-06-07T08:09:10") and daty["b.png"][1] == 50.0
+    assert lokalizacja.ustaw_date(db, [1], "zła data")["blad"]
+
+
+def test_oznacz_dokument_i_filtr(tmp_path):
+    from test_katalogator import _jpg_z_exif
+    from katalogator import galeria, skaner
+    k = tmp_path / "dysk"
+    (k / "Dokumenty z 2020").mkdir(parents=True)
+    _jpg_z_exif(k / "zwykle.jpg", data="2020:01:01 10:00:00", gps=None)
+    _jpg_z_exif(k / "Dokumenty z 2020" / "skan.jpg", data="2020:01:02 10:00:00", gps=None)
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    ids = {r[1].replace("\\", "/"): r[0] for r in db.execute("SELECT rowid, wzgledna FROM pliki")}
+    g = galeria.Galeria(tmp_path / "k.db")
+
+    def lista(r):
+        galeria.obsluz_api(g, "/api/g/lata", {"r": [r]})  # ustawia filtr na czas zapytania
+        return sorted(p["nazwa"] for p in g.pliki("2020", None)["pliki"])
+    assert lista("dokument") == ["skan.jpg"]
+    galeria.obsluz_post(g, "/api/g/dokument", {"ids": [ids["zwykle.jpg"]], "tak": True})
+    galeria.obsluz_post(g, "/api/g/dokument", {"ids": [ids["Dokumenty z 2020/skan.jpg"]], "tak": False})
+    assert lista("dokument") == ["zwykle.jpg"] and lista("zdjecie") == ["skan.jpg"]
+    assert galeria.obsluz_api(g, "/api/g/plik", {"id": [str(ids["zwykle.jpg"])], "r": ["zdjecie"]})[0]["dokument"] is True
+    galeria.obsluz_api(g, "/api/g/lata", {})

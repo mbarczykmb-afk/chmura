@@ -14,6 +14,7 @@ import os
 import re
 import secrets
 import socket
+import sqlite3
 import threading
 import time
 from collections import OrderedDict
@@ -130,8 +131,9 @@ class Galeria:
             finally:
                 db.close()
         # dokument: Twoja decyzja w projekcie albo zdjęcie w folderze „Dokumenty…” (np. Dokumenty z 2023)
-        dok = "(lower(wzgledna) LIKE '%dokument%'" + \
-              (" OR sciezka IN (SELECT sciezka FROM decyzje_dok WHERE dokument=1))" if self._ma_dok else ")")
+        dok = ("((lower(wzgledna) LIKE '%dokument%' AND sciezka NOT IN (SELECT sciezka FROM decyzje_dok WHERE dokument=0))"
+               " OR sciezka IN (SELECT sciezka FROM decyzje_dok WHERE dokument=1))") if self._ma_dok \
+            else "(lower(wzgledna) LIKE '%dokument%')"
         return {"zdjecie": f" AND rodzaj='zdjecie' AND NOT {dok}", "film": " AND rodzaj='film'",
                 "dokument": f" AND rodzaj='zdjecie' AND {dok}"}.get(r, "")
 
@@ -224,11 +226,16 @@ class Galeria:
         try:
             ulub = db.execute("SELECT 1 FROM g_ulubione WHERE sciezka=?", (r["sciezka"],)).fetchone() is not None
             albumy = [x[0] for x in db.execute("SELECT album FROM g_album_pliki WHERE sciezka=?", (r["sciezka"],))]
+            try:
+                d = db.execute("SELECT dokument FROM decyzje_dok WHERE sciezka=?", (r["sciezka"],)).fetchone()
+            except sqlite3.OperationalError:
+                d = None
+            dokument = bool(d[0]) if d else "dokument" in r["wzgledna"].lower()
         finally:
             db.close()
         return {"id": r["id"], "nazwa": re.split(r"[\\/]", r["wzgledna"])[-1], "folder": os.path.dirname(r["wzgledna"]),
                 "data": r["data"], "rodzaj": r["rodzaj"], "aparat": r["aparat"], "lat": r["lat"], "lon": r["lon"],
-                "miejsce": miejsce, "rozmiar": r["rozmiar"], "ulubione": ulub, "albumy": albumy}
+                "miejsce": miejsce, "rozmiar": r["rozmiar"], "ulubione": ulub, "albumy": albumy, "dokument": dokument}
 
     def sciezka(self, id_: int, rodzaj: str | None = None) -> str | None:
         r = self._wiersz(id_)
@@ -447,6 +454,38 @@ class Galeria:
                                          None if lat is None else float(lon))
             except (TypeError, ValueError):
                 return {"blad": "Nieprawidłowe współrzędne."}
+        finally:
+            db.close()
+
+    def data(self, ids: list[int], tekst: str) -> dict:
+        """📅 Zmiana daty zrobienia — w pliku (EXIF albo .xmp obok) i w bazie."""
+        from . import lokalizacja
+        w, arg = self._warunek()
+        db = self._db()
+        try:
+            dozwolone = [int(i) for i in ids[:2000]
+                         if db.execute(f"SELECT 1 FROM pliki WHERE rowid=? {w}", [int(i)] + arg).fetchone()]
+            if not dozwolone:
+                return {"blad": "Nie ma takiego pliku — odśwież widok."}
+            return lokalizacja.ustaw_date(db, dozwolone, tekst)
+        finally:
+            db.close()
+
+    def dokument(self, ids: list[int], tak: bool) -> dict:
+        """📄 To zdjęcie to dokument (albo jednak zwykłe zdjęcie) — filtr „Dokumenty” i projekt widzą decyzję."""
+        w, arg = self._warunek()
+        db = self._db()
+        try:
+            db.execute("CREATE TABLE IF NOT EXISTS decyzje_dok (sciezka TEXT PRIMARY KEY, dokument INTEGER NOT NULL)")
+            n = 0
+            for i in ids[:5000]:
+                r = db.execute(f"SELECT sciezka FROM pliki WHERE rowid=? {w}", [int(i)] + arg).fetchone()
+                if r:
+                    db.execute("INSERT OR REPLACE INTO decyzje_dok VALUES (?, ?)", (r[0], 1 if tak else 0))
+                    n += 1
+            db.commit()
+            self._ma_dok = True
+            return {"zmienione": n, "dokument": bool(tak)}
         finally:
             db.close()
 
@@ -689,13 +728,15 @@ def wyslij_strumien(h: BaseHTTPRequestHandler, sciezka: str | None) -> None:
         pass  # przeglądarka przerwała pobieranie (np. przewinięcie) — to normalne
 
 
-_FILTR = threading.local()  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
+_FILTR = threading.local()
+_LISTY = ("/api/g/lata", "/api/g/pliki", "/api/g/szukaj", "/api/g/tego-dnia", "/api/g/kolekcja", "/api/g/mapa")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
 
 
 def obsluz_api(g: Galeria, sciezka: str, q: dict):
     """/api/g/… -> (treść, typ) albo („film”, ścieżka) albo None, gdy to nie ścieżka galerii."""
     r = q.get("r", [""])[0]
-    _FILTR.rodzaj = r if r in ("zdjecie", "film", "dokument") else ""
+    # filtr tylko dla list (oś czasu, mapa, szukanie…) — pojedynczy plik, miniatura, film zawsze bez filtra
+    _FILTR.rodzaj = r if r in ("zdjecie", "film", "dokument") and sciezka in _LISTY else ""
     def i(k, d=0):
         try:
             return int(q.get(k, [d])[0])
@@ -740,6 +781,7 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict):
 
 def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
     """Zmiany kolekcji (ulubione, albumy) i miniatury filmów — tylko z okna programu (telefon jest tylko do odczytu)."""
+    _FILTR.rodzaj = ""
     ids = [int(x) for x in (dane.get("ids") or []) if str(x).lstrip("-").isdigit()]
     if sciezka == "/api/g/ulubione":
         return g.ulubione(int(dane.get("id") or 0), dane.get("wlacz"))
@@ -765,15 +807,20 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
     return obsluz_usuwanie(g, sciezka, dane)
 
 
-ZMIANY_PLIKOW = ("/api/g/usun", "/api/g/usun/cofnij", "/api/g/lokalizacja")
+ZMIANY_PLIKOW = ("/api/g/usun", "/api/g/usun/cofnij", "/api/g/lokalizacja", "/api/g/data")
 
 
 def obsluz_usuwanie(g: Galeria, sciezka: str, dane: dict) -> dict | None:
     """🗑 Usuń / Cofnij, 📍 lokalizacja — w oknie programu i na telefonie (gdy pozwolono sterować z telefonu)."""
+    _FILTR.rodzaj = ""  # zmiany dotyczą wskazanych plików — bez filtra widoku
     if sciezka == "/api/g/usun":
         return g.usun([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()])
     if sciezka == "/api/g/usun/cofnij":
         return g.cofnij_usuniecie(int(dane.get("partia") or 0))
+    if sciezka == "/api/g/data":
+        return g.data([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()], str(dane.get("data") or ""))
+    if sciezka == "/api/g/dokument":
+        return g.dokument([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()], bool(dane.get("tak", True)))
     if sciezka == "/api/g/lokalizacja":
         return g.lokalizacja([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()],
                              dane.get("lat"), dane.get("lon"))

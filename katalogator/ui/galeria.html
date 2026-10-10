@@ -207,6 +207,10 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 #lok-zapisz:disabled{opacity:.45;cursor:default}
 #lok-usun:hover,.lok-usun:hover{border-color:#dc2626;color:#dc2626}
 .popup .lok-usun{margin-top:4px;width:100%}
+#dt{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3500;display:grid;place-items:center;padding:14px}
+#dt .okno{background:var(--bg);color:var(--fg);border-radius:14px;padding:16px;width:min(440px,100%);display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
+#dt input[type=datetime-local]{display:block;margin-top:6px;font:inherit;font-size:16px;padding:8px 10px;border:1px solid var(--lin);border-radius:8px;background:var(--panel);color:var(--fg);width:100%}
+#dt-inne{display:flex;gap:6px;align-items:center;font-size:13.5px}
 #lok-inne-min{display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow:auto;padding:2px}
 .lok-min{width:76px;height:58px;padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;background:var(--lin);font-size:22px;opacity:.35;filter:grayscale(1)}
 .lok-min img{width:100%;height:100%;object-fit:cover;display:block}
@@ -298,6 +302,8 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
     <button id="p-z-albumu" hidden title="Usuń z tego albumu (zdjęcie zostaje na dysku)">− Z albumu</button>
     <button id="p-pokaz" title="Pokaz slajdów (P)">▶ Pokaz</button>
     <button id="p-miejsce" hidden title="Dodaj, zmień albo usuń miejsce zrobienia zdjęcia (L)">📍 Miejsce</button>
+    <button id="p-data" hidden title="Zmień datę zrobienia (zapis w pliku: JPEG — EXIF, inne — plik .xmp obok)">📅 Data</button>
+    <button id="p-dok" hidden title="Oznacz jako dokument (D)">📄 To dokument</button>
     <button id="p-usun" hidden title="Usuń (Delete) — do kosza programu: Odłożone/Usunięte, można cofnąć">🗑 Usuń</button>
     <button id="p-otworz" hidden title="Otwórz w programie Windows (np. Filmy i TV, VLC)">⤢ Otwórz w programie</button>
   </div>
@@ -348,6 +354,17 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 <script src="/ui/mapa/leaflet.markercluster.js"></script>
 <script src="/ui/mapa/qrcode.js"></script>
 <div id="toast-g" hidden></div>
+<div id="dt" hidden>
+  <div class="okno">
+    <b id="dt-tyt">📅 Data</b>
+    <label class="info">Data i godzina zrobienia zdjęcia / nagrania filmu
+      <input type="datetime-local" id="dt-wart" step="1"></label>
+    <label id="dt-inne" hidden><input type="checkbox" id="dt-inne-cb"> <span id="dt-inne-t"></span></label>
+    <div class="info lok-uwaga">Zapis w pliku: JPEG — data w EXIF (obraz bez zmian), inne formaty i filmy — plik .xmp obok.
+      Zdjęcie przeniesie się na osi czasu; w projekcie — przy następnej propozycji drzewa.</div>
+    <div class="lok-dol"><span style="flex:1"></span><button id="dt-anuluj">Anuluj</button><button id="dt-zapisz" class="akt">Zapisz</button></div>
+  </div>
+</div>
 <div id="lok" hidden>
   <div class="okno">
     <div class="lok-gora"><b id="lok-tyt">📍 Lokalizacja</b>

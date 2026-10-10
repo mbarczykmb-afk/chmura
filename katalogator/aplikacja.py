@@ -172,6 +172,14 @@ class Stan:
             if os.path.abspath(str(b)) != os.path.abspath(str(zrodlo)) and os.path.exists(b):
                 lokalizacja.rozeslij(b, w["sciezki"], w.get("lat"), w.get("lon"))
 
+    def rozeslij_daty(self, zakres: str, w: dict) -> None:
+        """📅 Zmiana daty widoczna od razu w pozostałych projektach i w Przeglądarce."""
+        bazy = [self.projekty.baza(p["id"]) for p in self.projekty.lista()] + [self.przegladarka.baza]
+        zrodlo = self.przegladarka.baza if zakres == "przegladarka" else self.baza
+        for b in bazy:
+            if os.path.abspath(str(b)) != os.path.abspath(str(zrodlo)) and os.path.exists(b):
+                lokalizacja.rozeslij_date(b, w["sciezki"], w["data"])
+
     def przelacz_tryb(self, tryb: str) -> str | None:
         """Porządkowanie ↔ Sprzątanie: otwiera ostatni projekt danego rodzaju (albo zakłada nowy)."""
         if tryb not in ("porzadkowanie", "sprzatanie"):
@@ -1230,6 +1238,8 @@ def _handler(stan: Stan, token: str, zamknij):
                     return self._wyslij({"blad": "nie ma"}, kod=HTTPStatus.NOT_FOUND)
                 if u.path == "/api/g/lokalizacja" and w.get("sciezki"):
                     stan.rozeslij_lokalizacje(z, w)
+                if u.path == "/api/g/data" and w.get("sciezki"):
+                    stan.rozeslij_daty(z, w)
                 if usuwa and z != "przegladarka":
                     with stan.blokada:
                         stan.wersja_danych += 1

@@ -174,6 +174,11 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.27:** w podglądzie zdjęcia: *📄 To dokument* (klawisz D) — przełącza zdjęcie ↔ dokument (filtr 📄 Dokumenty,
+decyzja widoczna w projekcie) · *📅 Data* — zmiana daty zrobienia, zapis w pliku (JPEG: EXIF bez zmiany obrazu;
+inne formaty i filmy: .xmp obok, ręczna data wygrywa przy skanie), opcjonalnie przesunięcie wszystkich zdjęć z tego
+dnia o tyle samo (zły zegar aparatu); zmiana widoczna od razu w innych projektach i w Przeglądarce.
+
 **1.26:** ekran startowy — trzy kafelki: 🗂 Porządkowanie, 🧹 Sprzątanie, 🔭 Przeglądarka (klawisze 1/2/3, Esc —
 zostań przy ostatnim) · Przeglądarka: pasek programu i pasek Przeglądarki chowane strzałką (▴ / ▾, zapamiętane;
 pasek programu domyślnie schowany) · filtr: Wszystko / 📷 Zdjęcia / 🎬 Filmy / 📄 Dokumenty (foldery „Dokumenty…”
