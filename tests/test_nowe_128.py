@@ -56,10 +56,10 @@ def test_edycja_kopia_obrot_przyciecie_exif(folder):
     g = galeria.Galeria(tmp / "k.db")
     w = g.edytuj(ids["a.jpg"], {"obrot": 90, "ciecie": [0, 0, 0.5, 1], "jasnosc": 30}, zastap=False)
     assert w["ok"] and w["nazwa"] == "a (edytowane).jpg" and w["plik"]["data"] == "2019-07-14T12:30:00"
-    im = Image.open(w["sciezka"])
-    # 400×300 z orientacją 6 → pionowe 300×400 → obrót w prawo → 400×300 → lewa połowa 200×300
-    assert im.size == (200, 300)
-    ex = im.getexif()
+    with Image.open(w["sciezka"]) as im:  # zamknięty — Windows nie usunie otwartego pliku przy cofaniu
+        # 400×300 z orientacją 6 → pionowe 300×400 → obrót w prawo → 400×300 → lewa połowa 200×300
+        assert im.size == (200, 300)
+        ex = im.getexif()
     assert ex.get(0x0112) == 1 and ex.get_ifd(0x8769).get(0x9003) == "2019:07:14 12:30:00"
     assert (k / "a.jpg").exists()  # oryginał bez zmian
     druga = g.edytuj(ids["a.jpg"], {"kontrast": 10})
