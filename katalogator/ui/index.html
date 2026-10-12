@@ -127,6 +127,22 @@ button.ikonowy:hover{color:var(--blad)}
 .wybrane-nagl{margin:12px 0 6px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
 details.reczne{margin-top:10px;font-size:13px;color:var(--mut)}
 details.reczne summary{cursor:pointer;margin-bottom:6px}
+/* --- ⚙ Ustawienia --- */
+.ust{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding-right:4px}
+.ust section{border:1px solid var(--lin);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.ust h3{margin:0;font-size:14.5px}
+.ust .wiersz{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px}
+.ust .wiersz>span.info{flex:1;min-width:180px}
+.ust label{display:flex;gap:6px;align-items:center;font-size:13.5px}
+.ust .seg{display:inline-flex;border:1px solid var(--lin);border-radius:8px;overflow:hidden}
+.ust .seg button{border:0;border-radius:0;border-right:1px solid var(--lin)}
+.ust .seg button:last-child{border-right:0}
+.ust .seg button.akt{background:var(--akc);color:#fff}
+.ust code{background:var(--bg);padding:2px 6px;border-radius:5px;word-break:break-all}
+.ust .problem{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;border-top:1px solid var(--lin);padding-top:6px}
+.ust .problem b{word-break:break-all}
+.ust .problem .info{flex-basis:100%}
+.ust .ok{color:var(--ok,#059669)} .ust .zle{color:var(--blad,#dc2626)}
 .nakladka{position:fixed;inset:0;background:rgba(0,0,0,.4);display:grid;place-items:center;z-index:10}
 .okno{background:var(--panel);border:1px solid var(--lin);border-radius:12px;width:min(680px,92vw);height:min(640px,88vh);display:flex;flex-direction:column;gap:10px;padding:18px}
 .okno .drzewo{flex:1;height:auto;resize:none}
@@ -554,12 +570,14 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
   <button id="telefon-btn" title="Telefon jako pilot: co robi program, uruchamianie kolejnych kroków, przeglądanie zdjęć">📱</button>
   <button id="nagl-schowaj" title="Schowaj ten pasek (więcej miejsca na zdjęcia) — wróci strzałką ▾ na środku u góry">▴</button>
   <button id="motyw-btn" title="Motyw: jasny / ciemny" aria-label="Przełącz motyw jasny / ciemny"></button>
+  <button id="ust-btn" title="Ustawienia: wygląd, start z Windows, telefon, kopia zapasowa, aktualizacje">⚙</button>
   <div style="position:relative">
     <button id="pomoc-btn" title="Pomoc, zgłaszanie problemów, aktualizacje">?</button>
     <div class="menu" id="pomoc-menu" hidden>
       <button id="m-powitanie">👋 Jak zacząć</button>
       <button id="m-zglos">🐞 Zgłoś problem / wyślij raport…</button>
       <button id="m-aktualizacje">⟳ Sprawdź aktualizacje</button>
+      <button id="m-ustawienia">⚙ Ustawienia</button>
       <button id="m-o">ℹ O programie</button>
       <button id="m-motyw-auto">🖥 Motyw jak w systemie Windows</button>
     </div>
@@ -903,6 +921,14 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
     <label style="font-size:13px;display:flex;gap:6px;align-items:center">
       <input type="checkbox" id="o-akt"> Sprawdzaj automatycznie, czy jest nowa wersja (raz na 12 godzin, tylko zapytanie do GitHuba)</label>
     <div class="dol"><span class="wybor">Nazwy miejscowości: © GeoNames (CC BY 4.0)</span><button id="o-zamknij">Zamknij</button></div>
+  </div>
+</div>
+
+<div class="nakladka" id="okno-ust" hidden>
+  <div class="okno" role="dialog" aria-labelledby="okno-ust-tytul" style="width:min(720px,94vw)">
+    <h2 id="okno-ust-tytul">⚙ Ustawienia</h2>
+    <div class="ust" id="ust-tresc">Wczytuję…</div>
+    <div class="dol"><span class="wybor" id="ust-info"></span><button class="glowny" id="ust-zamknij">Gotowe</button></div>
   </div>
 </div>
 
@@ -1662,5 +1688,6 @@ function rysujDup() {
 </div>
 <script src="/ui/sprzatanie.js"></script>
 <script src="/ui/pomoc.js"></script>
+<script src="/ui/ustawienia.js"></script>
 </body>
 </html>

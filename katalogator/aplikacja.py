@@ -12,6 +12,7 @@ import json
 import os
 import secrets
 import shutil
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -22,8 +23,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, logi, lokalizacja, pilot, planista, projekty, przegladarka,
-               przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, usuwanie, wykonawca)
+from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, pilot, planista, projekty, przegladarka,
+               przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, usuwanie, wykonawca, wysylanie)
 from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
@@ -144,7 +145,7 @@ class Stan:
         self.dup = {"trwa": False, "etap": "", "zrobione": 0, "wszystkie": 0, "bajty": 0, "bajty_razem": 0,
                     "komunikat": "", "blad": ""}
         self.zad = {n: self._pusty() for n in ("analiza", "plan", "wykonanie", "przychodzace", "aktualizacja",
-                                               "usuwanie")}
+                                               "usuwanie", "kopia", "sprawdzanie")}
         self.miniatury: dict[int, bytes] = {}
         self.projekty.ustaw_ostatni(pid)
         self.wersja_danych += 1
@@ -171,6 +172,7 @@ class Stan:
         for b in bazy:
             if os.path.abspath(str(b)) != os.path.abspath(str(zrodlo)) and os.path.exists(b):
                 lokalizacja.rozeslij(b, w["sciezki"], w.get("lat"), w.get("lon"))
+        self._kopia_zapomnij(w["sciezki"])
 
     def rozeslij_daty(self, zakres: str, w: dict) -> None:
         """📅 Zmiana daty widoczna od razu w pozostałych projektach i w Przeglądarce."""
@@ -179,6 +181,125 @@ class Stan:
         for b in bazy:
             if os.path.abspath(str(b)) != os.path.abspath(str(zrodlo)) and os.path.exists(b):
                 lokalizacja.rozeslij_date(b, w["sciezki"], w["data"])
+        self._kopia_zapomnij(w["sciezki"])
+
+    # --- 💾 kopia zapasowa biblioteki i sprawdzanie plików -----------------------------------------
+    def _kopia_zapomnij(self, sciezki) -> None:
+        """Zmiana EXIF-u przez program (data pliku zostaje) — sprawdzanie nie może uznać jej za uszkodzenie."""
+        try:
+            db = kopia.baza(self.katalog)
+            try:
+                kopia.zapomnij(db, sciezki)
+            finally:
+                db.close()
+        except sqlite3.Error:
+            LOG.exception("Kopia: nie udało się zapomnieć sum")
+
+    def kopia_info(self) -> dict:
+        ust = aktualizacje._ustawienia(self.katalog)
+        k = ust.get("kopia") or {}
+        db = kopia.baza(self.katalog)
+        try:
+            n = db.execute("SELECT COUNT(*) FROM problemy").fetchone()[0]
+            sumy = db.execute("SELECT COUNT(*) FROM sumy").fetchone()[0]
+        finally:
+            db.close()
+        folder = k.get("folder") or ""
+        return {"folder": folder, "auto": bool(k.get("auto")), "biblioteka": self.ustawienia["cel"],
+                "dostepny": bool(folder) and os.path.isdir(folder), "ostatnia": ust.get("kopia_ostatnia"),
+                "sprawdzanie": ust.get("sprawdzanie_ostatnie"), "problemy": n, "sprawdzonych_plikow": sumy,
+                "blad_miejsca": kopia.sprawdz_miejsce(self.ustawienia["cel"], folder) if folder else None}
+
+    def kopia_ustaw(self, folder: str | None = None, auto: bool | None = None) -> dict:
+        k = dict(aktualizacje._ustawienia(self.katalog).get("kopia") or {})
+        if folder is not None:
+            folder = os.path.normpath(folder.strip()) if folder.strip() else ""
+            blad = kopia.sprawdz_miejsce(self.ustawienia["cel"], folder) if folder else None
+            if blad:
+                return {"blad": blad}
+            k["folder"] = folder
+        if auto is not None:
+            k["auto"] = bool(auto)
+        aktualizacje.zapisz_ustawienia(self.katalog, kopia=k)
+        return self.kopia_info()
+
+    def kopia_start(self) -> str | None:
+        folder = (aktualizacje._ustawienia(self.katalog).get("kopia") or {}).get("folder") or ""
+        cel = self.ustawienia["cel"]
+        blad = kopia.sprawdz_miejsce(cel, folder)
+        if blad:
+            return blad
+
+        def f(db, postep, przerwij):
+            try:
+                w = kopia.kopiuj(cel, folder, postep, przerwij)
+            except kopia.Przerwano:
+                raise skaner.Przerwano(cel) from None
+            aktualizacje.zapisz_ustawienia(self.katalog, kopia_ostatnia=w)
+            return (f"Kopia gotowa: {w['skopiowane']} nowych lub zmienionych plików "
+                    f"({raport.rozmiar_txt(w['bajty'])}), {w['bez_zmian']} bez zmian" +
+                    (f" · błędy: {w['liczba_bledow']} ({w['bledy'][0]})" if w["liczba_bledow"] else "."))
+        return self.uruchom("kopia", f)
+
+    def sprawdzanie_start(self) -> str | None:
+        cel = self.ustawienia["cel"]
+        if not cel or not os.path.isdir(cel):
+            return "Najpierw wybierz bibliotekę (miejsce docelowe porządkowania)."
+        folder = (aktualizacje._ustawienia(self.katalog).get("kopia") or {}).get("folder") or None
+
+        def f(db, postep, przerwij):
+            kdb = kopia.baza(self.katalog)
+            try:
+                w = kopia.sprawdz(kdb, cel, folder, postep, przerwij)
+            except kopia.Przerwano:
+                raise skaner.Przerwano(cel) from None
+            finally:
+                kdb.close()
+            aktualizacje.zapisz_ustawienia(self.katalog, sprawdzanie_ostatnie=w)
+            return (f"Sprawdzono {w['sprawdzone']} plików ({raport.rozmiar_txt(w['bajty'])})" +
+                    (f" · ⚠ problemy: {w['wszystkich_problemow']} — Ustawienia → Kopia zapasowa"
+                     if w["wszystkich_problemow"] else " — wszystko w porządku."))
+        return self.uruchom("sprawdzanie", f)
+
+    def kopia_problemy(self) -> list[dict]:
+        db = kopia.baza(self.katalog)
+        try:
+            return kopia.problemy(db)
+        finally:
+            db.close()
+
+    def kopia_problem(self, sciezka: str, akcja: str) -> dict:
+        folder = (aktualizacje._ustawienia(self.katalog).get("kopia") or {}).get("folder") or ""
+        db = kopia.baza(self.katalog)
+        try:
+            if akcja == "przywroc":
+                return kopia.przywroc(db, self.ustawienia["cel"], folder, sciezka)
+            if akcja == "napraw":
+                return kopia.napraw_kopie(db, self.ustawienia["cel"], folder, sciezka)
+            if akcja == "przyjmij":
+                return kopia.przyjmij(db, sciezka)
+            return {"blad": "Nieznana akcja."}
+        except OSError as e:
+            return {"blad": f"{e.strerror or e}"}
+        finally:
+            db.close()
+
+    def kopia_po_starcie(self, opoznienie: float = 120) -> None:
+        """Automatyczna kopia: raz na dobę (po starcie programu) i po porządkowaniu plików."""
+        ust = aktualizacje._ustawienia(self.katalog)
+        if not (ust.get("kopia") or {}).get("auto"):
+            return
+        if time.time() - ((ust.get("kopia_ostatnia") or {}).get("czas") or 0) < 86400:
+            return
+
+        def start():
+            if not self.zajety():
+                blad = self.kopia_start()
+                if blad:
+                    LOG.info("Automatyczna kopia: %s", blad)
+        t = threading.Timer(opoznienie, start)
+        t.daemon = True
+        t.start()
 
     def przelacz_tryb(self, tryb: str) -> str | None:
         """Porządkowanie ↔ Sprzątanie: otwiera ostatni projekt danego rodzaju (albo zakłada nowy)."""
@@ -399,7 +520,8 @@ class Stan:
     NAZWY_ZADAN = {"skan": "Skanowanie", "dup": "Szukanie duplikatów", "analiza": "Analiza zdjęć",
                    "plan": "Tworzenie propozycji", "wykonanie": "Porządkowanie plików",
                    "przychodzace": "Folder przychodzący", "aktualizacja": "Aktualizacja",
-                   "usuwanie": "Usuwanie odłożonych plików"}
+                   "usuwanie": "Usuwanie odłożonych plików", "kopia": "Kopia zapasowa",
+                   "sprawdzanie": "Sprawdzanie plików"}
 
     def _biezace(self, skan: dict, dup: dict, zad: dict) -> dict | None:
         """Jedno trwające zadanie w jednolitej postaci — dla paska postępu u góry okna."""
@@ -490,6 +612,12 @@ class Stan:
             LOG.info("Zadanie „%s”: %s %s", nazwa, komunikat, blad)
             if nazwa in ("wykonanie", "cofanie", "przychodzace", "usuwanie"):
                 self.przegladarka.zglos_zmiany()  # pliki zmieniły miejsce — Przeglądarka odświeży się sama
+            if nazwa == "wykonanie" and not blad:
+                ust = aktualizacje._ustawienia(self.katalog)
+                if (ust.get("kopia") or {}).get("auto"):  # nowe zdjęcia w bibliotece — od razu do kopii
+                    t = threading.Timer(3, lambda: self.zajety() or self.kopia_start())
+                    t.daemon = True
+                    t.start()
 
         threading.Thread(target=praca, daemon=True).start()
         return None
@@ -1100,10 +1228,16 @@ def _handler(stan: Stan, token: str, zamknij):
                     return galeria.wyslij_strumien(self, w[1])
                 if w[0] == "film-mp4":
                     return filmy.wyslij_mp4(self, w[1], w[2], w[3])
+                if w[0] == "zip":
+                    return galeria.wyslij_zip(self, w[1], w[2])
                 if w[1]:
                     return self._wyslij(w[0], w[1]) if w[0] is not None else \
                         self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
                 return self._wyslij(w[0])
+            if u.path == "/api/kopia":
+                return self._wyslij(stan.kopia_info())
+            if u.path == "/api/kopia/problemy":
+                return self._wyslij({"problemy": stan.kopia_problemy()})
             if u.path == "/api/plan/uwagi":
                 return self._wyslij({"rodzaje": stan.z_db(planista.rodzaje_uwag)})
             if u.path == "/api/plan/aktualnosc":
@@ -1191,6 +1325,20 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij({"pliki": pliki})
             if u.path == "/api/przegladarka":
                 return self._wyslij({**stan.przegladarka.opis(), "katalogator_pracuje": stan.zajety()})
+            if u.path == "/api/ustawienia-programu":  # ⚙ Ustawienia — wszystko w jednym oknie
+                ust = aktualizacje._ustawienia(stan.katalog)
+                st = stan.serwer_tel
+                prz = stan.przegladarka.opis()
+                tel = ust.get("telefon_auto") if isinstance(ust.get("telefon_auto"), dict) else {}
+                return self._wyslij({
+                    "motyw": ust.get("motyw", "dark"), "autostart": autostart(), "autostart_mozliwy": autostart_mozliwy(),
+                    "sprawdzaj_aktualizacje": aktualizacje.wlaczone(stan.katalog), "wersja": __version__,
+                    "telefon": {"wlaczony": st is not None, "adresy": st.adresy() if st else [],
+                                "sterowanie": st.pilot.sterowanie if st else bool(tel.get("sterowanie", True)),
+                                "wlasny_pin": bool(ust.get("pin_telefonu")), "pin": st.pin if st else ""},
+                    "przegladarka": {"auto": prz.get("auto"), "co_godzin": prz.get("co_godzin"),
+                                     "foldery": len(prz.get("foldery") or [])},
+                    "kopia": stan.kopia_info()})
             if u.path == "/api/dyski":
                 return self._wyslij({"dyski": dyski.lista_dyskow()})
             if u.path == "/api/foldery":
@@ -1227,6 +1375,19 @@ def _handler(stan: Stan, token: str, zamknij):
             if not self._ok_token(parse_qs(u.query)):
                 return self._wyslij({"blad": "brak dostępu"}, kod=HTTPStatus.FORBIDDEN)
             stan.ostatni_ping = time.time()
+            if u.path == "/api/g/wyslij":  # 📤 z telefonu do biblioteki — treść to sam plik (strumieniowo)
+                q = parse_qs(u.query)
+                try:
+                    mt = float(q.get("mtime", ["0"])[0]) / 1000 or None
+                except ValueError:
+                    mt = None
+                w = wysylanie.przyjmij(stan.baza, stan.ustawienia["cel"], q.get("nazwa", [""])[0], mt, self.rfile,
+                                       int(self.headers.get("Content-Length") or 0))
+                if w.get("id"):
+                    with stan.blokada:
+                        stan.wersja_danych += 1
+                    stan.przegladarka.zglos_zmiany()
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             dane = self._json()
             if u.path.startswith("/api/g/"):  # ulubione, albumy, miniatury filmów — dane galerii, nie projektu
                 z = parse_qs(u.query).get("z", ["biblioteka"])[0]
@@ -1240,6 +1401,9 @@ def _handler(stan: Stan, token: str, zamknij):
                     stan.rozeslij_lokalizacje(z, w)
                 if u.path == "/api/g/data" and w.get("sciezki"):
                     stan.rozeslij_daty(z, w)
+                if u.path == "/api/g/album/udostepnij" and w.get("token"):  # link działa przez serwer telefonu
+                    s = stan.serwer_tel
+                    w["adresy"] = [a.rstrip("/") + "/a/" + w["token"] for a in s.adresy()] if s else []
                 if usuwa and z != "przegladarka":
                     with stan.blokada:
                         stan.wersja_danych += 1
@@ -1262,6 +1426,17 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij(w)
             if u.path == "/api/nowy-folder":
                 w = dyski.nowy_folder(str(dane.get("w", "")), str(dane.get("nazwa", "")))
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/kopia/ustaw":
+                w = stan.kopia_ustaw(dane["folder"] if "folder" in dane else None,
+                                     dane["auto"] if "auto" in dane else None)
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path in ("/api/kopia/start", "/api/kopia/sprawdz"):
+                blad = stan.kopia_start() if u.path.endswith("start") else stan.sprawdzanie_start()
+                return self._wyslij({"blad": blad} if blad else stan.stan(),
+                                    kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
+            if u.path == "/api/kopia/problem":
+                w = stan.kopia_problem(str(dane.get("sciezka") or ""), str(dane.get("akcja") or ""))
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/autostart":
                 blad = ustaw_autostart(bool(dane.get("wlacz")))
@@ -1623,6 +1798,7 @@ def main(otworz: bool = True) -> None:
 
     threading.Thread(target=pilnuj, daemon=True).start()
     stan.telefon_po_starcie()
+    stan.kopia_po_starcie()
     if otworz:
         otworz_okno(url)
     try:

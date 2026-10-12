@@ -12,7 +12,8 @@ const g = {widok: "os", lata: [], rok: null, mies: null, pliki: [], razem: 0, ma
            lista: [], poz: 0, zakres: "biblioteka",
            zrodlo: {typ: "os"},   // co pokazuje siatka: oś czasu / wyniki szukania / kolekcja / tego dnia
            obszar: null,          // prostokąt z mapy [lat1, lat2, lon1, lon2] — oś czasu tylko z tego miejsca
-           dzien: null, pokaz: null};
+           dzien: null, pokaz: null,
+           zazn: new Set(), ostatnioZazn: -1};  // ☑ zaznaczone zdjęcia (id) — akcje hurtem
 const obszarParam = () => g.obszar ? {lat1: g.obszar[0], lat2: g.obszar[1], lon1: g.obszar[2], lon2: g.obszar[3]} : {};
 
 // na telefonie: który zbiór oglądamy (z pilota: biblioteka / cały projekt / Przeglądarka dysków)
@@ -173,11 +174,12 @@ async function wczytajPliki(wiecej = false) {
     : await api("/api/g/pliki", {rok: g.rok, miesiac: g.mies || 0, od, ile: 200, ...obszarParam()});
   if (z !== g.zrodlo) return;  // w międzyczasie wybrano coś innego
   const bylo = wiecej ? g.pliki.length : 0;
+  if (!wiecej) { g.zazn.clear(); g.ostatnioZazn = -1; }
   g.pliki = wiecej ? g.pliki.concat(r.pliki) : r.pliki; g.razem = r.razem;
   if (r.opis !== undefined) z.opis = r.opis;
   if (r.nazwa) z.nazwa = r.nazwa;
   if (z.typ === "dzien") { z.md = r.md; z.lata = r.lata; z.najblizszy = r.najblizszy; }
-  rysujSiatke(bylo); rysujFiltr();
+  rysujSiatke(bylo); rysujFiltr(); odswiezZazn();
 }
 // Przewijanie do końca siatki doczytuje kolejne zdjęcia (bez klikania „Pokaż kolejne”)
 const doczytaj = "IntersectionObserver" in window ? new IntersectionObserver(wpisy => {
@@ -201,7 +203,8 @@ function rysujSiatke(odIndeksu = 0) {  // odIndeksu > 0: dopisujemy tylko nowe (
       h.append(rok); const sm = document.createElement("small");
       sm.textContent = (n ? latTemu(n.lat_temu) + " · " + liczbaZdjec(n.n) : ""); h.append(sm); s.append(h);
     }
-    const k = document.createElement("div"); k.className = "k"; k.title = p.nazwa;
+    const k = document.createElement("div"); k.className = "k" + (g.zazn.has(p.id) ? " zazn" : ""); k.title = p.nazwa;
+    k.dataset.i = i;
     const ob = document.createElement("div"); ob.className = "ob";
     if (p.rodzaj === "zdjecie") {
       const im = new Image(); im.loading = "lazy"; im.alt = ""; im.src = miniatura(p.id, false);  // mała: szybka, zapamiętywana na dysku
@@ -211,12 +214,18 @@ function rysujSiatke(odIndeksu = 0) {  // odIndeksu > 0: dopisujemy tylko nowe (
       const x = document.createElement("button"); x.className = "kosz"; x.textContent = "🗑"; x.title = "Usuń (do kosza programu, można cofnąć)";
       x.onclick = e => { e.stopPropagation(); usunPliki([p]); }; ob.append(x);
     }
+    const zz = document.createElement("button"); zz.className = "zz"; zz.title = "Zaznacz (Ctrl+klik, Shift+klik — zakres)";
+    zz.setAttribute("aria-label", "Zaznacz"); zz.onclick = e => { e.stopPropagation(); zaznacz(i, e.shiftKey); }; ob.append(zz);
     const op = document.createElement("div"); op.className = "op";
     op.innerHTML = "<div></div><div class='m'></div>";
     op.children[0].textContent = p.nazwa;
     op.children[1].textContent = dataTxt(p.data) + (p.lat != null ? " · 📍" : "");
     k.append(ob, op);
-    k.onclick = () => pokazPelny(g.pliki, i);
+    k.onclick = e => {
+      if (g.dlugie) { g.dlugie = false; return; }  // po przytrzymaniu palcem (zaznaczenie) — bez otwierania
+      if (g.zazn.size || e.ctrlKey || e.metaKey || e.shiftKey) { zaznacz(i, e.shiftKey); return; }
+      pokazPelny(g.pliki, i);
+    };
     s.append(k);
   });
   if (g.pliki.length < g.razem) {
@@ -235,6 +244,115 @@ function rysujSiatke(odIndeksu = 0) {  // odIndeksu > 0: dopisujemy tylko nowe (
       () => pokazWyniki({...g.zrodlo, md: nb.md}), "", "akt"));
   }
 }
+
+// ---------- ☑ zaznaczanie wielu: Ctrl/Shift+klik, kółko na miniaturze, przytrzymanie palcem ----------
+function zaznacz(i, zakres = false) {
+  const p = g.pliki[i]; if (!p) return;
+  if (zakres && g.ostatnioZazn >= 0) {  // Shift: wszystko pomiędzy
+    const [a, b] = [Math.min(g.ostatnioZazn, i), Math.max(g.ostatnioZazn, i)];
+    for (let j = a; j <= b; j++) if (g.pliki[j]) g.zazn.add(g.pliki[j].id);
+  } else if (g.zazn.has(p.id)) g.zazn.delete(p.id); else g.zazn.add(p.id);
+  g.ostatnioZazn = i;
+  odswiezZazn();
+}
+function odswiezZazn() {
+  document.querySelectorAll("#siatka .k").forEach(k => {
+    const p = g.pliki[+k.dataset.i]; k.classList.toggle("zazn", !!p && g.zazn.has(p.id));
+  });
+  const n = g.zazn.size, wyb = zaznaczone();
+  document.body.classList.toggle("zaznaczanie", n > 0);
+  $("zz").hidden = !n;
+  const kilka = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20);
+  $("zz-ile").textContent = `${n.toLocaleString("pl-PL")} ${n === 1 || kilka ? "zaznaczone" : "zaznaczonych"}`;
+  $("zz-data").hidden = $("zz-miejsce").hidden = $("zz-usun").hidden = !MOZE_USUWAC;
+  $("zz-dok").hidden = !W_PROGRAMIE || !wyb.some(p => p.rodzaj === "zdjecie");
+  $("zz-album").hidden = !W_PROGRAMIE;
+  $("zz-z-albumu").hidden = !(W_PROGRAMIE && g.zrodlo.typ === "kolekcja" && g.zrodlo.kol === "album");
+  const dok = wyb.filter(p => p.rodzaj === "zdjecie"), wszDok = dok.length && dok.every(p => p.dokument);
+  $("zz-dok").textContent = wszDok ? "📷 Nie dokument" : "📄 Dokument";
+  $("zz-wszystkie").textContent = g.pliki.length && g.pliki.every(p => g.zazn.has(p.id)) ? "☐ Odznacz" : "☑ Wszystkie";
+}
+const zaznaczone = () => g.pliki.filter(p => g.zazn.has(p.id));
+function koniecZazn() { g.zazn.clear(); g.ostatnioZazn = -1; zamknijMenuAlb(); odswiezZazn(); }
+$("zz-koniec").onclick = koniecZazn;
+$("zz-wszystkie").onclick = async () => {
+  if (g.pliki.length && g.pliki.every(p => g.zazn.has(p.id))) { koniecZazn(); return; }
+  // wszystkie z widoku — także jeszcze niewczytane (do 5000)
+  while (g.pliki.length < g.razem && g.pliki.length < 5000) { const n = g.pliki.length; await wczytajPliki(true); if (g.pliki.length === n) break; }
+  for (const p of g.pliki) g.zazn.add(p.id);
+  odswiezZazn();
+};
+$("zz-data").onclick = () => { const w = zaznaczone(); if (w.length) oknoDaty(w[0], w); };
+$("zz-miejsce").onclick = () => { const w = zaznaczone(); if (w.length) oknoLokalizacji(w[0], w); };
+$("zz-usun").onclick = async () => {
+  const w = zaznaczone(); if (!w.length) return;
+  if (w.length > 1 && !confirm(`Usunąć ${liczbaZdjec(w.length)}? Trafią do kosza programu (Odłożone/Usunięte) — można cofnąć.`)) return;
+  await usunPliki(w); koniecZazn();
+};
+$("zz-dok").onclick = async () => {
+  const w = zaznaczone().filter(p => p.rodzaj === "zdjecie"); if (!w.length) return;
+  const tak = !w.every(p => p.dokument);
+  try {
+    const r = await post("/api/g/dokument", {ids: w.map(p => p.id), tak});
+    for (const p of w) p.dokument = tak;
+    toastG(tak ? `📄 ${liczbaZdjec(r.zmienione)} — dokumenty` : `📷 ${liczbaZdjec(r.zmienione)} — zwykłe zdjęcia`);
+    if (g.rodzaj) { koniecZazn(); wczytajLata(true).catch(() => {}); wczytajPliki().catch(() => {}); } else odswiezZazn();
+  } catch (e) { toastG(e.message); }
+};
+$("zz-album").onclick = e => {
+  e.stopPropagation();
+  if (document.querySelector(".menu-alb")) { zamknijMenuAlb(); return; }
+  menuAlbumow($("zz"), zaznaczone().map(p => p.id), n => toastG(`＋ Dodano do „${n}”: ${liczbaZdjec(g.zazn.size)}`));
+};
+$("zz-z-albumu").onclick = async () => {
+  const w = zaznaczone(); if (!w.length) return;
+  await post("/api/g/album/usun-pliki", {album: g.zrodlo.album, ids: w.map(p => p.id)});
+  koniecZazn(); wczytajPliki().catch(() => {}); toastG(`− Usunięto z albumu: ${liczbaZdjec(w.length)} (pliki zostają na dysku)`);
+};
+$("zz-zip").onclick = () => pobierzZip({ids: zaznaczone().map(p => p.id)});
+// ⬇ ZIP: zaznaczone albo cały album — przeglądarka pobiera plik (bez czekania na spakowanie całości)
+async function pobierzZip(co) {
+  try {
+    const r = co.ids ? await post("/api/g/zip", {ids: co.ids}) : {klucz: ""};
+    const a = document.createElement("a");
+    a.href = url("/api/g/zip", co.ids ? {k: r.klucz} : {album: co.album});
+    a.download = ""; document.body.append(a); a.click(); a.remove();
+    toastG("⬇ Pobieranie ZIP rozpoczęte — zdjęcia w oryginalnej jakości.");
+  } catch (e) { toastG("Nie udało się: " + e.message); }
+}
+// menu albumów (podgląd i zaznaczone): istniejące + nowy
+async function menuAlbumow(gdzie, ids, gotowe) {
+  const m = document.createElement("div"); m.className = "menu-alb"; m.onclick = ev => ev.stopPropagation();
+  m.textContent = "Wczytuję…"; gdzie.append(m);
+  const r = await api("/api/g/albumy"); m.replaceChildren();
+  for (const a of r.albumy) m.append(przycisk(`🗂 ${a.nazwa}`, async () => {
+    await post("/api/g/album/dodaj", {album: a.id, ids}); zamknijMenuAlb(); gotowe(a.nazwa);
+  }));
+  m.append(przycisk("＋ Nowy album…", async () => {
+    const n = prompt("Nazwa nowego albumu:"); if (!n) return;
+    const w = await post("/api/g/album/nowy", {nazwa: n, ids}); zamknijMenuAlb(); gotowe(w.nazwa);
+  }));
+}
+// telefon: przytrzymanie palcem na miniaturze zaczyna zaznaczanie
+$("siatka").addEventListener("pointerdown", e => {
+  const k = e.target.closest(".k"); if (!k || e.pointerType === "mouse") return;
+  clearTimeout(g.dlugieZegar);
+  const x = e.clientX, y = e.clientY;
+  g.dlugieZegar = setTimeout(() => { g.dlugie = true; zaznacz(+k.dataset.i); if (navigator.vibrate) navigator.vibrate(30); }, 520);
+  const stop = ev => { if (ev.type !== "pointermove" || Math.hypot(ev.clientX - x, ev.clientY - y) > 10) { clearTimeout(g.dlugieZegar); off(); } };
+  const off = () => ["pointerup", "pointercancel", "pointermove"].forEach(t => $("siatka").removeEventListener(t, stop));
+  ["pointerup", "pointercancel", "pointermove"].forEach(t => $("siatka").addEventListener(t, stop));
+});
+$("siatka").addEventListener("contextmenu", e => { if (e.target.closest(".k") && g.dlugie) e.preventDefault(); });
+document.addEventListener("keydown", e => {
+  if (!$("pelny").hidden || !$("ed").hidden) return;
+  if (!$("dt").hidden) { if (e.key === "Escape") $("dt").hidden = true; if (e.key === "Enter") $("dt-zapisz").click(); return; }
+  if (!$("lok").hidden) { if (e.key === "Escape") zamknijLok(); return; }
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  if (e.key === "Escape" && g.zazn.size) koniecZazn();
+  if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A") && g.pliki.length) { e.preventDefault(); $("zz-wszystkie").click(); }
+  if (e.key === "Delete" && g.zazn.size && MOZE_USUWAC) $("zz-usun").click();
+});
 
 // ---------- podgląd na cały ekran ----------
 async function pokazPelny(lista, poz) {
@@ -700,6 +818,10 @@ function rysujFiltr() {
     f.append(przycisk("← Kolekcje", () => widok("kolekcje")));
     const t = document.createElement("span"); t.className = "tyt"; t.textContent = z.nazwa || ""; f.append(t, inf(ile(g.razem)));
     const p = pokaz(); if (p) f.append(p);
+    if (g.razem) f.append(przycisk("⬇ ZIP", () => z.kol === "album" ? pobierzZip({album: z.album}) : pobierzZip({ids: g.pliki.map(x => x.id)}),
+                                   "Pobierz cały album jako ZIP (oryginały)"));
+    if (W_PROGRAMIE && z.kol === "album") f.append(przycisk(z.udostepniony ? "🔗 Udostępniony" : "🔗 Udostępnij",
+      () => udostepnij(z), "Link do tego albumu dla rodziny — bez PIN-u, tylko oglądanie i pobieranie", z.udostepniony ? "akt" : ""));
     if (W_PROGRAMIE && z.kol === "album") {
       f.append(przycisk("✎ Zmień nazwę", async () => {
         const n = prompt("Nowa nazwa albumu:", z.nazwa || ""); if (!n) return;
@@ -776,13 +898,77 @@ async function rysujKolekcje() {
     k.append(ob, op); k.onclick = klik; s.append(k);
   };
   kafel("⭐", "Ulubione", r.ulubione.n, r.ulubione.okladka, () => pokazWyniki({typ: "kolekcja", kol: "ulubione"}));
-  for (const a of r.albumy) kafel("🗂", a.nazwa, a.n, a.okladka, () => pokazWyniki({typ: "kolekcja", kol: "album", album: a.id, nazwa: a.nazwa}));
+  for (const a of r.albumy) kafel("🗂", a.nazwa, a.n, a.okladka, () => pokazWyniki({typ: "kolekcja", kol: "album", album: a.id, nazwa: a.nazwa, udostepniony: a.udostepniony}));
   if (W_PROGRAMIE) kafel("＋", "Nowy album", null, null, async () => {
     const n = prompt("Nazwa nowego albumu:", "Wakacje " + new Date().getFullYear()); if (!n) return;
     await post("/api/g/album/nowy", {nazwa: n, ids: []}); rysujKolekcje();
   }, "nowy");
   if (!W_PROGRAMIE && !r.albumy.length && !r.ulubione.n) s.innerHTML = '<div class="pusto">Brak ulubionych i albumów — tworzy się je w programie na komputerze.</div>';
 }
+
+// 🔗 udostępnianie albumu: link przez serwer telefonu (sieć domowa / Tailscale), bez PIN-u, tylko ten album
+async function udostepnij(z, wlacz = true) {
+  let w;
+  try { w = await post("/api/g/album/udostepnij", {album: z.album, wlacz}); } catch (e) { alert(e.message); return; }
+  z.udostepniony = !!w.token; rysujFiltr();
+  if (!w.token) { $("udo").hidden = true; toastG("🔗 Link do albumu wyłączony — przestał działać."); return; }
+  const t = $("udo-tresc"); t.replaceChildren();
+  const adr = (w.adresy || [])[0];
+  if (!adr) {
+    t.innerHTML = `<p>Link jest gotowy, ale zadziała dopiero po włączeniu <b>📱 Na telefon</b> (menu ⋯) — album
+      jest udostępniany przez ten sam serwer co telefon.</p>`;
+    t.append(przycisk("📱 Włącz teraz", async () => { $("udo").hidden = true; await telefon(true); udostepnij(z); }, "", "akt"));
+  } else {
+    const qr = qrcode(0, "M"); qr.addData(adr); qr.make();
+    t.innerHTML = `<div class="qr"><div>${qr.createSvgTag({cellSize: 4, margin: 2})}</div><div>
+      <div class="info">Link do albumu „<span id="udo-nazwa"></span>”</div><code id="udo-adr"></code>
+      <div style="margin-top:8px"><button id="udo-kopiuj" class="akt">📋 Kopiuj link</button></div></div></div>
+      <ul><li>Bez PIN-u: kto ma link, widzi <b>tylko ten album</b> (oglądanie, pobieranie, ZIP) — nic więcej.</li>
+      <li>Działa w Twojej sieci domowej oraz dla osób w Twoim <b>Tailscale</b> (adresy 100.…: <span id="udo-inne"></span>) —
+      rodzinie spoza domu udostępnij komputer w Tailscale (Share…) albo wyślij ZIP.</li>
+      <li>Dopóki komputer jest włączony i działa „📱 Na telefon”.</li></ul>`;
+    $("udo-nazwa").textContent = z.nazwa || ""; $("udo-adr").textContent = adr;
+    $("udo-inne").textContent = w.adresy.slice(1).join(", ") || "—";
+    $("udo-kopiuj").onclick = async () => {
+      try { await navigator.clipboard.writeText(adr); $("udo-kopiuj").textContent = "✓ Skopiowano"; }
+      catch (e) { prompt("Skopiuj link:", adr); }
+    };
+  }
+  $("udo-wylacz").onclick = () => { if (confirm("Wyłączyć link? Kto go ma, nie zobaczy już albumu.")) udostepnij(z, false); };
+  $("udo").hidden = false;
+}
+$("udo-zamknij").onclick = () => { $("udo").hidden = true; };
+
+// 📤 wysyłanie do biblioteki (telefon: zdjęcia prosto z galerii) — plik po pliku, z postępem
+$("wyslij-btn").onclick = () => $("wyslij-pliki").click();
+$("wyslij-pliki").onchange = async () => {
+  const pliki = [...$("wyslij-pliki").files]; $("wyslij-pliki").value = "";
+  if (!pliki.length) return;
+  const razem = pliki.reduce((a, f) => a + f.size, 0);
+  let wyslane = 0, juz = 0, bledy = [], bajty = 0, folder = "";
+  for (const [i, f] of pliki.entries()) {
+    try {
+      const w = await new Promise((ok, nie) => {
+        const x = new XMLHttpRequest();
+        x.open("POST", url("/api/g/wyslij", {nazwa: f.name, mtime: f.lastModified || 0}));
+        x.setRequestHeader("X-Token", TOKEN); x.setRequestHeader("Content-Type", "application/octet-stream");
+        x.upload.onprogress = e => {
+          const pr = Math.round(100 * (bajty + e.loaded) / Math.max(razem, 1));
+          toastG(`📤 Wysyłam ${i + 1} z ${pliki.length} · ${pr}%`);
+        };
+        x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch (e) { /* nie JSON */ }
+                           x.status < 300 && !j.blad ? ok(j) : nie(new Error(j.blad || x.statusText)); };
+        x.onerror = () => nie(new Error("brak połączenia"));
+        x.send(f);
+      });
+      if (w.juz_jest) juz++; else { wyslane++; folder = w.folder; }
+    } catch (e) { bledy.push(`${f.name}: ${e.message}`); }
+    bajty += f.size;
+  }
+  toastG(`📤 Wysłano: ${liczbaZdjec(wyslane)}` + (folder ? ` → biblioteka/${folder}` : "") +
+         (juz ? ` · już były w bibliotece: ${juz}` : "") + (bledy.length ? ` · nie udało się: ${bledy.length} (${bledy[0]})` : ""));
+  if (wyslane) { wczytajLata(true).catch(() => {}); if (g.zrodlo.typ === "os") wczytajPliki().catch(() => {}); }
+};
 
 // ---------- 📍 lokalizacja: dodaj / zmień / usuń (w pliku: JPEG — EXIF, inne — .xmp obok) ----------
 // poprzednie: {id: [lat, lon] | [null, null]} — do „Cofnij”
@@ -818,18 +1004,18 @@ async function ustawLokalizacje(ids, lat, lon, poprzednie, cicho = false) {
 
 // okno wyboru miejsca: kliknij na mapie / przeciągnij pinezkę / wyszukaj miejscowość
 const lok = {mapa: null, znacznik: null, p: null};
-function oknoLokalizacji(p) {
-  lok.p = p; stopPokaz();
+function oknoLokalizacji(p, zbior = null) {
+  lok.p = p; lok.zbior = zbior; stopPokaz();
   $("lok").hidden = false;
-  $("lok-tyt").textContent = `📍 ${p.nazwa || "Lokalizacja"}`;
+  $("lok-tyt").textContent = zbior ? `📍 ${liczbaZdjec(zbior.length)}` : `📍 ${p.nazwa || "Lokalizacja"}`;
   $("lok-szukaj").value = ""; $("lok-wyniki").replaceChildren();
   // „także inne zdjęcia z tego dnia bez lokalizacji” — najczęstszy przypadek: aparat bez GPS na wycieczce
   const dzien = (p.data || "").slice(0, 10);
-  const inne = dzien ? (g.lista || []).filter(x => x.id !== p.id && x.lat == null && (x.data || "").slice(0, 10) === dzien) : [];
+  const inne = dzien && !zbior ? (g.lista || []).filter(x => x.id !== p.id && x.lat == null && (x.data || "").slice(0, 10) === dzien) : [];
   $("lok-inne").hidden = !inne.length; $("lok-inne-cb").checked = false;
   lok.inne = inne; lok.wybrane = new Set(inne.map(x => x.id));
   rysujInneLok();
-  $("lok-usun").hidden = p.lat == null;
+  $("lok-usun").hidden = zbior ? !zbior.some(x => x.lat != null) : p.lat == null;
   if (!lok.mapa) {
     lok.mapa = L.map("lok-mapa", {doubleClickZoom: false}).setView([52, 19], 6);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19,
@@ -877,13 +1063,13 @@ $("lok").onclick = e => { if (e.target.id === "lok") zamknijLok(); };
 $("lok-zapisz").onclick = async () => {
   if (!lok.znacznik) return;
   const ll = lok.znacznik.getLatLng(), p = lok.p;
-  const cele = [p, ...($("lok-inne-cb").checked ? lok.inne.filter(x => lok.wybrane.has(x.id)) : [])];
+  const cele = lok.zbior || [p, ...($("lok-inne-cb").checked ? lok.inne.filter(x => lok.wybrane.has(x.id)) : [])];
   const pop = Object.fromEntries(cele.map(x => [x.id, [x.lat ?? null, x.lon ?? null]]));
   if (await ustawLokalizacje(cele.map(x => x.id), ll.lat, ll.lng, pop)) { lok.ostatnie = [ll.lat, ll.lng]; zamknijLok(); }
 };
 $("lok-usun").onclick = async () => {
-  const p = lok.p;
-  if (await ustawLokalizacje([p.id], null, null, {[p.id]: [p.lat, p.lon]})) zamknijLok();
+  const cele = (lok.zbior || [lok.p]).filter(x => x.lat != null);
+  if (await ustawLokalizacje(cele.map(x => x.id), null, null, Object.fromEntries(cele.map(x => [x.id, [x.lat, x.lon]])))) zamknijLok();
 };
 let lokZegar = null;
 $("lok-szukaj").oninput = () => {
@@ -911,6 +1097,7 @@ $("p-miejsce").onclick = e => { e.stopPropagation(); const p = biezacy(); if (p)
 // ---------- 🗑 usuwanie: do kosza programu (Odłożone/Usunięte), z cofaniem ----------
 // w oknie programu i na telefonie z pilotem (serwer 24/7 jest tylko do oglądania)
 const MOZE_USUWAC = W_PROGRAMIE || !!P.get("pilot");
+$("wyslij-btn").hidden = !MOZE_USUWAC;
 function toastG(tekst, cofnij) {
   const t = $("toast-g"); t.replaceChildren(tekst);
   if (cofnij) t.append(przycisk("Cofnij", async () => { t.hidden = true; await cofnij(); }));
@@ -951,6 +1138,7 @@ function narzedziaPelnego(p) {
   $("p-miejsce").hidden = !MOZE_USUWAC;
   if (p) $("p-miejsce").textContent = p.lat != null ? "📍 Zmień miejsce" : "📍 Dodaj miejsce";
   $("p-data").hidden = !MOZE_USUWAC;
+  $("p-edytuj").hidden = !MOZE_USUWAC || !p || p.rodzaj !== "zdjecie";
   const dk = $("p-dok"); dk.hidden = !W_PROGRAMIE || (p && p.rodzaj === "film");
   dk.classList.toggle("akt", !!(p && p.dokument));
   dk.textContent = p && p.dokument ? "📄 Dokument ✓" : "📄 To dokument";
@@ -970,42 +1158,54 @@ $("p-dok").onclick = async e => {
   } catch (err) { toastG(err.message); }
 };
 // 📅 zmiana daty zrobienia (w pliku: EXIF w JPEG, .xmp obok w innych formatach)
-$("p-data").onclick = e => {
-  e.stopPropagation(); const p = biezacy(); if (!p) return;
+function oknoDaty(p, zbior = null) {
   stopPokaz();
-  const d = (p.data || "").slice(0, 16);
-  $("dt-wart").value = d || "";
-  $("dt-tyt").textContent = `📅 ${p.nazwa || "Data"}`;
-  const dzien = (p.data || "").slice(0, 10);
-  const inne = dzien ? (g.lista || []).filter(x => x.id !== p.id && (x.data || "").slice(0, 10) === dzien) : [];
-  $("dt-inne").hidden = !inne.length; $("dt-inne-cb").checked = false;
-  $("dt-inne-t").textContent = `przesuń też ${liczbaZdjec(inne.length)} z tego samego dnia o tyle samo`;
+  const pad = n => String(n).padStart(2, "0");
+  const iso = t => `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
+  let inne;
+  if (zbior) {  // zaznaczone: najwcześniejsza data jako punkt odniesienia
+    const z = zbior.filter(x => x.data).sort((a, b) => a.data < b.data ? -1 : 1);
+    p = z[0] || zbior[0]; inne = zbior.filter(x => x !== p);
+    $("dt-tyt").textContent = `📅 ${liczbaZdjec(zbior.length)}`;
+    $("dt-inne-t").textContent = "zachowaj odstępy między nimi (przesuń wszystkie o tyle samo; bez zaznaczenia — każde dostanie tę samą datę)";
+    $("dt-inne").hidden = false; $("dt-inne-cb").checked = z.length > 1;
+  } else {
+    $("dt-tyt").textContent = `📅 ${p.nazwa || "Data"}`;
+    const dzien = (p.data || "").slice(0, 10);
+    inne = dzien ? (g.lista || []).filter(x => x.id !== p.id && (x.data || "").slice(0, 10) === dzien) : [];
+    $("dt-inne").hidden = !inne.length; $("dt-inne-cb").checked = false;
+    $("dt-inne-t").textContent = `przesuń też ${liczbaZdjec(inne.length)} z tego samego dnia o tyle samo`;
+  }
+  $("dt-wart").value = (p.data || "").slice(0, 16) || "";
   $("dt").hidden = false; $("dt-wart").focus();
   $("dt-zapisz").onclick = async () => {
     const nowa = $("dt-wart").value;
     if (!nowa) return;
     const cele = [{p, data: nowa}];
-    if ($("dt-inne-cb").checked && p.data) {  // całe zdjęcia z tego dnia: to samo przesunięcie (np. zły zegar aparatu)
-      const roznica = new Date(nowa) - new Date(p.data.slice(0, 19));
-      for (const x of inne) {
-        const t = new Date(new Date(x.data.slice(0, 19)).getTime() + roznica);
-        const pad = n => String(n).padStart(2, "0");
-        cele.push({p: x, data: `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`});
-      }
+    const przesun = $("dt-inne-cb").checked && p.data;
+    const roznica = przesun ? new Date(nowa) - new Date(p.data.slice(0, 19)) : 0;
+    for (const x of inne) {
+      if (przesun && x.data) cele.push({p: x, data: iso(new Date(new Date(x.data.slice(0, 19)).getTime() + roznica))});
+      else if (zbior) cele.push({p: x, data: nowa});  // zaznaczone bez zachowania odstępów: ta sama data
     }
+    $("dt-zapisz").disabled = true;
     let zm = 0, bl = [];
     for (const c of cele) {
       try {
         const w = await post("/api/g/data", {ids: [c.p.id], data: c.data});
         if (w.zmienione) { c.p.data = w.data; zm++; } else bl = bl.concat(w.bledy || []);
       } catch (err) { bl.push(err.message); }
+      if (cele.length > 5) $("dt-tyt").textContent = `📅 ${zm + bl.length} / ${cele.length}…`;
     }
-    $("dt").hidden = true;
+    $("dt-zapisz").disabled = false; $("dt").hidden = true;
     toastG(`📅 Zmieniono datę: ${liczbaZdjec(zm)}` + (bl.length ? ` · nie udało się: ${bl.length} (${bl[0]})` : ""));
-    if (biezacy() === p) $("pelny-opis").textContent = `${p.nazwa} · ${dataTxt(p.data)}` + (p.miejsce ? " · " + p.miejsce : "");
+    if (!$("pelny").hidden && biezacy() === p) $("pelny-opis").textContent = `${p.nazwa} · ${dataTxt(p.data)}` + (p.miejsce ? " · " + p.miejsce : "");
+    if (zbior) rysujSiatke();
     g.punkty = null; wczytajLata(true).catch(() => {});
   };
-};
+}
+// 📅 zmiana daty zrobienia (w pliku: EXIF w JPEG, .xmp obok w innych formatach)
+$("p-data").onclick = e => { e.stopPropagation(); const p = biezacy(); if (p) oknoDaty(p); };
 $("dt-anuluj").onclick = () => { $("dt").hidden = true; };
 $("dt").onclick = e => { if (e.target.id === "dt") $("dt").hidden = true; };
 $("p-ulub").onclick = async e => {
@@ -1022,23 +1222,13 @@ $("p-z-albumu").onclick = async e => {
 $("p-otworz").onclick = e => { e.stopPropagation(); const p = biezacy(); if (p) otworzWProgramie(p); };
 async function otworzWProgramie(p) { stopPokaz(); try { await post("/api/g/otworz", {id: p.id}); } catch (e) { alert(e.message); } }
 function zamknijMenuAlb() { document.querySelectorAll(".menu-alb").forEach(m => m.remove()); }
-$("p-album").onclick = async e => {
+$("p-album").onclick = e => {
   e.stopPropagation();
   if (document.querySelector(".menu-alb")) { zamknijMenuAlb(); return; }
   const p = biezacy(); if (!p) return;
-  const m = document.createElement("div"); m.className = "menu-alb"; m.onclick = ev => ev.stopPropagation();
-  m.textContent = "Wczytuję…"; $("pelny").append(m);
-  const r = await api("/api/g/albumy"); m.replaceChildren();
-  const dodaj = async (album, nazwa) => {
-    await post("/api/g/album/dodaj", {album, ids: [p.id]}); zamknijMenuAlb();
+  menuAlbumow($("pelny"), [p.id], nazwa => {
     const b = $("p-album"); b.textContent = `✓ W „${nazwa}”`; setTimeout(() => { b.textContent = "＋ Album"; }, 1800);
-  };
-  for (const a of r.albumy) m.append(przycisk(`🗂 ${a.nazwa}`, () => dodaj(a.id, a.nazwa)));
-  m.append(przycisk("＋ Nowy album…", async () => {
-    const n = prompt("Nazwa nowego albumu:"); if (!n) return;
-    const w = await post("/api/g/album/nowy", {nazwa: n, ids: [p.id]}); zamknijMenuAlb();
-    const b = $("p-album"); b.textContent = `✓ W „${w.nazwa}”`; setTimeout(() => { b.textContent = "＋ Album"; }, 1800);
-  }));
+  });
 };
 function startPokaz() {
   if (g.pokaz) return;

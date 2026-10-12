@@ -121,10 +121,13 @@ class Pilot:
             return "Poczekaj, aż komputer skończy bieżące zadanie."
         return None
 
-    def po_usunieciu(self, zakres: str, lokalizacja: dict | None = None) -> None:
+    def po_usunieciu(self, zakres: str, w: dict | None = None, sciezka: str = "") -> None:
+        """Po zmianie z telefonu: miejsce / data widoczne w pozostałych bazach, odświeżenie widoków."""
         s = self.stan
-        if lokalizacja and lokalizacja.get("sciezki"):
-            s.rozeslij_lokalizacje(zakres, lokalizacja)
+        if w and w.get("sciezki") and sciezka == "/api/g/lokalizacja":
+            s.rozeslij_lokalizacje(zakres, w)
+        if w and w.get("sciezki") and sciezka == "/api/g/data":
+            s.rozeslij_daty(zakres, w)
         if zakres == "przegladarka":
             return
         with s.blokada:

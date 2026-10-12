@@ -174,6 +174,23 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.28:** **✏ Edycja zdjęć** w podglądzie (przycisk ✏ Edytuj albo klawisz **E**): obrót ⟲ ⟳, odbicie ⇋, ✂ przycięcie
+(dowolnie, 1:1, 4:3, 3:2, 16:9, pion 4:5 / 9:16; klawisz C), jasność, kontrast, nasycenie, balans bieli (temperatura
+i odcień), *✨ Auto*, *◐ przytrzymaj: przed* (też spacja). Zapis w pełnej rozdzielczości z datą, aparatem i GPS
+oryginału — jako kopia „<nazwa> (edytowane).jpg” obok albo *Zastąp oryginał* (oryginał do Odłożone/Usunięte);
+*Cofnij* w komunikacie · **☑ Zaznaczanie wielu** w siatce: kółko na miniaturze, Ctrl+klik, Shift+klik (zakres),
+Ctrl+A, na telefonie przytrzymanie palcem → pasek: 📅 Data (z zachowaniem odstępów albo ta sama dla wszystkich),
+📍 Miejsce, 📄 Dokument, ＋ Album, ⬇ ZIP, 🗑 Usuń · **⬇ ZIP** zaznaczonych i całego albumu (oryginały, pakowane w locie)
+· **🔗 Udostępnij album** — link bez PIN-u do jednego albumu (oglądanie, pobieranie, ZIP; *Wyłącz link* w każdej
+chwili); działa przez serwer telefonu: sieć domowa i Tailscale · **📤 Wyślij** — zdjęcia i filmy z telefonu
+(albo z innego komputera) prosto do biblioteki: `Z telefonu\<RRRR-MM>` (miesiąc z EXIF-u), ten sam plik drugi
+raz nie tworzy kopii; wymaga *Pozwól sterować z telefonu* · **⚙ Ustawienia** (nagłówek) — w jednym oknie: motyw,
+start z Windows, telefon (włącz / wyłącz, sterowanie, PIN), odświeżanie Przeglądarki, aktualizacje, kopia zapasowa ·
+**💾 Kopia zapasowa** biblioteki na drugi dysk / NAS: tylko nowe i zmienione pliki, z kopii nic nie znika, bez
+folderu Odłożone; automatycznie po porządkowaniu i raz na dobę · **🔍 Sprawdź pliki** — suma SHA-1 każdego pliku:
+wykrywa uszkodzenia dysku (zawartość inna przy tej samej dacie i rozmiarze), zdjęcia, które się nie otwierają,
+i uszkodzone pliki w kopii; *↺ Przywróć z kopii* / *💾 Napraw kopię*; przerwane sprawdzanie rusza od niesprawdzonych.
+
 **1.27:** w podglądzie zdjęcia: *📄 To dokument* (klawisz D) — przełącza zdjęcie ↔ dokument (filtr 📄 Dokumenty,
 decyzja widoczna w projekcie) · *📅 Data* — zmiana daty zrobienia, zapis w pliku (JPEG: EXIF bez zmiany obrazu;
 inne formaty i filmy: .xmp obok, ręczna data wygrywa przy skanie), opcjonalnie przesunięcie wszystkich zdjęć z tego

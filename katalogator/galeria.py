@@ -44,6 +44,7 @@ def plik_ui(sciezka_url: str) -> tuple[bytes, str] | None:
 SCHEMAT_KOLEKCJI = """
 CREATE TABLE IF NOT EXISTS g_ulubione (sciezka TEXT PRIMARY KEY, czas REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS g_albumy (id INTEGER PRIMARY KEY AUTOINCREMENT, nazwa TEXT NOT NULL, czas REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS g_udostepnione (token TEXT PRIMARY KEY, album INTEGER NOT NULL, czas REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS g_album_pliki (album INTEGER NOT NULL, sciezka TEXT NOT NULL, czas REAL NOT NULL,
                                           PRIMARY KEY (album, sciezka));
 CREATE TABLE IF NOT EXISTS g_min_filmow (sciezka TEXT PRIMARY KEY, mtime REAL NOT NULL, dane BLOB NOT NULL);
@@ -489,6 +490,69 @@ class Galeria:
         finally:
             db.close()
 
+    # --- ✏ edycja zdjęcia: kopia obok albo w miejsce oryginału (oryginał do kosza programu) ---------------------
+    def _zapomnij_miniatury(self, *ids) -> None:
+        with self._blokada:
+            for i in ids:
+                for sr in (False, True):
+                    self._min.pop((int(i), sr), None)
+
+    def edytuj(self, id_: int, op: dict, zastap: bool = False) -> dict:
+        from . import edycja
+        r = self._wiersz(id_)
+        if not r or r["rodzaj"] != "zdjecie":
+            return {"blad": "Nie ma takiego zdjęcia — odśwież widok."}
+        db = self._db()
+        try:
+            w = edycja.zapisz(db, r, op, zastap)
+            if w.get("id"):
+                self._zapomnij_miniatury(id_, w["id"])
+                n = db.execute(f"SELECT {_KOLUMNY} FROM pliki WHERE rowid=?", (w["id"],)).fetchone()
+                w["plik"] = _nazwa(dict(n)) if n else None
+            return w
+        finally:
+            db.close()
+
+    def edytuj_cofnij(self, id_: int, partia: int | None) -> dict:
+        from . import edycja
+        if not self._wiersz(id_):
+            return {"blad": "Nie ma takiego pliku — odśwież widok."}
+        db = self._db()
+        try:
+            self._zapomnij_miniatury(id_)
+            return edycja.cofnij(db, id_, partia)
+        finally:
+            db.close()
+
+    # --- ⬇ ZIP: zaznaczone albo cały album (oryginały) -------------------------------------------------
+    def pliki_zip(self, ids=None, album: int | None = None) -> list[str]:
+        w, arg = self._warunek()
+        db = self._db()
+        try:
+            if album:
+                self._napraw_kolekcje(db)
+                return [r[0] for r in db.execute(
+                    f"""SELECT sciezka FROM pliki WHERE rodzaj IN ('zdjecie','film') AND sciezka IN
+                        (SELECT sciezka FROM g_album_pliki WHERE album=?) {w} ORDER BY data, wzgledna""",
+                    [int(album)] + arg)]
+            wynik = []
+            for i in list(ids or [])[:5000]:
+                r = db.execute(f"SELECT sciezka FROM pliki WHERE rowid=? AND rodzaj IN ('zdjecie','film') {w}",
+                               [int(i)] + arg).fetchone()
+                if r:
+                    wynik.append(r[0])
+            return wynik
+        finally:
+            db.close()
+
+    def nazwa_albumu(self, album: int) -> str:
+        db = self._db()
+        try:
+            r = db.execute("SELECT nazwa FROM g_albumy WHERE id=?", (int(album),)).fetchone()
+            return r[0] if r else "Album"
+        finally:
+            db.close()
+
     def cofnij_usuniecie(self, partia: int) -> dict:
         from . import usuwanie
         db = self._db()
@@ -536,7 +600,9 @@ class Galeria:
                 r = db.execute(f"""SELECT COUNT(*) n, MIN(rowid) okladka FROM pliki WHERE rodzaj IN ('zdjecie','film')
                                    AND sciezka IN (SELECT sciezka FROM g_album_pliki WHERE album=?) {w}""",
                                [a["id"]] + arg).fetchone()
-                wynik.append({"id": a["id"], "nazwa": a["nazwa"], "n": r["n"], "okladka": r["okladka"]})
+                t = db.execute("SELECT token FROM g_udostepnione WHERE album=?", (a["id"],)).fetchone()
+                wynik.append({"id": a["id"], "nazwa": a["nazwa"], "n": r["n"], "okladka": r["okladka"],
+                              "udostepniony": bool(t)})
             u = db.execute(f"""SELECT COUNT(*) n, MIN(rowid) okladka FROM pliki WHERE rodzaj IN ('zdjecie','film')
                                AND sciezka IN (SELECT sciezka FROM g_ulubione) {w}""", arg).fetchone()
         finally:
@@ -576,9 +642,48 @@ class Galeria:
         finally:
             db.close()
 
+    # --- 🔗 udostępnianie albumu linkiem (bez PIN-u, tylko ten album, tylko do oglądania) ----------------------
+    def udostepnij(self, album: int, wlacz: bool = True) -> dict:
+        db = self._db()
+        try:
+            if not db.execute("SELECT 1 FROM g_albumy WHERE id=?", (int(album),)).fetchone():
+                return {"blad": "nie ma takiego albumu"}
+            if not wlacz:
+                db.execute("DELETE FROM g_udostepnione WHERE album=?", (int(album),))
+                db.commit()
+                return {"token": None}
+            r = db.execute("SELECT token FROM g_udostepnione WHERE album=?", (int(album),)).fetchone()
+            if r:
+                return {"token": r[0]}
+            t = secrets.token_urlsafe(16)
+            db.execute("INSERT INTO g_udostepnione VALUES (?,?,?)", (t, int(album), time.time()))
+            db.commit()
+            return {"token": t}
+        finally:
+            db.close()
+
+    def album_tokenu(self, token: str) -> int | None:
+        if not token or len(token) > 64:
+            return None
+        db = self._db()
+        try:
+            r = db.execute("SELECT album FROM g_udostepnione WHERE token=?", (token,)).fetchone()
+            return r[0] if r else None
+        finally:
+            db.close()
+
+    def w_albumie(self, album: int, id_: int) -> bool:
+        db = self._db()
+        try:
+            return db.execute("""SELECT 1 FROM pliki p JOIN g_album_pliki a ON a.sciezka = p.sciezka
+                                 WHERE p.rowid=? AND a.album=?""", (int(id_), int(album))).fetchone() is not None
+        finally:
+            db.close()
+
     def album_usun(self, album: int) -> dict:  # tylko album — zdjęcia zostają na dysku
         db = self._db()
         try:
+            db.execute("DELETE FROM g_udostepnione WHERE album=?", (int(album),))
             db.execute("DELETE FROM g_album_pliki WHERE album=?", (int(album),))
             db.execute("DELETE FROM g_albumy WHERE id=?", (int(album),))
             db.commit()
@@ -728,6 +833,54 @@ def wyslij_strumien(h: BaseHTTPRequestHandler, sciezka: str | None) -> None:
         pass  # przeglądarka przerwała pobieranie (np. przewinięcie) — to normalne
 
 
+_ZIPY: dict[str, tuple[float, list[int]]] = {}  # klucz -> (czas, id) — lista z POST, pobranie zwykłym linkiem (GET)
+
+
+def zip_klucz(ids: list[int]) -> dict:
+    teraz = time.time()
+    for k in [k for k, (t, _) in _ZIPY.items() if teraz - t > 3600]:
+        _ZIPY.pop(k, None)
+    k = secrets.token_urlsafe(12)
+    _ZIPY[k] = (teraz, [int(i) for i in ids][:5000])
+    return {"klucz": k, "n": len(_ZIPY[k][1])}
+
+
+def wyslij_zip(h: BaseHTTPRequestHandler, sciezki: list[str], nazwa: str) -> None:
+    """ZIP pakowany w locie (bez kompresji — zdjęcia i filmy są już skompresowane), od razu do przeglądarki."""
+    import zipfile
+    from urllib.parse import quote
+    if not sciezki:
+        h.send_response(HTTPStatus.NOT_FOUND)
+        h.send_header("Content-Length", "0")
+        h.end_headers()
+        return
+    nazwa = re.sub(r'[\\/:*?"<>|]+', "_", nazwa).strip() or "Zdjecia"
+    h.send_response(HTTPStatus.OK)
+    h.send_header("Content-Type", "application/zip")
+    h.send_header("Content-Disposition", f"attachment; filename=\"zdjecia.zip\"; filename*=UTF-8''{quote(nazwa + '.zip')}")
+    h.send_header("Cache-Control", "no-store")
+    h.send_header("Connection", "close")
+    h.end_headers()
+    h.close_connection = True
+    uzyte: set[str] = set()
+    try:
+        with zipfile.ZipFile(h.wfile, "w", zipfile.ZIP_STORED, allowZip64=True) as z:
+            for sc in sciezki:
+                if not os.path.isfile(sc):
+                    continue
+                rdzen, rozsz = os.path.splitext(os.path.basename(sc))
+                n, i = rdzen + rozsz, 2
+                while n.lower() in uzyte:
+                    n, i = f"{rdzen} ({i}){rozsz}", i + 1
+                uzyte.add(n.lower())
+                try:
+                    z.write(sc, n)
+                except OSError:
+                    continue
+    except (ConnectionError, OSError, ValueError):
+        pass  # pobieranie przerwane w przeglądarce
+
+
 _FILTR = threading.local()
 _LISTY = ("/api/g/lata", "/api/g/pliki", "/api/g/szukaj", "/api/g/tego-dnia", "/api/g/kolekcja", "/api/g/mapa")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
 
@@ -774,6 +927,11 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict):
         return g.podglad(i("id")), "image/jpeg"
     if sciezka == "/api/g/film":
         return "film", g.sciezka(i("id"), "film")
+    if sciezka == "/api/g/zip":
+        if i("album"):
+            return "zip", g.pliki_zip(album=i("album")), g.nazwa_albumu(i("album"))
+        _, ids = _ZIPY.get(q.get("k", [""])[0], (0, []))
+        return "zip", g.pliki_zip(ids), f"Zdjęcia ({len(ids)})"
     if sciezka == "/api/g/film-mp4":  # format, którego przeglądarka nie zna — przerabiany w locie (ffmpeg)
         return "film-mp4", g.sciezka(i("id"), "film"), max(0, i("od")), q.get("f", [""])[0] == "webm"
     return None
@@ -804,10 +962,15 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
         return g.zapisz_miniature_filmu(int(dane.get("id") or 0), jpeg)
     if sciezka == "/api/g/otworz":
         return g.otworz(int(dane.get("id") or 0))
+    if sciezka == "/api/g/zip":
+        return zip_klucz(ids)
+    if sciezka == "/api/g/album/udostepnij":
+        return g.udostepnij(int(dane.get("album") or 0), bool(dane.get("wlacz", True)))
     return obsluz_usuwanie(g, sciezka, dane)
 
 
-ZMIANY_PLIKOW = ("/api/g/usun", "/api/g/usun/cofnij", "/api/g/lokalizacja", "/api/g/data")
+ZMIANY_PLIKOW = ("/api/g/usun", "/api/g/usun/cofnij", "/api/g/lokalizacja", "/api/g/data", "/api/g/edytuj",
+                 "/api/g/edytuj/cofnij")
 
 
 def obsluz_usuwanie(g: Galeria, sciezka: str, dane: dict) -> dict | None:
@@ -821,6 +984,11 @@ def obsluz_usuwanie(g: Galeria, sciezka: str, dane: dict) -> dict | None:
         return g.data([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()], str(dane.get("data") or ""))
     if sciezka == "/api/g/dokument":
         return g.dokument([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()], bool(dane.get("tak", True)))
+    if sciezka == "/api/g/edytuj":
+        op = dane.get("op") if isinstance(dane.get("op"), dict) else {}
+        return g.edytuj(int(dane.get("id") or 0), op, bool(dane.get("zastap")))
+    if sciezka == "/api/g/edytuj/cofnij":
+        return g.edytuj_cofnij(int(dane.get("id") or 0), int(dane.get("partia") or 0) or None)
     if sciezka == "/api/g/lokalizacja":
         return g.lokalizacja([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()],
                              dane.get("lat"), dane.get("lon"))
@@ -853,6 +1021,20 @@ def adresy_ip() -> list[str]:
 
 def losowy_pin() -> str:
     return f"{secrets.randbelow(10**6):06d}"
+
+
+class _Kawalki:
+    """Najwyżej `n` bajtów ze strumienia — ciało zapytania przekazywane dalej bez wczytywania całości."""
+
+    def __init__(self, f, n: int):
+        self.f, self.zostalo = f, n
+
+    def read(self, ile: int = -1) -> bytes:
+        if self.zostalo <= 0:
+            return b""
+        k = self.f.read(self.zostalo if ile is None or ile < 0 else min(ile, self.zostalo))
+        self.zostalo -= len(k)
+        return k
 
 
 class SerwerGalerii:
@@ -954,8 +1136,11 @@ class SerwerGalerii:
                 q["t"] = [token]
                 adres = (sciezka_glowna or u.path) + "?" + urlencode(q, doseq=True)
                 n = int(self.headers.get("Content-Length") or 0)
-                tresc = self.rfile.read(n) if n else None
+                # duże wysyłki (📤 filmy z telefonu) — przekazywane kawałkami, bez trzymania w pamięci
+                tresc = (_Kawalki(self.rfile, n) if n > 8 * 1024 * 1024 else self.rfile.read(n)) if n else None
                 naglowki = {"X-Token": token}
+                if n:
+                    naglowki["Content-Length"] = str(n)
                 for k in ("Content-Type", "Range"):
                     if self.headers.get(k):
                         naglowki[k] = self.headers[k]
@@ -983,9 +1168,63 @@ class SerwerGalerii:
                 finally:
                     pol.close()
 
+            def _album(self, u, q):
+                """🔗 Udostępniony album: /a/<token>[/api|min|pod|film|oryg|zip] — bez PIN-u, tylko ten album."""
+                _FILTR.rodzaj = ""
+                cz = u.path.split("/")
+                token, co = cz[2] if len(cz) > 2 else "", cz[3] if len(cz) > 3 else ""
+                galerie = [s.galerie("wszystko"), s.galerie("przegladarka")] if s.galerie is not None else [s.galeria]
+                g = album = None
+                for kand in galerie:
+                    album = kand.album_tokenu(token)
+                    if album:
+                        g = kand
+                        break
+                if not album:
+                    return self._wyslij("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                                        "<body style='font:16px system-ui;padding:30px;text-align:center'>"
+                                        "<h2>🔗 Ten link już nie działa</h2><p>Album nie jest już udostępniany.</p>",
+                                        "text/html; charset=utf-8", HTTPStatus.NOT_FOUND)
+                if co == "":
+                    return self._wyslij((UI / "album.html").read_bytes(), "text/html; charset=utf-8")
+                if co == "api":
+                    k = g.kolekcja("album", album, 0, 5000)
+                    return self._wyslij({"nazwa": k.get("nazwa"), "pliki": k.get("pliki", [])})
+                if co == "zip":
+                    return wyslij_zip(self, g.pliki_zip(album=album), g.nazwa_albumu(album))
+                try:
+                    id_ = int(q.get("id", ["0"])[0])
+                except ValueError:
+                    id_ = 0
+                if not g.w_albumie(album, id_):
+                    return self._wyslij(None)
+                if co == "min":
+                    return self._wyslij(g.miniatura(id_, bool(q.get("s"))), "image/jpeg")
+                if co == "pod":
+                    return self._wyslij(g.podglad(id_), "image/jpeg")
+                if co == "film":
+                    return wyslij_strumien(self, g.sciezka(id_, "film"))
+                if co == "oryg":
+                    sc = g.sciezka(id_, "zdjecie")
+                    if not sc or not os.path.isfile(sc):
+                        return self._wyslij(None)
+                    from urllib.parse import quote
+                    with open(sc, "rb") as f:
+                        dane = f.read()
+                    self.send_response(HTTPStatus.OK)
+                    self.send_header("Content-Type", "application/octet-stream")
+                    self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(os.path.basename(sc))}")
+                    self.send_header("Content-Length", str(len(dane)))
+                    self.end_headers()
+                    self.wfile.write(dane)
+                    return None
+                return self._wyslij(None)
+
             def do_GET(self):
                 u = urlparse(self.path)
                 q = parse_qs(u.query)
+                if u.path.startswith("/a/"):
+                    return self._album(u, q)
                 if u.path == "/program":  # 🖥 pełny program (duplikaty, dokumenty, drzewo…) — po PIN-ie
                     t = q.get("s", [""])[0]
                     if self._znany(t):
@@ -1024,6 +1263,8 @@ class SerwerGalerii:
                 if w[0] == "film-mp4":
                     from . import filmy
                     return filmy.wyslij_mp4(self, w[1], w[2], w[3])
+                if w[0] == "zip":
+                    return wyslij_zip(self, w[1], w[2])
                 return self._wyslij(w[0], w[1]) if w[1] else self._wyslij(w[0])
 
             def do_POST(self):
@@ -1044,6 +1285,16 @@ class SerwerGalerii:
                     if blad:
                         return self._wyslij({"blad": blad}, kod=HTTPStatus.BAD_REQUEST)
                     return self._wyslij(s.pilot.status())
+                if u.path == "/api/g/zip":  # tylko odczyt — także bez sterowania
+                    if not self._ok(parse_qs(u.query)):
+                        return self._wyslij({"blad": "Podaj PIN"}, kod=HTTPStatus.UNAUTHORIZED)
+                    try:
+                        n = int(self.headers.get("Content-Length") or 0)
+                        dane = json.loads(self.rfile.read(min(n, 200000)) or b"{}")
+                    except ValueError:
+                        dane = {}
+                    ids = [int(x) for x in (dane.get("ids") or []) if str(x).isdigit()] if isinstance(dane, dict) else []
+                    return self._wyslij(zip_klucz(ids))
                 if u.path in ZMIANY_PLIKOW and s.pilot is not None:
                     q = parse_qs(u.query)
                     if not self._ok(q):
@@ -1062,7 +1313,7 @@ class SerwerGalerii:
                     z = q.get("z", [""])[0]
                     g = s.galerie(z) if s.galerie is not None and z in s.ZAKRESY else s.galeria
                     w = obsluz_usuwanie(g, u.path, dane if isinstance(dane, dict) else {})
-                    s.pilot.po_usunieciu(z, w if u.path == "/api/g/lokalizacja" else None)
+                    s.pilot.po_usunieciu(z, w, u.path)
                     return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
                 if u.path != "/api/g/zaloguj":
                     if s.pilot is not None and self._ok(parse_qs(u.query)):

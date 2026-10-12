@@ -269,5 +269,25 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
     return {**stat, **licz, "usuniete_z_bazy": usuniete, "korzen": korzen, "nieczytelne": nieczytelne}
 
 
+def dodaj_plik(db: sqlite3.Connection, sciezka: str, korzen: str) -> int:
+    """Dopisuje do bazy jeden nowy plik (edycja zdjęcia, wysłane z telefonu) bez skanowania całego folderu.
+    Zwraca rowid."""
+    korzen = os.path.abspath(korzen)
+    st = os.stat(sciezka)
+    rodz = typy.rodzaj(os.path.basename(sciezka))
+    m = odczytaj(sciezka, rodz, st.st_mtime, [b for b in boczne_nazwy(sciezka) if os.path.isfile(b)] or None)
+    ost = db.execute("SELECT MAX(id) FROM skany WHERE korzen = ?", (korzen,)).fetchone()[0]
+    if ost is None:
+        ost = db.execute("INSERT INTO skany(korzen, start, koniec) VALUES (?, ?, ?)",
+                         (korzen, time.time(), time.time())).lastrowid
+    db.execute(
+        "INSERT OR REPLACE INTO pliki VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (sciezka, korzen, os.path.relpath(sciezka, korzen), st.st_size, st.st_mtime, rodz, Path(sciezka).suffix.lower(),
+         m.data.isoformat(timespec="seconds") if m.data else None, m.zrodlo_daty,
+         m.lat, m.lon, m.aparat, m.wykonawca, m.album, m.tytul, m.blad, ost))
+    db.commit()
+    return db.execute("SELECT rowid FROM pliki WHERE sciezka = ?", (sciezka,)).fetchone()[0]
+
+
 if __name__ == "__main__":  # pragma: no cover
     sys.exit("Użyj: python -m katalogator skanuj <folder>")

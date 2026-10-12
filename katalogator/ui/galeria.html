@@ -106,6 +106,47 @@ body.zwiniete #wykres,body.zwiniete #lata,body.zwiniete #prz,body.zwiniete #filt
 #w-tip{position:fixed;z-index:4000;pointer-events:none;background:var(--panel);color:var(--fg);border:1px solid var(--lin);border-radius:8px;padding:6px 10px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.25);white-space:nowrap}
 #w-tip b{display:block;font-size:15px}
 #w-tip span{color:var(--mut)}
+/* --- ☑ zaznaczanie wielu --- */
+.k .ob .zz{position:absolute;z-index:2;left:6px;top:6px;width:26px;height:26px;padding:0;display:grid;place-items:center;line-height:1;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.25);opacity:0;transition:opacity .15s;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.k:hover .ob .zz,.zaznaczanie .k .ob .zz,.k .ob .zz:focus-visible{opacity:1}
+.k.zazn{outline:3px solid var(--akc);outline-offset:-3px}
+.k.zazn .ob img{transform:scale(.9);transition:transform .12s}
+.k.zazn .ob .zz{background:var(--akc);border-color:var(--akc);opacity:1}
+.k.zazn .ob .zz::after{content:"✓";color:#fff;font-size:15px;font-weight:700}
+.zaznaczanie .k .ob .kosz{display:none}
+.zaznaczanie .k{cursor:pointer}
+#zz{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:1500;background:var(--panel);border:1px solid var(--lin);border-radius:14px;padding:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;box-shadow:0 10px 40px rgba(0,0,0,.35);max-width:calc(100vw - 24px)}
+#zz b{padding:0 6px;font-size:13.5px;white-space:nowrap}
+#zz .menu-alb{top:auto;bottom:calc(100% + 6px);left:auto;right:0}
+.zaznaczanie #siatka{padding-bottom:90px}
+@media (max-width:600px){.k .ob .zz{opacity:.85;width:24px;height:24px}#zz{bottom:8px;left:8px;right:8px;transform:none;gap:4px;padding:6px}#zz button{padding:6px 8px}}
+/* --- ✏ edytor zdjęć --- */
+#ed{position:fixed;inset:0;z-index:2600;background:#0b0f19;color:#e7ecf7;display:flex}
+#ed-scena{flex:1;min-width:0;min-height:0;position:relative;display:grid;place-items:center;overflow:hidden;touch-action:none;padding:16px}
+#ed-plotno{display:block;box-shadow:0 6px 30px rgba(0,0,0,.5)}
+#ed-ramka{position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.55);cursor:move;touch-action:none}
+#ed-ramka::before,#ed-ramka::after{content:"";position:absolute;inset:33.33% 0;border-top:1px solid rgba(255,255,255,.4);border-bottom:1px solid rgba(255,255,255,.4);pointer-events:none}
+#ed-ramka::after{inset:0 33.33%;border:0;border-left:1px solid rgba(255,255,255,.4);border-right:1px solid rgba(255,255,255,.4)}
+#ed-ramka i{position:absolute;width:22px;height:22px;border:4px solid #fff;touch-action:none}
+#ed-ramka i[data-r="nw"]{left:-5px;top:-5px;border-right:0;border-bottom:0;cursor:nwse-resize}
+#ed-ramka i[data-r="ne"]{right:-5px;top:-5px;border-left:0;border-bottom:0;cursor:nesw-resize}
+#ed-ramka i[data-r="sw"]{left:-5px;bottom:-5px;border-right:0;border-top:0;cursor:nesw-resize}
+#ed-ramka i[data-r="se"]{right:-5px;bottom:-5px;border-left:0;border-top:0;cursor:nwse-resize}
+#ed-panel{width:300px;flex:none;background:#111827;border-left:1px solid #1f2a44;display:flex;flex-direction:column;gap:10px;padding:14px;overflow-y:auto}
+#ed-panel button,#ed-panel select{background:#1a2338;color:#e7ecf7;border-color:#2a3654}
+#ed-panel button.akt{background:var(--akc);border-color:var(--akc)}
+#ed-panel h3{margin:4px 0 0;font-size:12px;font-weight:600;color:#8a97b4;text-transform:uppercase;letter-spacing:.06em}
+.ed-rz{display:flex;gap:6px;flex-wrap:wrap}
+.ed-rz button{flex:1;padding:6px 8px;white-space:nowrap}
+.ed-s{display:grid;grid-template-columns:1fr auto;gap:2px 8px;font-size:13px}
+.ed-s input{grid-column:1/-1;width:100%;accent-color:var(--akc)}
+.ed-s output{color:#8a97b4;font-variant-numeric:tabular-nums;cursor:pointer}
+.ed-s.temperatura input{background:linear-gradient(90deg,#5b8cff,#ddd,#ffb347);border-radius:6px;height:6px;appearance:none;-webkit-appearance:none}
+.ed-s.odcien input{background:linear-gradient(90deg,#3fbf6f,#ddd,#d65db1);border-radius:6px;height:6px;appearance:none;-webkit-appearance:none}
+.ed-dol{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding-top:8px;border-top:1px solid #1f2a44}
+.ed-dol label{font-size:13px;display:flex;gap:6px;align-items:flex-start}
+#ed-info{font-size:12px;color:#8a97b4}
+@media (max-width:700px){#ed{flex-direction:column}#ed-panel{width:auto;max-height:46vh;border-left:0;border-top:1px solid #1f2a44}#ed-scena{padding:8px}}
 /* --- przeglądarka dysków --- */
 .prz{flex:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--lin);background:var(--panel)}
 .prz-f{display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 10px;border:1px solid var(--lin);border-radius:999px;background:var(--bg);font-size:13px;max-width:320px}
@@ -207,6 +248,12 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 #lok-zapisz:disabled{opacity:.45;cursor:default}
 #lok-usun:hover,.lok-usun:hover{border-color:#dc2626;color:#dc2626}
 .popup .lok-usun{margin-top:4px;width:100%}
+#udo{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3500;display:grid;place-items:center;padding:14px}
+#udo .okno{background:var(--bg);color:var(--fg);border-radius:14px;padding:16px;width:min(560px,100%);display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
+#udo .qr{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:6px 0}
+#udo .qr>div:first-child{background:#fff;padding:8px;border-radius:8px}
+#udo code{background:var(--panel);padding:2px 6px;border-radius:5px;word-break:break-all;color:var(--fg);display:inline-block;margin-top:4px}
+#udo ul{padding-left:18px;margin:6px 0}
 #dt{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3500;display:grid;place-items:center;padding:14px}
 #dt .okno{background:var(--bg);color:var(--fg);border-radius:14px;padding:16px;width:min(440px,100%);display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
 #dt input[type=datetime-local]{display:block;margin-top:6px;font:inherit;font-size:16px;padding:8px 10px;border:1px solid var(--lin);border-radius:8px;background:var(--panel);color:var(--fg);width:100%}
@@ -239,6 +286,8 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   </span>
   <span class="odstep"></span>
   <button id="dyski-btn" hidden title="Dyski i foldery Przeglądarki, skanowanie">💽<span class="t"> Dyski</span><b class="znaczek" id="dyski-stan" hidden></b></button>
+  <button id="wyslij-btn" hidden title="Wyślij zdjęcia i filmy do biblioteki (z telefonu: prosto z galerii)">📤<span class="t"> Wyślij</span></button>
+  <input type="file" id="wyslij-pliki" multiple accept="image/*,video/*" hidden>
   <button id="wykres-btn" title="Pokaż / schowaj wykres lat i miesięcy">📊</button>
   <span class="menu-w">
     <button id="menu-btn" title="Więcej: zakres, pokaz slajdów, telefon" aria-haspopup="true">⋯</button>
@@ -302,6 +351,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
     <button id="p-z-albumu" hidden title="Usuń z tego albumu (zdjęcie zostaje na dysku)">− Z albumu</button>
     <button id="p-pokaz" title="Pokaz slajdów (P)">▶ Pokaz</button>
     <button id="p-miejsce" hidden title="Dodaj, zmień albo usuń miejsce zrobienia zdjęcia (L)">📍 Miejsce</button>
+    <button id="p-edytuj" hidden title="Przytnij, obróć, rozjaśnij, popraw kolory (E) — zapis jako kopia albo zamiast oryginału">✏ Edytuj</button>
     <button id="p-data" hidden title="Zmień datę zrobienia (zapis w pliku: JPEG — EXIF, inne — plik .xmp obok)">📅 Data</button>
     <button id="p-dok" hidden title="Oznacz jako dokument (D)">📄 To dokument</button>
     <button id="p-usun" hidden title="Usuń (Delete) — do kosza programu: Odłożone/Usunięte, można cofnąć">🗑 Usuń</button>
@@ -353,7 +403,54 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 <script src="/ui/mapa/leaflet.js"></script>
 <script src="/ui/mapa/leaflet.markercluster.js"></script>
 <script src="/ui/mapa/qrcode.js"></script>
+<div id="zz" hidden>
+  <b id="zz-ile"></b>
+  <button id="zz-wszystkie" title="Zaznacz wszystkie w tym widoku (Ctrl+A)">☑ Wszystkie</button>
+  <button id="zz-data" title="Zmień datę zaznaczonych (np. zły zegar aparatu)">📅 Data</button>
+  <button id="zz-miejsce" title="Dodaj / zmień miejsce zaznaczonych">📍 Miejsce</button>
+  <button id="zz-dok" title="Oznacz zaznaczone jako dokumenty albo zwykłe zdjęcia">📄 Dokument</button>
+  <button id="zz-album" title="Dodaj zaznaczone do albumu">＋ Album</button>
+  <button id="zz-z-albumu" hidden title="Usuń zaznaczone z tego albumu (pliki zostają)">− Z albumu</button>
+  <button id="zz-zip" title="Pobierz zaznaczone jako ZIP (oryginały)">⬇ ZIP</button>
+  <button id="zz-usun" title="Usuń zaznaczone (Delete) — do kosza programu, można cofnąć">🗑 Usuń</button>
+  <button id="zz-koniec" title="Zakończ zaznaczanie (Esc)">✕</button>
+</div>
+<div id="udo" hidden>
+  <div class="okno">
+    <b>🔗 Udostępnij album</b>
+    <div id="udo-tresc" class="info"></div>
+    <div class="lok-dol"><button id="udo-wylacz">Wyłącz link</button><span style="flex:1"></span><button id="udo-zamknij" class="akt">Gotowe</button></div>
+  </div>
+</div>
 <div id="toast-g" hidden></div>
+<div id="ed" hidden>
+  <div id="ed-scena"><canvas id="ed-plotno"></canvas><div id="ed-ramka" hidden><i data-r="nw"></i><i data-r="ne"></i><i data-r="sw"></i><i data-r="se"></i></div></div>
+  <div id="ed-panel">
+    <b id="ed-tyt">✏ Edycja</b>
+    <h3>Kadr</h3>
+    <div class="ed-rz">
+      <button id="ed-lewo" title="Obróć w lewo">⟲</button><button id="ed-prawo" title="Obróć w prawo">⟳</button>
+      <button id="ed-lustro" title="Odbicie lustrzane">⇋</button><button id="ed-tnij" title="Przytnij (C)">✂ Przytnij</button>
+    </div>
+    <div class="ed-rz" id="ed-proporcje" hidden>
+      <select id="ed-prop" aria-label="Proporcje kadru"><option value="">Dowolnie</option><option value="org">Jak oryginał</option>
+        <option value="1">1:1 kwadrat</option><option value="1.3333">4:3</option><option value="1.5">3:2</option>
+        <option value="1.7778">16:9</option><option value="0.8">4:5 (pion)</option><option value="0.5625">9:16 (pion)</option></select>
+      <button id="ed-tnij-reset" title="Całe zdjęcie">Całe</button>
+    </div>
+    <h3>Światło i kolor</h3>
+    <div class="ed-rz"><button id="ed-auto" title="Automatyczna jasność, kontrast i balans bieli">✨ Auto</button>
+      <button id="ed-reset" title="Cofnij wszystkie zmiany">↺ Od nowa</button></div>
+    <div id="ed-suwaki"></div>
+    <button id="ed-porownaj" title="Przytrzymaj, żeby zobaczyć oryginał (spacja)">◐ Przytrzymaj: przed</button>
+    <div class="ed-dol">
+      <label><input type="checkbox" id="ed-zastap"> <span>Zastąp oryginał<br><small class="info">oryginał trafi do Odłożone/Usunięte — można cofnąć</small></span></label>
+      <div id="ed-info"></div>
+      <div class="ed-rz"><button id="ed-anuluj">Anuluj</button><button id="ed-zapisz" class="akt">Zapisz kopię</button></div>
+    </div>
+  </div>
+</div>
+
 <div id="dt" hidden>
   <div class="okno">
     <b id="dt-tyt">📅 Data</b>
@@ -385,5 +482,6 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 </div>
 <script src="/ui/aktywnosc.js"></script>
 <script src="/ui/galeria.js"></script>
+<script src="/ui/edytor.js"></script>
 </body>
 </html>

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Album</title>
+<style>
+:root{--bg:#fff;--panel:#f3f6fb;--fg:#0f172a;--mut:#5b6b86;--lin:#e1e7f0;--akc:#2563eb}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#060a15;--panel:#0d1426;--fg:#e7ecf7;--mut:#8a97b4;--lin:#1c2742;--akc:#5b8cff}}
+:root[data-theme="dark"]{--bg:#060a15;--panel:#0d1426;--fg:#e7ecf7;--mut:#8a97b4;--lin:#1c2742;--akc:#5b8cff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--lin)}
+h1{margin:0;font-size:20px;flex:1;min-width:0}
+.info{color:var(--mut);font-size:13px}
+a.btn,button{font:inherit;color:#fff;background:var(--akc);border:0;border-radius:10px;padding:8px 14px;text-decoration:none;cursor:pointer}
+#siatka{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;padding:12px 16px}
+.k{aspect-ratio:1;background:var(--panel);border-radius:10px;overflow:hidden;position:relative;cursor:zoom-in;border:0;padding:0}
+.k img{width:100%;height:100%;object-fit:cover;display:block}
+.k .f{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.6);color:#fff;border-radius:999px;padding:2px 8px;font-size:12px}
+#pelny{position:fixed;inset:0;background:#000;z-index:20;display:flex;align-items:center;justify-content:center;color:#fff}
+#pelny[hidden]{display:none}
+#tresc img,#tresc video{max-width:96vw;max-height:86vh;object-fit:contain}
+#pelny .x,#pelny .p,#pelny .n{position:absolute;background:rgba(255,255,255,.14);color:#fff;border-radius:999px;width:46px;height:46px;padding:0;font-size:22px}
+#pelny .x{top:12px;right:12px}#pelny .p{left:12px;top:50%}#pelny .n{right:12px;top:50%}
+#opis{position:absolute;left:0;right:0;bottom:0;padding:10px 14px;text-align:center;font-size:13px;background:linear-gradient(transparent,rgba(0,0,0,.7));display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap}
+#opis a{color:#fff}
+.pusto{padding:40px;text-align:center;color:var(--mut)}
+@media (max-width:600px){#siatka{grid-template-columns:repeat(3,1fr);gap:4px;padding:6px}header{padding:10px 12px}h1{font-size:17px}}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="tytul">Album</h1>
+  <span class="info" id="ile"></span>
+  <a class="btn" id="zip" href="zip" download>⬇ Pobierz wszystkie (ZIP)</a>
+</header>
+<div id="siatka"><div class="pusto">Wczytuję…</div></div>
+<div id="pelny" hidden>
+  <button class="x" title="Zamknij (Esc)">✕</button>
+  <button class="p" title="Poprzednie (←)">‹</button>
+  <button class="n" title="Następne (→)">›</button>
+  <div id="tresc"></div>
+  <div id="opis"></div>
+</div>
+<script>
+"use strict";
+// Udostępniony album z Katalogatora — tylko do oglądania i pobierania
+const baza = location.pathname.replace(/\/+$/, "") + "/";
+const $ = id => document.getElementById(id);
+const st = {pliki: [], poz: 0};
+const dataTxt = d => d ? new Date(d).toLocaleDateString("pl-PL", {day: "numeric", month: "long", year: "numeric"}) : "";
+$("zip").href = baza + "zip";
+async function start() {
+  try {
+    const r = await (await fetch(baza + "api")).json();
+    st.pliki = r.pliki || [];
+    document.title = r.nazwa || "Album"; $("tytul").textContent = "🗂 " + (r.nazwa || "Album");
+    const n = st.pliki.length;
+    $("ile").textContent = n === 1 ? "1 zdjęcie" : `${n} ${n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "zdjęcia" : "zdjęć"}`;
+    const s = $("siatka"); s.replaceChildren();
+    if (!n) { s.innerHTML = '<div class="pusto">Album jest pusty.</div>'; return; }
+    st.pliki.forEach((p, i) => {
+      const k = document.createElement("button"); k.className = "k"; k.title = p.nazwa;
+      const im = new Image(); im.loading = "lazy"; im.alt = ""; im.src = baza + "min?id=" + p.id; k.append(im);
+      if (p.rodzaj === "film") { const f = document.createElement("span"); f.className = "f"; f.textContent = "▶ film"; k.append(f); }
+      k.onclick = () => pokaz(i); s.append(k);
+    });
+  } catch (e) { $("siatka").innerHTML = '<div class="pusto">Nie udało się wczytać albumu.</div>'; }
+}
+function pokaz(i) {
+  st.poz = i; const p = st.pliki[i], t = $("tresc"); t.replaceChildren();
+  $("pelny").hidden = false;
+  if (p.rodzaj === "film") {
+    const v = document.createElement("video"); v.controls = true; v.autoplay = true; v.src = baza + "film?id=" + p.id; t.append(v);
+  } else {
+    const im = new Image(); im.src = baza + "min?s=1&id=" + p.id; t.append(im);
+    const duze = new Image(); duze.src = baza + "pod?id=" + p.id;
+    duze.onload = () => { if (st.poz === i) t.replaceChildren(duze); };
+  }
+  const o = $("opis"); o.replaceChildren(`${p.nazwa}${p.data ? " · " + dataTxt(p.data) : ""}`);
+  if (p.rodzaj !== "film") { const a = document.createElement("a"); a.href = baza + "oryg?id=" + p.id; a.textContent = "⬇ Pobierz"; a.download = p.nazwa; o.append(a); }
+  document.querySelector("#pelny .p").hidden = i <= 0;
+  document.querySelector("#pelny .n").hidden = i >= st.pliki.length - 1;
+}
+const zamknij = () => { $("pelny").hidden = true; $("tresc").replaceChildren(); };
+const krok = d => { const n = st.poz + d; if (n >= 0 && n < st.pliki.length) pokaz(n); };
+document.querySelector("#pelny .x").onclick = zamknij;
+document.querySelector("#pelny .p").onclick = e => { e.stopPropagation(); krok(-1); };
+document.querySelector("#pelny .n").onclick = e => { e.stopPropagation(); krok(1); };
+$("pelny").onclick = e => { if (e.target.id === "pelny" || e.target.id === "tresc") zamknij(); };
+document.addEventListener("keydown", e => {
+  if ($("pelny").hidden) return;
+  if (e.key === "Escape") zamknij(); if (e.key === "ArrowLeft") krok(-1); if (e.key === "ArrowRight") krok(1);
+});
+let x0 = null;
+$("pelny").addEventListener("touchstart", e => { x0 = e.touches.length === 1 ? e.touches[0].clientX : null; }, {passive: true});
+$("pelny").addEventListener("touchend", e => { if (x0 === null) return; const d = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(d) > 50) krok(d < 0 ? 1 : -1); });
+start();
+</script>
+</body>
+</html>
