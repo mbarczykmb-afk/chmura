@@ -198,6 +198,8 @@ body.pasek-schowany #pasek-pokaz{display:block;position:fixed;top:0;right:14px;z
   padding:1px 12px 3px;font-size:13px;background:var(--panel);color:var(--mut);box-shadow:0 4px 14px rgba(0,0,0,.18)}
 #rodzaj-sel{display:none}
 @media (max-width:600px){header .rodzaje{display:none}#rodzaj-sel{display:block}}
+.tylko-tel{display:none}
+@media (max-width:600px){header>#kolejnosc,header>#wyslij-btn{display:none}.tylko-tel:not([hidden]){display:block}}
 /* --- zwarty nagłówek: ikony, a reszta pod ⋯ / 💽 / 📊 --- */
 header button{white-space:nowrap;position:relative}
 header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);color:var(--akc-fg);border-radius:999px;font-size:10.5px;line-height:1;padding:3px 5px;font-weight:700}
@@ -285,6 +287,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
     <button data-r="" title="Wszystko">Wszystko</button><button data-r="zdjecie" title="Tylko zdjęcia (bez dokumentów)">📷<span class="t"> Zdjęcia</span></button><button data-r="film" title="Tylko filmy">🎬<span class="t"> Filmy</span></button><button data-r="dokument" title="Tylko dokumenty (zdjęcia dokumentów: foldery „Dokumenty…” i Twoje decyzje)">📄<span class="t"> Dokumenty</span></button>
   </span>
   <span class="odstep"></span>
+  <button id="kolejnosc" title="Kolejność zdjęć">⇅<span class="t" id="kolejnosc-t"> Od najnowszych</span></button>
   <button id="dyski-btn" hidden title="Dyski i foldery Przeglądarki, skanowanie">💽<span class="t"> Dyski</span><b class="znaczek" id="dyski-stan" hidden></b></button>
   <button id="wyslij-btn" hidden title="Wyślij zdjęcia i filmy do biblioteki (z telefonu: prosto z galerii)">📤<span class="t"> Wyślij</span></button>
   <input type="file" id="wyslij-pliki" multiple accept="image/*,video/*" hidden>
@@ -308,6 +311,8 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
       <button id="pelny-ekran">⛶ Pełny ekran</button>
       <select id="rodzaj-sel" aria-label="Pokaż"><option value="">Wszystko</option><option value="zdjecie">📷 Zdjęcia</option>
         <option value="film">🎬 Filmy</option><option value="dokument">📄 Dokumenty</option></select>
+      <button id="menu-kol" class="tylko-tel">⇅ Od najnowszych</button>
+      <button id="menu-wyslij" class="tylko-tel" hidden>📤 Wyślij zdjęcia do biblioteki</button>
       <button id="menu-pokaz">▶ Pokaz slajdów</button>
       <button id="na-telefon" hidden title="Oglądaj bibliotekę na telefonie (sieć domowa / Tailscale)">📱 Na telefon</button>
     </div>

@@ -174,6 +174,9 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.28.1:** Przeglądarka — **⇅ kolejność**: od najnowszych (domyślnie) albo od najstarszych; dotyczy zdjęć na osi
+czasu, lat i miesięcy, wyników szukania, albumów i „Tego dnia” (zapamiętana; na telefonie w menu ⋯, tam też 📤 Wyślij).
+
 **1.28:** **✏ Edycja zdjęć** w podglądzie (przycisk ✏ Edytuj albo klawisz **E**): obrót ⟲ ⟳, odbicie ⇋, ✂ przycięcie
 (dowolnie, 1:1, 4:3, 3:2, 16:9, pion 4:5 / 9:16; klawisz C), jasność, kontrast, nasycenie, balans bieli (temperatura
 i odcień), *✨ Auto*, *◐ przytrzymaj: przed* (też spacja). Zapis w pełnej rozdzielczości z datą, aparatem i GPS

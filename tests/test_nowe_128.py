@@ -243,3 +243,20 @@ def test_kopia_jako_zadanie_programu(tmp_path):
     i = stan.kopia_info()  # „a.jpg” to nie zdjęcie — zgłoszone jako plik, który się nie otwiera
     assert i["problemy"] == 1 and i["sprawdzanie"]["sprawdzone"] == 1
     assert "problemy: 1" in stan.zad["sprawdzanie"]["komunikat"]
+
+
+# --- ⇅ kolejność: od najnowszych / od najstarszych -----------------------------------------------------
+def test_kolejnosc_od_najnowszych_i_najstarszych(folder):
+    tmp, k, ids = folder
+    g = galeria.Galeria(tmp / "k.db")
+    nazwy = lambda w: [p["nazwa"] for p in w[0]["pliki"]]  # noqa: E731
+    assert nazwy(galeria.obsluz_api(g, "/api/g/pliki", {"rok": ["2020"]})) == ["b.jpg", "c.jpg"]  # jak dotąd
+    assert nazwy(galeria.obsluz_api(g, "/api/g/pliki", {"rok": ["2020"], "kol": ["nowe"]})) == ["c.jpg", "b.jpg"]
+    assert nazwy(galeria.obsluz_api(g, "/api/g/pliki", {"rok": ["2020"], "kol": ["stare"]})) == ["b.jpg", "c.jpg"]
+    assert nazwy(galeria.obsluz_api(g, "/api/g/szukaj", {"q": ["2020"], "kol": ["stare"]})) == ["b.jpg", "c.jpg"]
+    assert nazwy(galeria.obsluz_api(g, "/api/g/szukaj", {"q": ["2020"]})) == ["c.jpg", "b.jpg"]
+    a = g.album_nowy("A", [ids["b.jpg"], ids["c.jpg"]])["id"]
+    w = galeria.obsluz_api(g, "/api/g/kolekcja", {"typ": ["album"], "album": [str(a)], "kol": ["nowe"]})
+    assert nazwy(w) == ["c.jpg", "b.jpg"]
+    galeria.obsluz_api(g, "/api/g/plik", {"id": [str(ids["b.jpg"])], "kol": ["nowe"]})  # nie dotyczy pojedynczego pliku
+    assert g._kier() == "ASC"

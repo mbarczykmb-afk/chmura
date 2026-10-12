@@ -28,6 +28,7 @@ function url(sciezka, param = {}) {
 }
 async function api(sciezka, param) {
   if (g.rodzaj) param = {...(param || {}), r: g.rodzaj};  // filtr: zdjęcia / filmy / dokumenty
+  param = {...(param || {}), kol: g.kol};                  // ⇅ od najnowszych / od najstarszych
   const r = await fetch(url(sciezka, param));
   if (r.status === 401 || r.status === 403) { pokazLogin(); throw new Error("Podaj PIN"); }
   const j = await r.json();
@@ -80,13 +81,14 @@ async function wczytajLata(tylkoLiczby = false) {
         : "Brak zdjęć z datą."}</div>`;
     $("miesiace").replaceChildren(); return;
   }
-  for (const rok of g.lata) {
+  const lata = g.kol === "stare" ? [...g.lata].reverse() : g.lata;  // lata w tej samej kolejności co zdjęcia
+  for (const rok of lata) {
     const b = document.createElement("button");
     b.innerHTML = `${rok.rok}<small>${rok.n.toLocaleString("pl-PL")}</small>`;
     b.onclick = () => wybierzRok(rok.rok);
     b.dataset.rok = rok.rok; l.append(b);
   }
-  wybierzRok(g.lata.some(x => x.rok === g.rok) ? g.rok : g.lata[0].rok);
+  wybierzRok(g.lata.some(x => x.rok === g.rok) ? g.rok : lata[0].rok);
 }
 function wybierzRok(rok, mies = null) {
   g.rok = rok;
@@ -95,7 +97,7 @@ function wybierzRok(rok, mies = null) {
   const m = $("miesiace"); m.replaceChildren();
   const wsz = document.createElement("button"); wsz.innerHTML = `cały rok<small>${r.n}</small>`; wsz.dataset.m = "";
   wsz.onclick = () => wybierzMiesiac(null); m.append(wsz);
-  for (const x of [...r.miesiace].sort((a, b) => a.m - b.m)) {
+  for (const x of [...r.miesiace].sort((a, b) => g.kol === "stare" ? a.m - b.m : b.m - a.m)) {
     const b = document.createElement("button"); b.innerHTML = `${MIESIACE[x.m - 1] || "?"}<small>${x.n}</small>`;
     b.dataset.m = x.m; b.onclick = () => wybierzMiesiac(x.m); m.append(b);
   }
@@ -662,6 +664,25 @@ function ustawRodzaj(r) {
   if (g.zrodlo.typ === "os") start(); else pokazWyniki(g.zrodlo);
 }
 rysujRodzaje();
+// --- ⇅ kolejność: od najnowszych / od najstarszych (zapamiętana) ---
+g.kol = (() => { try { return localStorage.getItem("kat_g_kol") === "stare" ? "stare" : "nowe"; } catch (e) { return "nowe"; } })();
+function rysujKolejnosc() {
+  const nowe = g.kol === "nowe";
+  $("kolejnosc-t").textContent = nowe ? " Od najnowszych" : " Od najstarszych";
+  $("kolejnosc").title = (nowe ? "Teraz: od najnowszych" : "Teraz: od najstarszych") + " — kliknij, żeby odwrócić kolejność zdjęć";
+  $("kolejnosc").firstChild.textContent = nowe ? "↓" : "↑";
+  $("menu-kol").textContent = nowe ? "⇅ Kolejność: od najnowszych" : "⇅ Kolejność: od najstarszych";
+}
+$("kolejnosc").onclick = () => {
+  g.kol = g.kol === "nowe" ? "stare" : "nowe";
+  try { localStorage.setItem("kat_g_kol", g.kol); } catch (e) { /* bez pamięci */ }
+  rysujKolejnosc();
+  if (g.widok === "kolekcje" || g.widok === "mapa") return;  // zadziała przy następnym otwarciu listy
+  // oś czasu: od pierwszego roku w nowej kolejności (najnowszy / najstarszy)
+  if (g.zrodlo.typ === "os") { g.rok = null; g.mies = null; wczytajLata().catch(() => {}); } else pokazWyniki(g.zrodlo);
+};
+rysujKolejnosc();
+$("menu-kol").onclick = () => $("kolejnosc").click();
 // --- pasek Przeglądarki chowany strzałką (zapamiętane) ---
 function ustawPasek(schowany) {
   document.body.classList.toggle("pasek-schowany", schowany);
@@ -1097,7 +1118,8 @@ $("p-miejsce").onclick = e => { e.stopPropagation(); const p = biezacy(); if (p)
 // ---------- 🗑 usuwanie: do kosza programu (Odłożone/Usunięte), z cofaniem ----------
 // w oknie programu i na telefonie z pilotem (serwer 24/7 jest tylko do oglądania)
 const MOZE_USUWAC = W_PROGRAMIE || !!P.get("pilot");
-$("wyslij-btn").hidden = !MOZE_USUWAC;
+$("wyslij-btn").hidden = $("menu-wyslij").hidden = !MOZE_USUWAC;
+$("menu-wyslij").onclick = () => $("wyslij-pliki").click();
 function toastG(tekst, cofnij) {
   const t = $("toast-g"); t.replaceChildren(tekst);
   if (cofnij) t.append(przycisk("Cofnij", async () => { t.hidden = true; await cofnij(); }));

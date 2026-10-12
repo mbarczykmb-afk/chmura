@@ -138,6 +138,11 @@ class Galeria:
         return {"zdjecie": f" AND rodzaj='zdjecie' AND NOT {dok}", "film": " AND rodzaj='film'",
                 "dokument": f" AND rodzaj='zdjecie' AND {dok}"}.get(r, "")
 
+    @staticmethod
+    def _kier(domyslna: str = "stare") -> str:
+        """⇅ Kolejność z bieżącego zapytania (parametr kol): „nowe” = od najnowszych, „stare” = od najstarszych."""
+        return "DESC" if (getattr(_FILTR, "kolejnosc", "") or domyslna) == "nowe" else "ASC"
+
     def _zakres(self) -> tuple[str, list]:
         k = self.korzenie()
         if k is None:  # wszystko w bazie
@@ -177,6 +182,7 @@ class Galeria:
     def pliki(self, rok: str, miesiac: int | None, od: int = 0, ile: int = 200, obszar: tuple | None = None) -> dict:
         w, arg = self._warunek(obszar)
         filtr = "substr(data, 1, 4) = ?" + (" AND CAST(substr(data, 6, 2) AS INTEGER) = ?" if miesiac else "")
+        k = self._kier()
         a = [str(rok)] + ([int(miesiac)] if miesiac else [])
         db = self._db()
         try:
@@ -184,7 +190,7 @@ class Galeria:
                                a + arg).fetchone()[0]
             wiersze = [dict(r) for r in db.execute(
                 f"""SELECT rowid id, wzgledna, rodzaj, data, lat, lon, rozmiar FROM pliki
-                    WHERE rodzaj IN ('zdjecie','film') AND {filtr} {w} ORDER BY data, wzgledna LIMIT ? OFFSET ?""",
+                    WHERE rodzaj IN ('zdjecie','film') AND {filtr} {w} ORDER BY data {k}, wzgledna {k} LIMIT ? OFFSET ?""",
                 a + arg + [int(ile), int(od)])]
         finally:
             db.close()
@@ -360,7 +366,8 @@ class Galeria:
         db = self._db()
         try:
             if miejsce:  # dokładnie: najbliższa miejscowość / kraj zdjęcia (jak w nazwach folderów)
-                wiersze = [dict(r) for r in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data DESC", arg + a)]
+                wiersze = [dict(r) for r in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data {self._kier('nowe')}",
+                                                       arg + a)]
                 cel = miejsce["nazwa"] if miejsce["pl"] else "@" + miejsce["kraj"]
 
                 def pasuje(r):
@@ -370,7 +377,8 @@ class Galeria:
                 razem, wiersze = len(wiersze), wiersze[od:od + ile]
             else:
                 razem = db.execute(f"SELECT COUNT(*) {sql}", arg + a).fetchone()[0]
-                wiersze = [dict(r) for r in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data DESC LIMIT ? OFFSET ?",
+                wiersze = [dict(r) for r in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data {self._kier('nowe')} "
+                                                       f"LIMIT ? OFFSET ?",
                                                        arg + a + [int(ile), int(od)])]
         finally:
             db.close()
@@ -400,7 +408,7 @@ class Galeria:
             wiersze = [dict(r) for r in db.execute(
                 f"""SELECT {_KOLUMNY} FROM pliki WHERE rodzaj IN ('zdjecie','film')
                     AND substr(data, 6, 5) IN ({','.join('?' * len(dni_md))}) AND substr(data, 1, 4) < ? {w}
-                    ORDER BY substr(data, 1, 4) DESC, data LIMIT 2000""", dni_md + [teraz] + arg)]
+                    ORDER BY substr(data, 1, 4) {self._kier('nowe')}, data LIMIT 2000""", dni_md + [teraz] + arg)]
             najblizszy = None
             if not wiersze:  # podpowiedź: najbliższy dzień roku ze zdjęciami z poprzednich lat
                 dzien_roku = srodek.timetuple().tm_yday
@@ -719,8 +727,9 @@ class Galeria:
             self._napraw_kolekcje(db)
             sql = f"FROM pliki WHERE rodzaj IN ('zdjecie','film') AND sciezka IN ({pod}) {w}"
             razem = db.execute(f"SELECT COUNT(*) {sql}", a + arg).fetchone()[0]
-            wiersze = [dict(r) for r in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data, wzgledna LIMIT ? OFFSET ?",
-                                                   a + arg + [int(ile), int(od)])]
+            k = self._kier()
+            wiersze = [dict(r) for r in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data {k}, wzgledna {k} "
+                                                   f"LIMIT ? OFFSET ?", a + arg + [int(ile), int(od)])]
         finally:
             db.close()
         return {"razem": razem, "pliki": [_nazwa(r) for r in wiersze], "nazwa": nazwa}
@@ -890,6 +899,8 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict):
     r = q.get("r", [""])[0]
     # filtr tylko dla list (oś czasu, mapa, szukanie…) — pojedynczy plik, miniatura, film zawsze bez filtra
     _FILTR.rodzaj = r if r in ("zdjecie", "film", "dokument") and sciezka in _LISTY else ""
+    kol = q.get("kol", [""])[0]
+    _FILTR.kolejnosc = kol if kol in ("nowe", "stare") and sciezka in _LISTY else ""
     def i(k, d=0):
         try:
             return int(q.get(k, [d])[0])
@@ -1170,7 +1181,7 @@ class SerwerGalerii:
 
             def _album(self, u, q):
                 """🔗 Udostępniony album: /a/<token>[/api|min|pod|film|oryg|zip] — bez PIN-u, tylko ten album."""
-                _FILTR.rodzaj = ""
+                _FILTR.rodzaj = _FILTR.kolejnosc = ""
                 cz = u.path.split("/")
                 token, co = cz[2] if len(cz) > 2 else "", cz[3] if len(cz) > 3 else ""
                 galerie = [s.galerie("wszystko"), s.galerie("przegladarka")] if s.galerie is not None else [s.galeria]
