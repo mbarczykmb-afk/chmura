@@ -22,12 +22,13 @@ from datetime import datetime, timedelta, timezone
 
 WINDOWS = sys.platform == "win32"
 ID_SKLEPU = "9N26S50LN705"  # Windows File Recovery w Microsoft Store
-FOLDER_WYNIKOW = "Odzyskane przez Katalogator"
+FOLDER_WYNIKOW = "Odzyskane_Katalogator"
 SKRYPT, DZIENNIK, KONIEC, INFO = ".katalogator-odzysk.cmd", "winfr.log", "koniec.txt", "start.txt"
 # typowe błędy winfr → podpowiedź po polsku
 BLEDY_WINFR = {
-    "80070356": "Windows File Recovery nie zapisuje na dyski sieciowe — wybierz pendrive albo dysk USB "
-                "(odzyskane pliki możesz potem przenieść na NAS).",
+    "80070356": "Windows File Recovery nie mógł utworzyć folderu na odzyskane pliki. Wybierz pendrive albo dysk USB "
+                "(sam dysk — program użyje folderu Odzyskane_Katalogator) i spróbuj ponownie. Jeśli dalej się nie uda — "
+                "wyłącz na chwilę osłony antywirusa (Avast blokuje zapis nieznanym programom).",
     "80070005": "Brak dostępu — czy kliknąłeś „Tak” w okienku Windows? Spróbuj ponownie.",
     "80070070": "Za mało miejsca na dysku docelowym — wybierz większy albo zawęź szukanie (rodzaj, folder, nazwa).",
     "source and destination": "Odzyskane pliki muszą trafić na inny dysk niż przeszukiwany.",
@@ -121,8 +122,17 @@ def _cmd(args: list[str]) -> str:
     return " ".join(f'"{a}"' if (" " in a or not a) else a for a in args)
 
 
+SIEC = ("Windows File Recovery nie zapisuje na dyski sieciowe — wybierz pendrive albo dysk USB "
+        "(odzyskane pliki możesz potem przenieść na NAS).")
+
+
+def bezpieczna(sciezka: str) -> bool:
+    """Windows File Recovery źle czyta ścieżki docelowe ze spacjami i znakami spoza ASCII (błąd 0x80070356)."""
+    return bool(re.fullmatch(r"[A-Za-z]:\\[A-Za-z0-9_.\-\\]*", sciezka or ""))
+
+
 def folder_wynikow(cel: str) -> str:
-    """Sam dysk („E:\\”) → E:\\Odzyskane przez Katalogator; wybrany folder — dokładnie ten folder."""
+    """Sam dysk („E:\\”) → E:\\Odzyskane_Katalogator; wybrany folder — dokładnie ten folder."""
     cel = ntpath.normpath(cel or "")
     d, reszta = ntpath.splitdrive(cel)
     return ntpath.join(d + "\\", FOLDER_WYNIKOW) if reszta.strip("\\") == "" else cel
@@ -169,6 +179,9 @@ def uruchom(dysk: str, cel_miejsce: str, folder: str, typ, fraza: str, dokladnie
         return {"blad": "Odzyskane pliki muszą trafić na INNY dysk niż ten, na którym ich szukasz — "
                         "inaczej nadpisałyby to, co chcemy odzyskać. Wybierz dysk sieciowy, pendrive albo dysk USB."}
     cel = folder_wynikow(cel_miejsce)
+    if not bezpieczna(cel):
+        return {"blad": f"Folder „{cel}” ma spacje albo polskie litery — Windows File Recovery takich nie przyjmuje. "
+                        "Wybierz sam dysk (program użyje folderu Odzyskane_Katalogator) albo folder w rodzaju D:\\Odzysk."}
     try:
         os.makedirs(cel, exist_ok=True)
     except OSError as e:

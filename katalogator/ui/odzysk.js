@@ -158,7 +158,9 @@ async function rysujGleboko() {
   const zrodlo = $("odz-skad").value, dysk = zrodlo.slice(0, 2).toUpperCase();
   if (!zrodlo || zrodlo === "__inny") return;
   // dokąd: inny dysk niż przeszukiwany — także sieciowy (NAS); najpierw ten z największą ilością wolnego miejsca
-  const cele = (i.cele || i.dyski).filter(d => d.sciezka.slice(0, 2).toUpperCase() !== dysk).sort((a, b) => (b.wolne || 0) - (a.wolne || 0));
+  const cele = (i.cele || i.dyski).filter(d => d.sciezka.slice(0, 2).toUpperCase() !== dysk)
+    .sort((a, b) => (b.rodzaj === "wymienny") - (a.rodzaj === "wymienny") || (b.wolne || 0) - (a.wolne || 0));  // pendrive / USB najpierw
+  if (!odz.celWybor) try { odz.celWybor = localStorage.getItem("kat_odz_cel") || ""; } catch (e) { /* bez pamięci */ }
   if (z && z.zakonczone && z.kod) t.append(odzEl("div", {className: "uwaga", textContent: `Windows File Recovery zakończył się błędem (kod ${z.kod}). ` +
     (z.wskazowka || "Ostatnie komunikaty poniżej.")}), odzEl("div", {className: "odz-log", textContent: z.dziennik || "(pusty dziennik)"}));
   if (z && z.zakonczone) t.append(odzEl("div", {className: "info", textContent: `Ostatnie odzyskiwanie: ${z.zrodlo} — ${kiedyTxt(z.start * 1000)}` + (z.kod ? ` (kod zakończenia ${z.kod})` : "")}),
@@ -177,22 +179,23 @@ async function rysujGleboko() {
              odzPrzycisk("⟳ Odśwież", otworzOdzysk));
     return;
   }
-  // gdzie zapisać: dysk (folder „Odzyskane przez Katalogator”) albo dowolny folder na innym dysku
+  // gdzie zapisać: dysk (folder „Odzyskane_Katalogator”) albo dowolny folder na innym dysku
   const sel = odzEl("select", {id: "odz-cel"});
-  for (const d of cele) sel.append(odzEl("option", {value: d.sciezka, textContent: `${d.rodzaj === "sieciowy" ? "🌐" : "💽"} ${d.sciezka.replace(/\\$/, "")} ${d.etykieta || d.siec || ""} — wolne ${odzRozmiar(d.wolne)}`}));
+  for (const d of cele) sel.append(odzEl("option", {value: d.sciezka, textContent: `${d.rodzaj === "wymienny" ? "🔌" : "💽"} ${d.sciezka.replace(/\\$/, "")} ${d.etykieta || ""}${d.rodzaj === "wymienny" ? " (pendrive / USB)" : ""} — wolne ${odzRozmiar(d.wolne)}`}));
   if (odz.celFolder && odz.celFolder.slice(0, 2).toUpperCase() !== dysk) sel.append(odzEl("option", {value: odz.celFolder, textContent: `📁 ${odz.celFolder}`}));
   sel.append(odzEl("option", {value: "__inny", textContent: "📂 Wybierz folder…"}));
   if (odz.celWybor && [...sel.options].some(o => o.value === odz.celWybor)) sel.value = odz.celWybor;
   const celInfo = odzEl("span", {className: "info"});
   const opisCelu = () => {
     const v = sel.value, dyskowy = /^[A-Za-z]:[\\/]?$/.test(v) || cele.some(d => d.sciezka === v);
-    celInfo.textContent = dyskowy ? `→ ${v.replace(/[\\/]$/, "")}\\Odzyskane przez Katalogator` : `→ ${v}`;
+    celInfo.textContent = dyskowy ? `→ ${v.replace(/[\\/]$/, "")}\\Odzyskane_Katalogator` : `→ ${v}`;
   };
   sel.onchange = () => {
-    if (sel.value !== "__inny") { odz.celWybor = sel.value; opisCelu(); return; }
+    if (sel.value !== "__inny") { odz.celWybor = sel.value; try { localStorage.setItem("kat_odz_cel", sel.value); } catch (e) { /* — */ } opisCelu(); return; }
     $("okno-odzysk").hidden = true;
     otworzWyborFolderu(`Gdzie zapisać odzyskane pliki? (inny dysk niż ${dysk})`, odz.celFolder || "", f => {
       $("okno-odzysk").hidden = false;
+      if (!/^[A-Za-z]:\\[A-Za-z0-9_.\-\\]*$/.test(f)) { toast("Ten folder ma spacje albo polskie litery — Windows File Recovery takich nie przyjmuje. Wybierz sam dysk albo folder w rodzaju D:\\Odzysk."); rysujGleboko(); return; }
       if (f.slice(0, 2).toUpperCase() === dysk) { toast(`Wybierz folder na innym dysku niż ${dysk} — inaczej odzyskane pliki nadpisałyby szukane.`); rysujGleboko(); return; }
       odz.celFolder = odz.celWybor = f; rysujGleboko();
     });

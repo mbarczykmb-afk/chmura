@@ -174,6 +174,10 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.29.7:** 🛟 Odzyskiwanie — folder na odzyskane pliki bez spacji: `<dysk>:\Odzyskane_Katalogator` (Windows File
+Recovery nie przyjmuje ścieżek ze spacjami i polskimi literami — błąd 0x80070356 także na pendrivie); własny folder
+— tylko w rodzaju `D:\Odzysk`; pendrive / dysk USB podpowiadany jako pierwszy, wybór zapamiętany.
+
 **1.29.6:** 🛟 Odzyskiwanie — Windows File Recovery nie zapisuje na dyski sieciowe (błąd 0x80070356): odzyskane
 pliki zapisujesz na pendrive / dysk USB (przycisk ⟳ odświeża listę po podłączeniu), potem możesz je przenieść na
 NAS · czytelny dziennik (wcześniej pierwsza linia była nieczytelna) i podpowiedzi po polsku przy typowych błędach.
@@ -196,7 +200,7 @@ zmapowanych liter, więc program sam podłącza udział (`net use`, zapisane has
 
 **1.29.2:** 🛟 Odzyskiwanie — **skąd i dokąd**: *Gdzie był* (Pobrane, Pulpit…, cały dysk albo *📂 Inny folder…*)
 oraz *Przywróć do*: z koszy i kopii — **na oryginalne miejsce** albo **do wybranego folderu**; głębokie szukanie —
-odzyskane pliki na wybranym dysku („Odzyskane przez Katalogator”) albo w **dowolnym folderze na innym dysku**
+odzyskane pliki na wybranym dysku („Odzyskane_Katalogator”) albo w **dowolnym folderze na innym dysku**
 (w komputerze albo USB — dysków sieciowych Windows File Recovery nie obsługuje).
 
 **1.29.1:** 🛟 Odzyskiwanie — **wybrane formaty**: pod rodzajem lista formatów (np. dla filmów MP4, MOV, AVI, MKV,
@@ -209,7 +213,7 @@ pamięci) i jak dawno. Najpierw program przeszukuje **kosze Windows na wszystkic
 miejsce), **kopię zapasową** (pliki, których nie ma już w bibliotece) i kosz programu. Potem **głębokie szukanie**
 nakładką na **Windows File Recovery** (darmowy program Microsoftu — instalacja jednym przyciskiem): tryb *dokładny*
 sięga daleko w przeszłość, także po opróżnieniu kosza, formatowaniu i na kartach z aparatu. Odzyskane pliki trafiają
-na **inny dysk** (pendrive / USB), do folderu „Odzyskane przez Katalogator”, z miniaturami i *🔭 Przeglądaj na osi
+na **inny dysk** (pendrive / USB), do folderu „Odzyskane_Katalogator”, z miniaturami i *🔭 Przeglądaj na osi
 czasu*. Windows pyta o zgodę administratora; przerwanie — zamknięcie okna „Katalogator - odzyskiwanie”. Na dyskach
 SSD szanse spadają z minuty na minutę (TRIM) — program ostrzega.
 

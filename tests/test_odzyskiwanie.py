@@ -113,8 +113,8 @@ def test_wybrane_formaty():
 
 
 def test_dokad_przywracac(tmp_path):
-    assert o.folder_wynikow("E:\\") == "E:\\Odzyskane przez Katalogator"
-    assert o.folder_wynikow("E:") == "E:\\Odzyskane przez Katalogator"
+    assert o.folder_wynikow("E:\\") == "E:\\Odzyskane_Katalogator"
+    assert o.folder_wynikow("E:") == "E:\\Odzyskane_Katalogator"
     assert o.folder_wynikow("E:\\Moje\\Odzysk") == "E:\\Moje\\Odzysk"
     d = tmp_path / "dysk"
     k = d / "$Recycle.Bin" / "S-1"
@@ -137,8 +137,8 @@ def test_skrypt_z_dyskiem_sieciowym():
     assert 'set "LOG=Z:\\Odzysk\\winfr.log"' in s  # bez folderu roboczego — dziennik obok wyników
     r = o.skrypt_cmd(a[:2], a[3:], "Z:\\Odzysk", "\\\\nas\\Public", "C:\\Dane\\odzysk")
     assert 'set "LOG=C:\\Dane\\odzysk\\winfr.log"' in r and "BLAD: brak dostepu" in r
-    lok = o.skrypt_cmd(a[:2], a[3:], "E:\\Odzyskane przez Katalogator")
-    assert "net use" not in lok and 'set "CEL=E:\\Odzyskane przez Katalogator"' in lok
+    lok = o.skrypt_cmd(a[:2], a[3:], "E:\\Odzyskane_Katalogator")
+    assert "net use" not in lok and 'set "CEL=E:\\Odzyskane_Katalogator"' in lok
     assert o._unc("Z:\\Odzysk\\.x.cmd", "\\\\nas\\Public\\") == "\\\\nas\\Public\\Odzysk\\.x.cmd"
     assert o._unc("E:\\a", "") == "E:\\a"
 
@@ -163,5 +163,12 @@ def test_dziennik_winfr_utf16_i_podpowiedz(tmp_path):
                                    "Unknown error 0x80070356\r\n".encode("utf-16"))
     (rob / o.KONIEC).write_text("1")
     p = o.postep({"cel": str(tmp_path / "w"), "robocze": str(rob), "start": time.time()})
-    assert p["kod"] == 1 and "sieciowe" in p["wskazowka"]
+    assert p["kod"] == 1 and "folderu na odzyskane" in p["wskazowka"]
     assert "Start 15.10.2026" in p["dziennik"] and "Failed to create destination folder" in p["dziennik"]
+
+
+def test_bezpieczna_sciezka_docelowa(monkeypatch):
+    assert o.bezpieczna("D:\\Odzyskane_Katalogator") and o.bezpieczna(o.folder_wynikow("D:\\"))
+    assert not o.bezpieczna("D:\\Odzysk 2026") and not o.bezpieczna("E:\\Zdjęcia")
+    monkeypatch.setattr(o, "winfr", lambda: "winfr.exe")
+    assert "spacje" in o.uruchom("C:", "D:\\Moje odzyskane", "", "wszystko", "", True)["blad"]

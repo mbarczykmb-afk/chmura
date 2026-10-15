@@ -340,7 +340,7 @@ class Stan:
         if odzyskiwanie.WINDOWS:
             d = next((x for x in dyski.lista_dyskow() if x["sciezka"][:1].upper() == cel[:1].upper()), None)
             if d and d.get("rodzaj") == "sieciowy":
-                return {"blad": odzyskiwanie.BLEDY_WINFR["80070356"]}
+                return {"blad": odzyskiwanie.SIEC}
             if not d or d.get("rodzaj") not in ("lokalny", "wymienny"):
                 return {"blad": "Wybierz folder na dysku w komputerze albo na pendrivie / dysku USB."}
         w = odzyskiwanie.uruchom(dysk, cel, folder, self.odzysk_typ(dane), str(dane.get("fraza") or ""),
