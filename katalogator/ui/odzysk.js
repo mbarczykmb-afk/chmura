@@ -1,8 +1,30 @@
 // 🛟 Odzyskiwanie usuniętych plików: kosze Windows, kosz programu, kopia zapasowa, potem Windows File Recovery
 "use strict";
 
-const odz = {info: null, typ: "wszystko", zegar: null, wyniki: [], razem: 0, min: 0};
-const IKONY_ODZ = {zdjecia: "🖼️", filmy: "🎬", dokumenty: "📄", inne: "📦"};
+const odz = {info: null, typ: "wszystko", zegar: null, wyniki: [], razem: 0, min: 0, wylaczone: new Set()};
+const IKONY_ODZ = {zdjecia: "🖼️", filmy: "🎬", dokumenty: "📄", muzyka: "🎵", archiwa: "🗜", inne: "📦"};
+const NAZWY_TYPOW = {wszystko: "wszystkie pliki", zdjecia: "zdjęcia", filmy: "filmy", dokumenty: "dokumenty", muzyka: "muzykę", archiwa: "archiwa"};
+// formaty danego rodzaju: wszystkie włączone; klik wyłącza / włącza; „inne” — własne rozszerzenia
+function rysujFormaty() {
+  const box = $("odz-formaty"); box.replaceChildren();
+  const lista = (odz.info && odz.info.typy && odz.info.typy[odz.typ]) || [];
+  for (const e of lista) {
+    const b = odzEl("button", {textContent: e.slice(1), className: odz.wylaczone.has(e) ? "" : "akt",
+                               title: odz.wylaczone.has(e) ? "Pominięte — kliknij, żeby szukać" : "Kliknij, żeby pominąć ten format"});
+    b.onclick = () => { odz.wylaczone.has(e) ? odz.wylaczone.delete(e) : odz.wylaczone.add(e); rysujFormaty(); odzOdswiez(); };
+    box.append(b);
+  }
+  if (!lista.length) box.append(odzEl("span", {className: "info", textContent: "wszystkie rodzaje plików — albo wpisz konkretne obok"}));
+}
+// [] = cały rodzaj; lista = tylko te formaty
+function wybraneFormaty() {
+  const lista = (odz.info && odz.info.typy && odz.info.typy[odz.typ]) || [];
+  const wlasne = $("odz-wlasne").value.split(/[\s,;]+/).map(x => x.trim().toLowerCase().replace(/^[*.]+/, "")).filter(x => /^[a-z0-9]{1,8}$/.test(x)).map(x => "." + x);
+  const wl = lista.filter(e => !odz.wylaczone.has(e));
+  if (!wlasne.length && wl.length === lista.length) return [];
+  return [...new Set([...wl, ...wlasne])];
+}
+const opisFormatow = () => { const f = wybraneFormaty(); return f.length ? f.map(e => e.slice(1).toUpperCase()).join(", ") : NAZWY_TYPOW[odz.typ]; };
 const kiedyTxt = d => d ? new Date(d).toLocaleString("pl-PL", {day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"}) : "";
 function odzEl(tag, wl = {}, ...dz) {
   const e = document.createElement(tag);
@@ -23,7 +45,7 @@ async function otworzOdzysk() {
   }
   sel.append(odzEl("option", {value: "__inny", textContent: "📂 Inny folder…"}));
   if (poprz && [...sel.options].some(o => o.value === poprz)) sel.value = poprz;
-  opisSkad();
+  opisSkad(); rysujFormaty();
   if (odz.info.zadanie) { $("odz-gleboko").hidden = false; rysujGleboko(); }
 }
 function opisSkad() {
@@ -42,8 +64,9 @@ $("odz-skad").onchange = () => {
 };
 $("odz-typ").onclick = e => {
   const b = e.target.closest("button"); if (!b) return;
-  odz.typ = b.dataset.t;
+  odz.typ = b.dataset.t; odz.wylaczone.clear();
   $("odz-typ").querySelectorAll("button").forEach(x => x.classList.toggle("akt", x === b));
+  rysujFormaty();
 };
 const odzTryb = () => document.querySelector('input[name="odz-tryb"]:checked').value === "1";
 const odzRozmiar = b => rozmiar(b || 0);
@@ -54,7 +77,7 @@ $("odz-szukaj").onclick = async () => {
   const l = $("odz-szybkie-lista"); l.replaceChildren(odzEl("div", {className: "info", textContent: "Sprawdzam kosze Windows na wszystkich dyskach, kosz programu" + (odz.info.kopia ? " i kopię zapasową (dysk sieciowy — może potrwać minutę)" : "") + "…"}));
   $("odz-szybkie").hidden = false;
   let w;
-  try { w = await api("/api/odzysk/szybkie", {typ: odz.typ, fraza: $("odz-fraza").value.trim(), kopia: !!odz.info.kopia}); }
+  try { w = await api("/api/odzysk/szybkie", {typ: odz.typ, formaty: wybraneFormaty(), fraza: $("odz-fraza").value.trim(), kopia: !!odz.info.kopia}); }
   catch (e) { l.replaceChildren(odzEl("div", {className: "uwaga", textContent: e.message})); b.disabled = false; b.textContent = "🔍 Szukaj"; return; }
   b.disabled = false; b.textContent = "🔍 Szukaj ponownie";
   l.replaceChildren();
@@ -119,7 +142,7 @@ async function rysujGleboko() {
                                   odzEl("div", {className: "odz-wiersz"}, odzPrzycisk("Pokaż odzyskane", () => pokazWyniki(true))));
   t.append(odzEl("div", {className: "info", textContent: `Szukam na dysku ${dysk}` +
     (zrodlo.length > 3 ? ` w folderze ${zrodlo.slice(2)}` : " (cały dysk)") +
-    ` · ${({wszystko: "wszystkie pliki", zdjecia: "zdjęcia", filmy: "filmy", dokumenty: "dokumenty"})[odz.typ]}` +
+    ` · ${opisFormatow()}` +
     ($("odz-fraza").value.trim() ? ` z „${$("odz-fraza").value.trim()}” w nazwie` : "") +
     ` · tryb ${odzTryb() ? "dokładny — od kilkunastu minut do kilku godzin" : "szybki — kilka minut"}.`}));
   const ssdBox = odzEl("div"); t.append(ssdBox);
@@ -138,7 +161,7 @@ async function rysujGleboko() {
   t.append(odzEl("div", {className: "odz-wiersz"}, odzPrzycisk("🛟 Zacznij odzyskiwanie", async e => {
     e.target.disabled = true;
     try {
-      const r = await api("/api/odzysk/start", {zrodlo, cel: sel.value, typ: odz.typ, fraza: $("odz-fraza").value.trim(), dokladnie: odzTryb()});
+      const r = await api("/api/odzysk/start", {zrodlo, cel: sel.value, typ: odz.typ, formaty: wybraneFormaty(), fraza: $("odz-fraza").value.trim(), dokladnie: odzTryb()});
       odz.info.zadanie = r.zadanie; rysujPostep(r.zadanie);
     } catch (er) { toast(er.message); e.target.disabled = false; }
   }, "glowny"), odzEl("span", {className: "info", textContent: "Windows zapyta o zgodę (uprawnienia administratora) — kliknij „Tak”."})));
@@ -174,7 +197,7 @@ async function pokazWyniki(odNowa) {
   const w = $("odz-wyniki"); w.hidden = false;
   if (odNowa) odz.wyniki = [];
   let r;
-  try { r = await api(`/api/odzysk/wyniki?typ=${odz.typ}&min=${odz.min}&od=${odz.wyniki.length}&ile=200`); } catch (e) { toast(e.message); return; }
+  try { r = await api(`/api/odzysk/wyniki?typ=${odz.typ}&f=${encodeURIComponent(wybraneFormaty().join(","))}&min=${odz.min}&od=${odz.wyniki.length}&ile=200`); } catch (e) { toast(e.message); return; }
   odz.wyniki = odz.wyniki.concat(r.pliki); odz.razem = r.razem;
   const pasek = $("odz-wyniki-pasek"); pasek.replaceChildren();
   const minSel = odzEl("select");
@@ -210,6 +233,7 @@ async function pokazWyniki(odNowa) {
 // zmiana „co / gdzie / kiedy” — opis głębokiego szukania od razu aktualny
 const odzOdswiez = () => { if (!$("odz-gleboko").hidden && odz.info && !(odz.info.zadanie && !odz.info.zadanie.zakonczone)) rysujGleboko(); };
 $("odz-fraza").addEventListener("input", () => { clearTimeout(odz.wpis); odz.wpis = setTimeout(odzOdswiez, 400); });
+$("odz-wlasne").addEventListener("input", () => { clearTimeout(odz.wpis); odz.wpis = setTimeout(odzOdswiez, 400); });
 $("odz-skad").addEventListener("change", odzOdswiez);
 $("odz-typ").addEventListener("click", odzOdswiez);
 document.querySelectorAll('input[name="odz-tryb"]').forEach(r => r.addEventListener("change", odzOdswiez));

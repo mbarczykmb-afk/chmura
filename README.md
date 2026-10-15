@@ -174,6 +174,10 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.29.1:** 🛟 Odzyskiwanie — **wybrane formaty**: pod rodzajem lista formatów (np. dla filmów MP4, MOV, AVI, MKV,
+MTS…; klik pomija format), pole na własne rozszerzenia (np. `braw, psd`), nowe rodzaje 🎵 Muzyka i 🗜 Archiwa;
+filtr działa w koszach, kopii zapasowej, Windows File Recovery i w wynikach.
+
 **1.29:** **🛟 Odzyskiwanie usuniętych plików** (przycisk 🛟 w nagłówku, czwarty kafelek na starcie): wybierasz
 rodzaj (zdjęcia / filmy / dokumenty), fragment nazwy, skąd zniknęły (Pobrane, Pulpit, Dokumenty…, cały dysk, karta
 pamięci) i jak dawno. Najpierw program przeszukuje **kosze Windows na wszystkich dyskach** (przywraca na oryginalne

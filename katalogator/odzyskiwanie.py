@@ -29,10 +29,23 @@ TYPY = {
     "zdjecia": [".jpg", ".jpeg", ".png", ".heic", ".heif", ".gif", ".bmp", ".tif", ".tiff", ".webp",
                 ".cr2", ".cr3", ".nef", ".arw", ".dng", ".orf", ".rw2"],
     "filmy": [".mp4", ".mov", ".avi", ".mkv", ".wmv", ".3gp", ".m4v", ".mts", ".m2ts", ".mpg", ".mpeg", ".webm"],
-    "dokumenty": [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".txt", ".rtf",
-                  ".zip", ".rar", ".7z"],
+    "dokumenty": [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".txt", ".rtf"],
+    "muzyka": [".mp3", ".m4a", ".wav", ".flac", ".wma", ".ogg", ".aac", ".opus"],
+    "archiwa": [".zip", ".rar", ".7z", ".tar", ".gz", ".iso"],
     "wszystko": [],
 }
+
+
+def rozszerzenia(typ) -> list[str]:
+    """Rodzaj („filmy”) albo wybrane formaty (["mp4", ".MOV"]) → lista rozszerzeń; [] = wszystkie pliki."""
+    if isinstance(typ, (list, tuple)):
+        wynik = []
+        for e in typ:
+            e = "." + str(e).strip().lower().lstrip(".*")
+            if re.fullmatch(r"\.[a-z0-9]{1,8}", e) and e not in wynik:
+                wynik.append(e)
+        return wynik[:60]
+    return TYPY.get(typ, [])
 FOLDERY_UZYTKOWNIKA = [("Pobrane", "Downloads"), ("Pulpit", "Desktop"), ("Dokumenty", "Documents"),
                        ("Obrazy", "Pictures"), ("Wideo", "Videos"), ("Muzyka", "Music")]
 
@@ -42,8 +55,9 @@ def rodzaj_pliku(nazwa: str) -> str:
     return next((t for t, r in TYPY.items() if e in r), "inne")
 
 
-def pasuje(nazwa: str, typ: str, fraza: str) -> bool:
-    if typ in TYPY and TYPY[typ] and os.path.splitext(nazwa)[1].lower() not in TYPY[typ]:
+def pasuje(nazwa: str, typ, fraza: str) -> bool:
+    r = rozszerzenia(typ)
+    if r and os.path.splitext(nazwa)[1].lower() not in r:
         return False
     return not fraza or fraza.lower() in nazwa.lower()
 
@@ -79,10 +93,10 @@ def podziel(sciezka: str) -> tuple[str, str]:
     return dysk.upper(), ("\\" + reszta + "\\") if reszta else ""
 
 
-def wzorce(folder: str, typ: str, fraza: str) -> list[str]:
+def wzorce(folder: str, typ, fraza: str) -> list[str]:
     """Filtry /n dla winfr: folder (względem dysku) × rozszerzenia × fragment nazwy."""
     fraza = re.sub(r'[\\/:"<>|?*%^&]+', "", fraza or "").strip()  # bez znaków specjalnych ścieżek i cmd
-    rozsz = TYPY.get(typ) or [""]
+    rozsz = rozszerzenia(typ) or [""]
     if not fraza and not rozsz[0]:
         return [folder] if folder else []
     return [f"{folder}*{fraza}*{e}" if fraza else f"{folder}*{e}" for e in rozsz]
@@ -99,7 +113,7 @@ def _cmd(args: list[str]) -> str:
     return " ".join(f'"{a}"' if (" " in a or not a) else a for a in args)
 
 
-def uruchom(dysk: str, cel_dysk: str, folder: str, typ: str, fraza: str, dokladnie: bool) -> dict:
+def uruchom(dysk: str, cel_dysk: str, folder: str, typ, fraza: str, dokladnie: bool) -> dict:
     """Start winfr z uprawnieniami administratora (Windows zapyta o zgodę). Okno winfr — zminimalizowane;
     zamknięcie go przerywa szukanie."""
     exe = winfr()
@@ -191,7 +205,7 @@ def _pliki_wynikow(cel: str, start: float, limit: int = 20000) -> list[tuple[str
     return wynik
 
 
-def wyniki(zadanie: dict | None, typ: str = "wszystko", fraza: str = "", min_kb: int = 0,
+def wyniki(zadanie: dict | None, typ="wszystko", fraza: str = "", min_kb: int = 0,
            od: int = 0, ile: int = 200) -> dict:
     if not zadanie or not zadanie.get("cel"):
         return {"razem": 0, "pliki": []}
@@ -247,7 +261,7 @@ def _kosze(dyski: list[str]) -> list[str]:
     return wynik
 
 
-def kosze_windows(dyski: list[str], typ: str, fraza: str, limit: int = 500) -> list[dict]:
+def kosze_windows(dyski: list[str], typ, fraza: str, limit: int = 500) -> list[dict]:
     wynik = []
     for k in _kosze(dyski):
         try:
@@ -284,7 +298,7 @@ def kosze_windows(dyski: list[str], typ: str, fraza: str, limit: int = 500) -> l
 
 
 # --- kosz programu i kopia zapasowa --------------------------------------------------------------------
-def kosz_programu(korzenie: list[str], typ: str, fraza: str, limit: int = 500) -> list[dict]:
+def kosz_programu(korzenie: list[str], typ, fraza: str, limit: int = 500) -> list[dict]:
     from .duplikaty import FOLDER_ODLOZONE
     wynik = []
     for k in dict.fromkeys(korzenie):
@@ -305,7 +319,7 @@ def kosz_programu(korzenie: list[str], typ: str, fraza: str, limit: int = 500) -
     return wynik
 
 
-def z_kopii(biblioteka: str, kopia_folder: str, typ: str, fraza: str, limit: int = 500, czas: float = 120) -> dict:
+def z_kopii(biblioteka: str, kopia_folder: str, typ, fraza: str, limit: int = 500, czas: float = 120) -> dict:
     """Pliki, które są w kopii zapasowej, a których nie ma już w bibliotece (usunięte — kopia nic nie kasuje)."""
     if not biblioteka or not kopia_folder or not os.path.isdir(kopia_folder) or not os.path.isdir(biblioteka):
         return {"pliki": [], "przerwane": False}

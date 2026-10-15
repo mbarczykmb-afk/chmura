@@ -140,6 +140,10 @@ details.reczne summary{cursor:pointer;margin-bottom:6px}
 .odz .seg button{border:0;border-radius:0;border-right:1px solid var(--lin)}
 .odz .seg button:last-child{border-right:0}
 .odz .seg button.akt{background:var(--akc);color:#fff}
+.odz-formaty{display:flex;flex-wrap:wrap;gap:4px}
+.odz-formaty button{padding:3px 9px;border-radius:999px;font-size:12px;text-transform:uppercase;opacity:.55}
+.odz-formaty button.akt{opacity:1;background:var(--akc-miekki,rgba(91,140,255,.16));border-color:var(--akc)}
+#odz-wlasne{width:190px;font:inherit;font-size:13px;padding:5px 9px;border:1px solid var(--lin);border-radius:8px;background:var(--bg);color:var(--fg)}
 .odz-grupa{font-size:13px;font-weight:600;margin-top:4px}
 .odz-el{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--lin);font-size:13px}
 .odz-el .ik{font-size:26px;text-align:center}
@@ -962,7 +966,9 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
       <section class="odz-krok">
         <h3>1. Co zgubiłeś?</h3>
         <div class="odz-wiersz"><span class="odz-et">Rodzaj</span>
-          <span class="seg" id="odz-typ"><button data-t="wszystko" class="akt">Wszystko</button><button data-t="zdjecia">📷 Zdjęcia</button><button data-t="filmy">🎬 Filmy</button><button data-t="dokumenty">📄 Dokumenty</button></span></div>
+          <span class="seg" id="odz-typ"><button data-t="wszystko" class="akt">Wszystko</button><button data-t="zdjecia">📷 Zdjęcia</button><button data-t="filmy">🎬 Filmy</button><button data-t="dokumenty">📄 Dokumenty</button><button data-t="muzyka">🎵 Muzyka</button><button data-t="archiwa">🗜 Archiwa</button></span></div>
+        <div class="odz-wiersz" id="odz-formaty-w"><span class="odz-et">Formaty</span><span class="odz-formaty" id="odz-formaty"></span>
+          <input id="odz-wlasne" type="text" placeholder="inne, np. mts, braw, psd" autocomplete="off" title="Własne rozszerzenia oddzielone przecinkami"></div>
         <div class="odz-wiersz"><span class="odz-et">Fragment nazwy</span>
           <input id="odz-fraza" type="search" placeholder="opcjonalnie, np. zoom, faktura, IMG_2019 — puste = wszystkie" autocomplete="off"></div>
         <div class="odz-wiersz"><span class="odz-et">Gdzie był</span>

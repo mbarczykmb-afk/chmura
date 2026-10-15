@@ -100,3 +100,13 @@ def test_postep_i_wyniki_z_folderu_winfr(tmp_path):
     assert o.w_wynikach(z, str(rec / "zdj.jpg")) and not o.w_wynikach(z, str(tmp_path / "inny.jpg"))
     stary = {"cel": str(cel), "start": time.time() + 3600}  # folder Recovery_ sprzed tego odzyskiwania — pomijany
     assert o.wyniki(stary)["razem"] == 0
+
+
+def test_wybrane_formaty():
+    assert o.rozszerzenia(["MP4", ".mov", "*.mts", "zly/format", "mp4"]) == [".mp4", ".mov", ".mts"]
+    assert o.rozszerzenia("filmy") == o.TYPY["filmy"] and o.rozszerzenia("nieznany") == []
+    assert ".mp3" in o.TYPY["muzyka"] and ".zip" in o.TYPY["archiwa"]
+    assert o.wzorce("\\Users\\Ja\\Videos\\", [".mp4", ".mts"], "") == ["\\Users\\Ja\\Videos\\*.mp4", "\\Users\\Ja\\Videos\\*.mts"]
+    assert o.pasuje("klip.MTS", [".mts"], "") and not o.pasuje("klip.mp4", [".mts"], "")
+    assert o.pasuje("utwor.flac", "muzyka", "") and not o.pasuje("zdj.jpg", "muzyka", "")
+    assert o.rodzaj_pliku("a.mp3") == "muzyka"

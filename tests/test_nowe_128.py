@@ -260,3 +260,12 @@ def test_kolejnosc_od_najnowszych_i_najstarszych(folder):
     assert nazwy(w) == ["c.jpg", "b.jpg"]
     galeria.obsluz_api(g, "/api/g/plik", {"id": [str(ids["b.jpg"])], "kol": ["nowe"]})  # nie dotyczy pojedynczego pliku
     assert g._kier() == "ASC"
+
+
+def test_odzyskiwanie_formaty_w_programie(tmp_path):
+    stan = aplikacja.Stan(tmp_path / "dane")
+    assert stan.odzysk_typ({"typ": "filmy"}) == "filmy"
+    assert stan.odzysk_typ({"typ": "filmy", "formaty": ["mov", "MTS"]}) == [".mov", ".mts"]
+    assert stan.odzysk_typ({"typ": "zle", "formaty": []}) == "wszystko"
+    i = stan.odzysk_info()
+    assert "muzyka" in i["typy"] and i["zadanie"] is None

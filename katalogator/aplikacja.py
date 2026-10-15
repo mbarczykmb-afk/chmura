@@ -291,7 +291,7 @@ class Stan:
     def odzysk_info(self) -> dict:
         d = [x for x in dyski.lista_dyskow() if x.get("rodzaj") in ("lokalny", "wymienny") and x.get("dostepny")]
         z = self.odzysk_zadanie()
-        return {"winfr": bool(odzyskiwanie.winfr()), "windows": odzyskiwanie.WINDOWS, "dyski": d,
+        return {"winfr": bool(odzyskiwanie.winfr()), "windows": odzyskiwanie.WINDOWS, "dyski": d, "typy": odzyskiwanie.TYPY,
                 "foldery": odzyskiwanie.foldery_uzytkownika(), "zadanie": odzyskiwanie.postep(z),
                 "kopia": (aktualizacje._ustawienia(self.katalog).get("kopia") or {}).get("folder") or ""}
 
@@ -299,7 +299,16 @@ class Stan:
         litery = [x["sciezka"] for x in dyski.lista_dyskow() if x.get("rodzaj") in ("lokalny", "wymienny")]
         return {"dyski": litery, "kopia": (aktualizacje._ustawienia(self.katalog).get("kopia") or {}).get("folder") or ""}
 
-    def odzysk_szybkie(self, typ: str, fraza: str, z_kopii: bool) -> dict:
+    @staticmethod
+    def odzysk_typ(dane: dict):
+        """Rodzaj („filmy”) albo wybrane formaty (["mp4", "mov"]) — formaty mają pierwszeństwo."""
+        f = dane.get("formaty")
+        if isinstance(f, list) and odzyskiwanie.rozszerzenia(f):
+            return odzyskiwanie.rozszerzenia(f)
+        t = str(dane.get("typ") or "wszystko")
+        return t if t in odzyskiwanie.TYPY else "wszystko"
+
+    def odzysk_szybkie(self, typ, fraza: str, z_kopii: bool) -> dict:
         m = self._odzysk_miejsca()
         w = {"kosz_windows": odzyskiwanie.kosze_windows(m["dyski"], typ, fraza),
              "kosz_programu": odzyskiwanie.kosz_programu(self.korzenie_kosza(), typ, fraza)}
@@ -321,10 +330,10 @@ class Stan:
     def odzysk_start(self, dane: dict) -> dict:
         zrodlo = str(dane.get("zrodlo") or "")
         dysk, folder = odzyskiwanie.podziel(zrodlo)
-        w = odzyskiwanie.uruchom(dysk, str(dane.get("cel") or ""), folder, str(dane.get("typ") or "wszystko"),
+        w = odzyskiwanie.uruchom(dysk, str(dane.get("cel") or ""), folder, self.odzysk_typ(dane),
                                  str(dane.get("fraza") or ""), bool(dane.get("dokladnie", True)))
         if w.get("ok"):
-            zad = {k: w[k] for k in ("cel", "start", "polecenie")} | {"zrodlo": zrodlo, "typ": dane.get("typ"),
+            zad = {k: w[k] for k in ("cel", "start", "polecenie")} | {"zrodlo": zrodlo, "typ": self.odzysk_typ(dane),
                                                                      "fraza": dane.get("fraza") or ""}
             aktualizacje.zapisz_ustawienia(self.katalog, odzysk=zad)
             LOG.info("Odzyskiwanie: winfr %s", w["polecenie"])
@@ -1286,7 +1295,9 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/odzysk/postep":
                 return self._wyslij({"zadanie": odzyskiwanie.postep(stan.odzysk_zadanie())})
             if u.path == "/api/odzysk/wyniki":
-                return self._wyslij(odzyskiwanie.wyniki(stan.odzysk_zadanie(), q.get("typ", ["wszystko"])[0],
+                f = [x for x in q.get("f", [""])[0].split(",") if x]
+                typ = stan.odzysk_typ({"typ": q.get("typ", ["wszystko"])[0], "formaty": f})
+                return self._wyslij(odzyskiwanie.wyniki(stan.odzysk_zadanie(), typ,
                                                         q.get("q", [""])[0], _int(q, "min", 0), _int(q, "od", 0),
                                                         min(_int(q, "ile", 200), 500)))
             if u.path == "/api/odzysk/min":  # miniatura odzyskanego zdjęcia (tylko z folderu wyników)
@@ -1495,7 +1506,7 @@ def _handler(stan: Stan, token: str, zamknij):
                 w = dyski.nowy_folder(str(dane.get("w", "")), str(dane.get("nazwa", "")))
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/odzysk/szybkie":
-                return self._wyslij(stan.odzysk_szybkie(str(dane.get("typ") or "wszystko"), str(dane.get("fraza") or ""),
+                return self._wyslij(stan.odzysk_szybkie(stan.odzysk_typ(dane), str(dane.get("fraza") or ""),
                                                         bool(dane.get("kopia"))))
             if u.path == "/api/odzysk/przywroc":
                 w = stan.odzysk_przywroc(dane.get("element") if isinstance(dane.get("element"), dict) else {})
