@@ -289,9 +289,12 @@ class Stan:
         return aktualizacje._ustawienia(self.katalog).get("odzysk")
 
     def odzysk_info(self) -> dict:
-        d = [x for x in dyski.lista_dyskow() if x.get("rodzaj") in ("lokalny", "wymienny") and x.get("dostepny")]
+        wsz = [x for x in dyski.lista_dyskow() if x.get("dostepny")]
+        d = [x for x in wsz if x.get("rodzaj") in ("lokalny", "wymienny")]  # skąd: tylko dyski w komputerze / USB
+        cele = [x for x in wsz if x.get("rodzaj") in ("lokalny", "wymienny", "sieciowy")]  # dokąd: także sieciowe
         z = self.odzysk_zadanie()
-        return {"winfr": bool(odzyskiwanie.winfr()), "windows": odzyskiwanie.WINDOWS, "dyski": d, "typy": odzyskiwanie.TYPY,
+        return {"winfr": bool(odzyskiwanie.winfr()), "windows": odzyskiwanie.WINDOWS, "dyski": d, "cele": cele,
+                "typy": odzyskiwanie.TYPY,
                 "foldery": odzyskiwanie.foldery_uzytkownika(), "zadanie": odzyskiwanie.postep(z),
                 "kopia": (aktualizacje._ustawienia(self.katalog).get("kopia") or {}).get("folder") or ""}
 
@@ -332,12 +335,17 @@ class Stan:
         zrodlo = str(dane.get("zrodlo") or "")
         dysk, folder = odzyskiwanie.podziel(zrodlo)
         cel = str(dane.get("cel") or "")
-        if odzyskiwanie.WINDOWS and cel[:1].upper() not in {
-                d["sciezka"][:1].upper() for d in dyski.lista_dyskow() if d.get("rodzaj") in ("lokalny", "wymienny")}:
-            return {"blad": "Odzyskane pliki zapisuję tylko na dysku w komputerze albo USB (nie sieciowym — "
-                            "Windows File Recovery go nie widzi). Wybierz inny folder."}
-        w = odzyskiwanie.uruchom(dysk, str(dane.get("cel") or ""), folder, self.odzysk_typ(dane),
-                                 str(dane.get("fraza") or ""), bool(dane.get("dokladnie", True)))
+        udzial = ""
+        if odzyskiwanie.WINDOWS:
+            d = next((x for x in dyski.lista_dyskow() if x["sciezka"][:1].upper() == cel[:1].upper()), None)
+            if not d or d.get("rodzaj") not in ("lokalny", "wymienny", "sieciowy"):
+                return {"blad": "Wybierz folder na dysku w komputerze, USB albo dysku sieciowym."}
+            if d.get("rodzaj") == "sieciowy":
+                udzial = d.get("siec") or ""
+                if not udzial:
+                    return {"blad": f"Nie znam ścieżki sieciowej dysku {cel[:2]} — podłącz go ponownie w Eksploratorze."}
+        w = odzyskiwanie.uruchom(dysk, cel, folder, self.odzysk_typ(dane), str(dane.get("fraza") or ""),
+                                 bool(dane.get("dokladnie", True)), udzial)
         if w.get("ok"):
             zad = {k: w[k] for k in ("cel", "start", "polecenie")} | {"zrodlo": zrodlo, "typ": self.odzysk_typ(dane),
                                                                      "fraza": dane.get("fraza") or ""}

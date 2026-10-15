@@ -126,3 +126,14 @@ def test_dokad_przywracac(tmp_path):
     assert o.przywroc(el, {"kosze": o._kosze([str(d)])}, str(tmp_path / "brak"))["blad"]
     w = o.przywroc(el, {"kosze": o._kosze([str(d)])}, str(cel) if cel.mkdir() is None else "")
     assert w["ok"] and (cel / "film.mp4").read_bytes() == b"abc" and not (tmp_path / "Pobrane").exists()
+
+
+def test_skrypt_z_dyskiem_sieciowym():
+    a = o.polecenie("winfr.exe", "C:", "Z:\\Odzysk", True, ["*100%*.mp4"])
+    s = o.skrypt_cmd(a[:2], a[3:], "Z:\\Odzysk", "\\\\nas\\Public")
+    assert 'net use Z: "\\\\nas\\Public"' in s and 'set "CEL=\\\\nas\\Public\\Odzysk"' in s
+    assert 'winfr.exe C: "%CEL%" /extensive /n *100%%*.mp4 /a > "%CEL%\\winfr.log"' in s  # % w filtrze podwojony
+    lok = o.skrypt_cmd(a[:2], a[3:], "E:\\Odzyskane przez Katalogator")
+    assert "net use" not in lok and 'set "CEL=E:\\Odzyskane przez Katalogator"' in lok
+    assert o._unc("Z:\\Odzysk\\.x.cmd", "\\\\nas\\Public\\") == "\\\\nas\\Public\\Odzysk\\.x.cmd"
+    assert o._unc("E:\\a", "") == "E:\\a"

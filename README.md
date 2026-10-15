@@ -174,10 +174,15 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.29.3:** 🛟 Odzyskiwanie — odzyskane pliki można zapisać także na **dysku sieciowym** (np. Z: na NAS-ie) —
+przydatne, gdy w komputerze jest tylko dysk C:. Windows File Recovery działa jako administrator i nie widzi
+zmapowanych liter, więc program sam podłącza udział (`net use`, zapisane hasło Windows), a w razie potrzeby używa
+ścieżki `\\serwer\udział`. Gdy odzyskiwanie skończy się błędem — w oknie widać ostatnie komunikaty.
+
 **1.29.2:** 🛟 Odzyskiwanie — **skąd i dokąd**: *Gdzie był* (Pobrane, Pulpit…, cały dysk albo *📂 Inny folder…*)
 oraz *Przywróć do*: z koszy i kopii — **na oryginalne miejsce** albo **do wybranego folderu**; głębokie szukanie —
 odzyskane pliki na wybranym dysku („Odzyskane przez Katalogator”) albo w **dowolnym folderze na innym dysku**
-(lokalnym lub USB — dysków sieciowych Windows File Recovery nie widzi).
+(lokalnym, USB albo sieciowym — od 1.29.3).
 
 **1.29.1:** 🛟 Odzyskiwanie — **wybrane formaty**: pod rodzajem lista formatów (np. dla filmów MP4, MOV, AVI, MKV,
 MTS…; klik pomija format), pole na własne rozszerzenia (np. `braw, psd`), nowe rodzaje 🎵 Muzyka i 🗜 Archiwa;

@@ -150,7 +150,10 @@ async function rysujGleboko() {
   }
   const zrodlo = $("odz-skad").value, dysk = zrodlo.slice(0, 2).toUpperCase();
   if (!zrodlo || zrodlo === "__inny") return;
-  const cele = i.dyski.filter(d => d.sciezka.slice(0, 2).toUpperCase() !== dysk).sort((a, b) => (b.wolne || 0) - (a.wolne || 0));
+  // dokąd: inny dysk niż przeszukiwany — także sieciowy (NAS); najpierw ten z największą ilością wolnego miejsca
+  const cele = (i.cele || i.dyski).filter(d => d.sciezka.slice(0, 2).toUpperCase() !== dysk).sort((a, b) => (b.wolne || 0) - (a.wolne || 0));
+  if (z && z.zakonczone && z.kod) t.append(odzEl("div", {className: "uwaga", textContent: `Windows File Recovery zakończył się błędem (kod ${z.kod}). ` +
+    "Jeśli nie zapisał na dysk sieciowy — wybierz pendrive albo dysk USB. Ostatnie komunikaty:"}), odzEl("div", {className: "odz-log", textContent: z.dziennik || "(pusty dziennik)"}));
   if (z && z.zakonczone) t.append(odzEl("div", {className: "info", textContent: `Ostatnie odzyskiwanie: ${z.zrodlo} — ${kiedyTxt(z.start * 1000)}` + (z.kod ? ` (kod zakończenia ${z.kod})` : "")}),
                                   odzEl("div", {className: "odz-wiersz"}, odzPrzycisk("Pokaż odzyskane", () => pokazWyniki(true))));
   t.append(odzEl("div", {className: "info", textContent: `Szukam na dysku ${dysk}` +
@@ -163,13 +166,13 @@ async function rysujGleboko() {
     if (r.ssd) ssdBox.replaceChildren(odzEl("div", {className: "uwaga", textContent: `Dysk ${dysk} to SSD: po usunięciu Windows zwykle szybko czyści to miejsce (TRIM) — szanse na odzyskanie są małe, ale warto spróbować od razu. Dyski talerzowe, pendrive'y i karty pamięci — szanse znacznie większe.`}));
   }).catch(() => {});
   if (!cele.length) {
-    t.append(odzEl("div", {className: "uwaga", textContent: `Odzyskane pliki muszą trafić na INNY dysk niż ${dysk} — podłącz pendrive albo dysk USB i kliknij „Odśwież”.`}),
+    t.append(odzEl("div", {className: "uwaga", textContent: `Odzyskane pliki muszą trafić na INNY dysk niż ${dysk} — podłącz dysk sieciowy (NAS), pendrive albo dysk USB i kliknij „Odśwież”.`}),
              odzPrzycisk("⟳ Odśwież", otworzOdzysk));
     return;
   }
   // gdzie zapisać: dysk (folder „Odzyskane przez Katalogator”) albo dowolny folder na innym dysku
   const sel = odzEl("select", {id: "odz-cel"});
-  for (const d of cele) sel.append(odzEl("option", {value: d.sciezka, textContent: `💽 ${d.sciezka.replace(/\\$/, "")} ${d.etykieta || ""} — wolne ${odzRozmiar(d.wolne)}`}));
+  for (const d of cele) sel.append(odzEl("option", {value: d.sciezka, textContent: `${d.rodzaj === "sieciowy" ? "🌐" : "💽"} ${d.sciezka.replace(/\\$/, "")} ${d.etykieta || d.siec || ""} — wolne ${odzRozmiar(d.wolne)}`}));
   if (odz.celFolder && odz.celFolder.slice(0, 2).toUpperCase() !== dysk) sel.append(odzEl("option", {value: odz.celFolder, textContent: `📁 ${odz.celFolder}`}));
   sel.append(odzEl("option", {value: "__inny", textContent: "📂 Wybierz folder…"}));
   if (odz.celWybor && [...sel.options].some(o => o.value === odz.celWybor)) sel.value = odz.celWybor;

@@ -120,15 +120,37 @@ def folder_wynikow(cel: str) -> str:
     return ntpath.join(d + "\\", FOLDER_WYNIKOW) if reszta.strip("\\") == "" else cel
 
 
-def uruchom(dysk: str, cel_miejsce: str, folder: str, typ, fraza: str, dokladnie: bool) -> dict:
+def _unc(sciezka: str, udzial: str) -> str:
+    """„Z:\\Odzysk” + „\\\\nas\\dane” → „\\\\nas\\dane\\Odzysk”."""
+    return udzial.rstrip("\\") + "\\" + ntpath.splitdrive(sciezka)[1].lstrip("\\") if udzial else sciezka
+
+
+def skrypt_cmd(args_przed: list[str], args_po: list[str], cel: str, udzial: str = "") -> str:
+    """Treść .cmd uruchamianego jako administrator. Dysk sieciowy (Z:) w sesji administratora nie istnieje —
+    podłączamy go („net use”, zapisane hasło z Windows), a gdy się nie da — używamy ścieżki \\\\serwer\\udział."""
+    esc = lambda a: _cmd(a).replace("%", "%%")  # noqa: E731
+    linie = ["@echo off", "chcp 65001 >nul", "title Katalogator - odzyskiwanie (zamknij, aby przerwac)"]
+    if udzial:
+        lit = cel[:2]
+        linie += [f'if not exist "{lit}\\" net use {lit} "{udzial}" /persistent:no >nul 2>&1',
+                  f'if exist "{lit}\\" (set "CEL={cel}") else (set "CEL={_unc(cel, udzial)}")']
+    else:
+        linie.append(f'set "CEL={cel}"')
+    linie.append(f'{esc(args_przed)} "%CEL%" {esc(args_po)} > "%CEL%\\{DZIENNIK}" 2>&1')
+    linie.append(f'echo %errorlevel% > "%CEL%\\{KONIEC}"')
+    return "\n".join(linie) + "\n"
+
+
+def uruchom(dysk: str, cel_miejsce: str, folder: str, typ, fraza: str, dokladnie: bool, udzial: str = "") -> dict:
     """Start winfr z uprawnieniami administratora (Windows zapyta o zgodę). Okno winfr — zminimalizowane;
-    zamknięcie go przerywa szukanie. `cel_miejsce` — dysk albo folder na odzyskane pliki (na innym dysku)."""
+    zamknięcie go przerywa szukanie. `cel_miejsce` — dysk albo folder na odzyskane pliki (na innym dysku);
+    `udzial` — dla dysku sieciowego jego ścieżka \\\\serwer\\udział."""
     exe = winfr()
     if not exe:
         return {"blad": "Najpierw zainstaluj Windows File Recovery (przycisk wyżej)."}
     if not dysk or not cel_miejsce or dysk[:1].upper() == cel_miejsce[:1].upper():
         return {"blad": "Odzyskane pliki muszą trafić na INNY dysk niż ten, na którym ich szukasz — "
-                        "inaczej nadpisałyby to, co chcemy odzyskać. Podłącz pendrive lub dysk USB."}
+                        "inaczej nadpisałyby to, co chcemy odzyskać. Wybierz dysk sieciowy, pendrive albo dysk USB."}
     cel = folder_wynikow(cel_miejsce)
     os.makedirs(cel, exist_ok=True)
     for n in (DZIENNIK, KONIEC):
@@ -139,14 +161,13 @@ def uruchom(dysk: str, cel_miejsce: str, folder: str, typ, fraza: str, dokladnie
     args = polecenie(exe, dysk[:2], cel, dokladnie, wzorce(folder, typ, fraza))
     skrypt = os.path.join(cel, SKRYPT)
     with open(skrypt, "w", encoding="utf-8", newline="\r\n") as f:
-        f.write("@echo off\nchcp 65001 >nul\ntitle Katalogator - odzyskiwanie (zamknij, aby przerwac)\n")
-        f.write(f'{_cmd(args).replace("%", "%%")} > "{os.path.join(cel, DZIENNIK)}" 2>&1\n')
-        f.write(f'echo %errorlevel% > "{os.path.join(cel, KONIEC)}"\n')
+        f.write(skrypt_cmd(args[:2], args[3:], cel, udzial))
     if not WINDOWS:
         return {"blad": "Windows File Recovery działa tylko w Windows 10/11."}
     import ctypes
+    sk = _unc(skrypt, udzial)  # sesja administratora nie zna litery dysku sieciowego — skrypt po ścieżce \\\\serwer
     w = ctypes.windll.shell32.ShellExecuteW(None, "runas", os.environ.get("ComSpec", "cmd.exe"),
-                                            f'/c "{skrypt}"', cel, 7)  # 7 = zminimalizowane, bez fokusu
+                                            f'/c "{sk}"', None, 7)  # 7 = zminimalizowane, bez fokusu
     if w <= 32:
         return {"blad": "Windows nie pozwolił uruchomić odzyskiwania (potrzebna zgoda administratora — "
                         "kliknij „Tak” w okienku Windows)."}
