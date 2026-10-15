@@ -264,7 +264,7 @@ async function pokazWyniki(odNowa) {
   let r;
   try { r = await api(`/api/odzysk/wyniki?typ=${odz.typ}&f=${encodeURIComponent(wybraneFormaty().join(","))}&min=${odz.min}&od=${odz.wyniki.length}&ile=200`); } catch (e) { toast(e.message); return; }
   odz.wyniki = odz.wyniki.concat(r.pliki); odz.razem = r.razem;
-  const pasek = $("odz-wyniki-pasek"); pasek.replaceChildren();
+  const pasek = $("odz-wyniki-pasek"); pasek.replaceChildren(); if ($("odz-stany")) $("odz-stany").remove();
   const minSel = odzEl("select");
   for (const [v, n] of [[0, "wszystkie rozmiary"], [10, "≥ 10 KB"], [100, "≥ 100 KB (bez miniaturek)"], [1024, "≥ 1 MB"]]) minSel.append(odzEl("option", {value: v, textContent: n, selected: odz.min === v}));
   minSel.onchange = () => { odz.min = +minSel.value; pokazWyniki(true); };
@@ -278,6 +278,12 @@ async function pokazWyniki(odNowa) {
         $("okno-odzysk").hidden = true; otworzGalerie("przegladarka");
       } catch (e) { toast(e.message); }
     }, "", "Dodaje folder z odzyskanymi plikami do Przeglądarki — oś czasu, miniatury, podgląd"));
+  const st = r.stany || {};
+  if (odNowa && (st.pusty || st.uszkodzony)) {  // SSD (TRIM): wpisy o plikach są, ale treść wyczyszczona
+    pasek.after(odzEl("div", {className: "uwaga", id: "odz-stany", textContent:
+      `Działa ${st.ok || 0} z ${r.razem}. ` + (st.pusty ? `Puste (same zera): ${st.pusty} — dysk SSD już wyczyścił ich zawartość (TRIM), tych nie da się odzyskać żadnym programem. ` : "") +
+      (st.uszkodzony ? `Uszkodzone (zły początek pliku): ${st.uszkodzony} — czasem otworzy je VLC, zwykle są niekompletne.` : "")}));
+  }
   const s = $("odz-siatka"); if (odNowa) s.replaceChildren();
   s.querySelectorAll(".wiecej").forEach(x => x.remove());
   for (const p of r.pliki) {
@@ -287,7 +293,9 @@ async function pokazWyniki(odNowa) {
       im.src = `/api/odzysk/min?t=${encodeURIComponent(TOKEN)}&p=${encodeURIComponent(p.sciezka)}`;
       im.onload = () => ob.replaceChildren(im);
     }
-    s.append(odzEl("div", {className: "odz-k", title: `${p.gdzie}\\${p.nazwa}\nKliknij — pokaż w Eksploratorze`,
+    const STANY = {pusty: "∅ pusty — SSD wyczyścił zawartość", uszkodzony: "⚠ uszkodzony"};
+    if (STANY[p.stan]) ob.append(odzEl("span", {className: "odz-stan " + p.stan, textContent: STANY[p.stan]}));
+    s.append(odzEl("div", {className: "odz-k" + (p.stan === "pusty" ? " pusty" : ""), title: `${p.gdzie}\\${p.nazwa}\nKliknij — pokaż w Eksploratorze`,
                            onclick: () => api("/api/odzysk/pokaz", {sciezka: p.sciezka}).catch(e => toast(e.message))},
                    ob, odzEl("div", {className: "op"}, odzEl("b", {textContent: p.nazwa}), odzEl("span", {textContent: odzRozmiar(p.rozmiar)}))));
   }

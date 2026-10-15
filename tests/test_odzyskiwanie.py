@@ -177,3 +177,19 @@ def test_bezpieczna_sciezka_docelowa(monkeypatch):
 def test_czytelny_postep_winfr():
     t = o._czysc("Pass 1: Scanning and processing disk\r\nScanning disk: 00%\b\b\b01%\b\b\b97%\r\n\x00")
     assert t == "Pass 1: Scanning and processing disk\nScanning disk: 97%"
+
+
+def test_stan_odzyskanych_plikow(tmp_path):
+    cel = tmp_path / "Odzysk"
+    rec = cel / "Recovery_20261015_190000"
+    rec.mkdir(parents=True)
+    (rec / "pusty.mp4").write_bytes(b"\0" * 300000)  # SSD po TRIM: same zera
+    (rec / "zly.mp4").write_bytes(b"xx" * 1000)
+    (rec / "dobry.mp4").write_bytes(b"\0\0\0\x18ftypmp42" + b"\1" * 1000)
+    (rec / "zdj.jpg").write_bytes(b"\xff\xd8\xff\xe0" + b"\1" * 100)
+    assert o.stan_pliku(str(rec / "pusty.mp4")) == "pusty"
+    assert o.stan_pliku(str(rec / "zly.mp4")) == "uszkodzony"
+    assert o.stan_pliku(str(rec / "dobry.mp4")) == "ok" and o.stan_pliku(str(rec / "zdj.jpg")) == "ok"
+    w = o.wyniki({"cel": str(cel), "start": time.time() - 10})
+    assert w["stany"] == {"ok": 2, "uszkodzony": 1, "pusty": 1}
+    assert [x["nazwa"] for x in w["pliki"]][-1] == "pusty.mp4" and w["pliki"][0]["stan"] == "ok"

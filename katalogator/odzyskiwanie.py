@@ -290,16 +290,53 @@ def _pliki_wynikow(cel: str, start: float, limit: int = 20000) -> list[tuple[str
     return wynik
 
 
+# początek pliku danego formatu — odzyskany plik bez niego nie otworzy się (np. „0xc00d36e5” w odtwarzaczu Windows)
+_NAGLOWKI = {
+    (".jpg", ".jpeg"): lambda d: d[:2] == b"\xff\xd8",
+    (".png",): lambda d: d[:4] == b"\x89PNG",
+    (".mp4", ".mov", ".m4v", ".3gp", ".m4a"): lambda d: d[4:8] in (b"ftyp", b"moov", b"mdat", b"wide", b"free", b"skip"),
+    (".avi", ".wav"): lambda d: d[:4] == b"RIFF",
+    (".mkv", ".webm"): lambda d: d[:4] == b"\x1a\x45\xdf\xa3",
+    (".wmv", ".wma"): lambda d: d[:4] == b"\x30\x26\xb2\x75",
+    (".mpg", ".mpeg"): lambda d: d[:3] == b"\x00\x00\x01",
+    (".mts", ".m2ts"): lambda d: d[:1] == b"\x47" or d[4:5] == b"\x47",
+    (".pdf",): lambda d: d[:4] == b"%PDF",
+    (".zip", ".docx", ".xlsx", ".pptx", ".odt", ".ods"): lambda d: d[:2] == b"PK",
+}
+
+
+def stan_pliku(sciezka: str) -> str:
+    """„pusty” — same zera (SSD wyczyścił zawartość: TRIM), „uszkodzony” — zły początek pliku, „ok”."""
+    try:
+        rozm = os.path.getsize(sciezka)
+        with open(sciezka, "rb") as f:
+            probki = []
+            for poz in (0, rozm // 2, max(0, rozm - 65536)):
+                f.seek(poz)
+                probki.append(f.read(65536))
+    except OSError:
+        return "uszkodzony"
+    if not any(any(p) for p in probki):
+        return "pusty"
+    e = os.path.splitext(sciezka)[1].lower()
+    test = next((t for k, t in _NAGLOWKI.items() if e in k), None)
+    return "uszkodzony" if test and not test(probki[0][:16]) else "ok"
+
+
 def wyniki(zadanie: dict | None, typ="wszystko", fraza: str = "", min_kb: int = 0,
            od: int = 0, ile: int = 200) -> dict:
     if not zadanie or not zadanie.get("cel"):
         return {"razem": 0, "pliki": []}
     lista = [(p, rel, st) for p, rel, st in _pliki_wynikow(zadanie["cel"], zadanie.get("start", 0))
              if pasuje(os.path.basename(p), typ, fraza) and st.st_size >= min_kb * 1024]
-    lista.sort(key=lambda x: (rodzaj_pliku(x[0]) == "inne", -x[2].st_size))
-    return {"razem": len(lista), "folder": zadanie["cel"],
+    # sprawdzamy zawartość (3 próbki po 64 KB) — dobre pliki na początek, puste na koniec
+    stany = {p: stan_pliku(p) for p, _, _ in lista[:3000]}
+    kolej = {"ok": 0, "uszkodzony": 1, "pusty": 2}
+    lista.sort(key=lambda x: (kolej.get(stany.get(x[0], "ok"), 0), rodzaj_pliku(x[0]) == "inne", -x[2].st_size))
+    licz = {k: sum(1 for v in stany.values() if v == k) for k in kolej}
+    return {"razem": len(lista), "folder": zadanie["cel"], "stany": licz,
             "pliki": [{"sciezka": p, "nazwa": os.path.basename(p), "gdzie": os.path.dirname(rel),
-                       "rozmiar": st.st_size, "rodzaj": rodzaj_pliku(p),
+                       "rozmiar": st.st_size, "rodzaj": rodzaj_pliku(p), "stan": stany.get(p, "ok"),
                        "data": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds")}
                       for p, rel, st in lista[od:od + ile]]}
 

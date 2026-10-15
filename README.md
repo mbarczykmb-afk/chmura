@@ -174,6 +174,10 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.29.9:** 🛟 Odzyskiwanie — każdy odzyskany plik jest sprawdzany: **∅ pusty** (same zera — dysk SSD wyczyścił
+zawartość, TRIM; nie do odzyskania), **⚠ uszkodzony** (zły początek pliku) albo dobry; dobre na początku listy,
+podsumowanie „działa X z Y”.
+
 **1.29.8:** 🛟 Odzyskiwanie — czytelny postęp (etap 1–3, bez „krzaków” z dziennika Windows File Recovery) i podpowiedź:
 dawno usunięte pliki często tracą nazwę i folder, więc gdy szukanie w folderze nic nie da — cały dysk, tylko rodzaj.
 
