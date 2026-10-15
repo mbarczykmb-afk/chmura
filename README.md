@@ -174,6 +174,11 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.30.1:** 🛠 Naprawa filmów **bez pytania o wzorzec**: program sam szuka na dyskach (biblioteka, Przeglądarka,
+Wideo, Zoom, Pobrane) działających filmów z tym samym „podpisem” nagrywającego programu (atom ftyp) i po kolei
+próbuje ich jako wzorców; ten, który zadziałał, służy następnym plikom. Lista odzyskanych pokazuje stan: dobry /
+⚠ bez indeksu / ⚠ uszkodzony / 📄 plik tekstowy (np. „.d.mts” — kod programu, nie film) / ∅ pusty.
+
 **1.30:** 🛟 Odzyskiwanie — **🛠 Napraw filmy**: odzyskane filmy, których nie da się otworzyć (Windows: 0xc00d36e5).
 Program sprawdza budowę pliku MP4: gdy indeks jest (plik ucięty / uszkodzone fragmenty) — przepisuje go ffmpeg-iem;
 gdy indeksu (`moov`) brak — co zwykle dzieje się przy odzyskiwaniu „po sygnaturze” (pliki `1.mp4`, `2.mp4`…

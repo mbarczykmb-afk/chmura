@@ -281,9 +281,10 @@ async function pokazWyniki(odNowa) {
       } catch (e) { toast(e.message); }
     }, "", "Dodaje folder z odzyskanymi plikami do Przeglądarki — oś czasu, miniatury, podgląd"));
   const st = r.stany || {};
-  if (odNowa && (st.pusty || st.uszkodzony)) {  // SSD (TRIM): wpisy o plikach są, ale treść wyczyszczona
+  if (odNowa && (st.pusty || st.uszkodzony || st.bez_indeksu || st.tekst)) {  // SSD (TRIM): wpisy o plikach są, ale treść wyczyszczona
     pasek.after(odzEl("div", {className: "uwaga", id: "odz-stany", textContent:
-      `Działa ${st.ok || 0} z ${r.razem}. ` + (st.pusty ? `Puste (same zera): ${st.pusty} — dysk SSD już wyczyścił ich zawartość (TRIM), tych nie da się odzyskać żadnym programem. ` : "") +
+      `Działa ${st.ok || 0} z ${r.razem}. ` + (st.bez_indeksu ? `Bez indeksu: ${st.bez_indeksu} — kliknij „🛠 Napraw filmy”. ` : "") +
+      (st.tekst ? `Pliki tekstowe (nie filmy, np. „.d.mts”): ${st.tekst}. ` : "") + (st.pusty ? `Puste (same zera): ${st.pusty} — dysk SSD już wyczyścił ich zawartość (TRIM), tych nie da się odzyskać żadnym programem. ` : "") +
       (st.uszkodzony ? `Uszkodzone (zły początek pliku): ${st.uszkodzony} — czasem otworzy je VLC, zwykle są niekompletne.` : "")}));
   }
   const s = $("odz-siatka"); if (odNowa) s.replaceChildren();
@@ -295,7 +296,8 @@ async function pokazWyniki(odNowa) {
       im.src = `/api/odzysk/min?t=${encodeURIComponent(TOKEN)}&p=${encodeURIComponent(p.sciezka)}`;
       im.onload = () => ob.replaceChildren(im);
     }
-    const STANY = {pusty: "∅ pusty — SSD wyczyścił zawartość", uszkodzony: "⚠ uszkodzony"};
+    const STANY = {pusty: "∅ pusty — SSD wyczyścił zawartość", uszkodzony: "⚠ uszkodzony", bez_indeksu: "⚠ bez indeksu — 🛠 Napraw",
+                   tekst: "📄 plik tekstowy, nie film"};
     if (STANY[p.stan]) ob.append(odzEl("span", {className: "odz-stan " + p.stan, textContent: STANY[p.stan]}));
     if (p.rodzaj === "filmy" && !/_naprawiony\d*\./.test(p.nazwa)) {
       const nb = odzEl("button", {className: "odz-napraw", textContent: "🛠", title: "Napraw ten film"});
@@ -312,25 +314,29 @@ async function pokazWyniki(odNowa) {
 
 // 🛠 naprawa odzyskanych filmów: ffmpeg, a gdy brak indeksu (moov) — untrunc z wzorcem (działający film z tego źródła)
 async function naprawFilmy(lista, wzorzec = "") {
+  lista = lista.filter(p => p.stan !== "tekst" && p.stan !== "pusty");  // pliki tekstowe „.mts” i same zera — nie filmy
   if (!lista.length) { toast("Brak filmów do naprawy."); return; }
   let box = $("odz-naprawa");
   if (!box) { box = odzEl("div", {id: "odz-naprawa", className: "odz-krok"}); $("odz-siatka").before(box); }
   const stan = odzEl("div", {className: "info"}); box.replaceChildren(odzEl("b", {textContent: "🛠 Naprawa filmów"}), stan);
-  let ok = 0; const wz = [], bl = [];
+  let ok = 0; const wz = [], bl = [], uzyte = new Set();
   for (const [i, p] of lista.entries()) {
-    stan.textContent = `Naprawiam ${i + 1} z ${lista.length}: ${p.nazwa}` + (wzorzec ? " (odbudowa indeksu — może potrwać)" : "") + "…";
+    stan.textContent = `Naprawiam ${i + 1} z ${lista.length}: ${p.nazwa}` +
+      (wzorzec ? " (odbudowa indeksu — może potrwać)" : " — szukam podobnego działającego filmu na dyskach jako wzorca, to może potrwać") + "…";
     try {
-      const r = await api("/api/odzysk/napraw", {sciezka: p.sciezka, wzorzec});
+      const r = await api("/api/odzysk/napraw", {sciezka: p.sciezka, wzorzec, auto: !wzorzec});
+      if (r.wzorzec) uzyte.add(r.wzorzec);
       if (r.ok) ok++; else if (r.potrzebny_wzorzec) wz.push(p); else bl.push(`${p.nazwa}: ${r.blad}`);
     } catch (e) { bl.push(`${p.nazwa}: ${e.message}`); }
   }
   stan.textContent = `Naprawione: ${ok} z ${lista.length}` + (ok ? " — pliki „…_naprawiony.mp4” obok oryginałów (na początku listy)." : ".") +
     (bl.length ? ` Nie udało się: ${bl.length}.` : "");
+  if (uzyte.size) box.append(odzEl("div", {className: "info", textContent: "Wzorce użyte do odbudowy: " + [...uzyte].map(x => x.split(/[\\/]/).pop()).join(", ")}));
   if (bl.length) box.append(odzEl("div", {className: "odz-log", textContent: bl.slice(0, 20).join("\n")}));
   if (wz.length && !wzorzec) {
-    box.append(odzEl("div", {className: "uwaga", textContent: `${wz.length} filmów nie ma indeksu (moov) — dane obrazu są, ale trzeba je odbudować ` +
-      "na podstawie WZORCA: działającego filmu z tego samego źródła (np. inne nagranie Zoom, film z tego samego telefonu), " +
-      "najlepiej o podobnych ustawieniach. Program pobierze raz darmowy untrunc z GitHuba."}));
+    box.append(odzEl("div", {className: "uwaga", textContent: `${wz.length} filmów nie udało się odbudować samemu — na dyskach nie ma ` +
+      "podobnego działającego filmu (wzorca). Jeśli znasz jakiś film nagrany tym samym programem / telefonem, wskaż go — " +
+      "a jeśli nie, te pliki prawdopodobnie są niekompletne i nie da się ich uratować."}));
     const wyb = odzEl("div", {className: "odz-wiersz"});
     const rysujWzorce = async folder => {
       const r = await api("/api/odzysk/filmy", {folder});

@@ -318,9 +318,22 @@ def stan_pliku(sciezka: str) -> str:
         return "uszkodzony"
     if not any(any(p) for p in probki):
         return "pusty"
+    p0 = probki[0][:512]
+    if p0 and sum(1 for b in p0 if 32 <= b < 127 or b in (9, 10, 13)) / len(p0) > 0.95 \
+            and os.path.splitext(sciezka)[1].lower() not in (".txt", ".rtf"):
+        return "tekst"  # np. „.d.mts” — kod programu z rozszerzeniem filmu
     e = os.path.splitext(sciezka)[1].lower()
     test = next((t for k, t in _NAGLOWKI.items() if e in k), None)
-    return "uszkodzony" if test and not test(probki[0][:16]) else "ok"
+    if test and not test(probki[0][:16]):
+        return "uszkodzony"
+    if e in (".mp4", ".mov", ".m4v", ".3gp"):  # nagłówek jest, ale bez indeksu (moov) odtwarzacz go nie otworzy
+        from .naprawa import atomy
+        try:
+            if "moov" not in [t for t, _, _ in atomy(sciezka, 50)[0]]:
+                return "bez_indeksu"
+        except OSError:
+            return "uszkodzony"
+    return "ok"
 
 
 def wyniki(zadanie: dict | None, typ="wszystko", fraza: str = "", min_kb: int = 0,
@@ -331,7 +344,7 @@ def wyniki(zadanie: dict | None, typ="wszystko", fraza: str = "", min_kb: int = 
              if pasuje(os.path.basename(p), typ, fraza) and st.st_size >= min_kb * 1024]
     # sprawdzamy zawartość (3 próbki po 64 KB) — dobre pliki na początek, puste na koniec
     stany = {p: stan_pliku(p) for p, _, _ in lista[:3000]}
-    kolej = {"ok": 0, "uszkodzony": 1, "pusty": 2}
+    kolej = {"ok": 0, "bez_indeksu": 1, "uszkodzony": 2, "tekst": 3, "pusty": 4}
     lista.sort(key=lambda x: (kolej.get(stany.get(x[0], "ok"), 0), rodzaj_pliku(x[0]) == "inne", -x[2].st_size))
     licz = {k: sum(1 for v in stany.values() if v == k) for k in kolej}
     return {"razem": len(lista), "folder": zadanie["cel"], "stany": licz,

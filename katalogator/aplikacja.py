@@ -54,6 +54,7 @@ class Stan:
         indeks.ustaw(Path(katalog) / "wspolny_indeks.db")
         self.przegladarka = przegladarka.Przegladarka(katalog)  # dyski do oglądania, osobna baza
         self.serwer_tel = None
+        self.wzorce_pamiec: dict = {}  # marka ftyp → wzorce, które zadziałały przy naprawie filmów
         pid = self.projekty.ostatni() or self.projekty.nowy("Mój projekt")
         self._otworz(pid)
 
@@ -320,6 +321,33 @@ class Stan:
             k = odzyskiwanie.z_kopii(self.ustawienia["cel"], m["kopia"], typ, fraza)
             w["kopia"], w["kopia_przerwane"] = k["pliki"], k["przerwane"]
         return w
+
+    def filmy_na_wzorce(self) -> list[str]:
+        """Filmy MP4/MOV znane programowi (projekt, Przeglądarka, Wideo, Zoom) — kandydaci na wzorzec naprawy."""
+        teraz = time.time()
+        if getattr(self, "_wzorce", None) and teraz - self._wzorce[0] < 600:
+            return self._wzorce[1]
+        wynik: list[str] = []
+        for b in (self.baza, self.przegladarka.baza):
+            try:
+                db = skaner.otworz_baze(b)
+                try:
+                    wynik += [r[0] for r in db.execute(
+                        "SELECT sciezka FROM pliki WHERE rodzaj='film' AND rozszerzenie IN ('.mp4','.mov','.m4v','.3gp') "
+                        "ORDER BY rozmiar LIMIT 3000")]
+                finally:
+                    db.close()
+            except sqlite3.Error:
+                continue
+        dom = os.path.expanduser("~")
+        for f in (os.path.join(dom, "Videos"), os.path.join(dom, "Documents", "Zoom"), os.path.join(dom, "Downloads"),
+                  os.path.join(dom, "Desktop")):
+            for katalog, _, pliki in os.walk(f):
+                wynik += [os.path.join(katalog, n) for n in pliki if os.path.splitext(n)[1].lower() in (".mp4", ".mov", ".m4v")]
+                if len(wynik) > 6000:
+                    break
+        self._wzorce = (teraz, list(dict.fromkeys(wynik)))
+        return self._wzorce[1]
 
     def odzysk_przywroc(self, element: dict, do_folderu: str | None = None) -> dict:
         m = self._odzysk_miejsca()
@@ -1534,7 +1562,12 @@ def _handler(stan: Stan, token: str, zamknij):
                     return self._wyslij({"blad": "Naprawiam tylko pliki z folderu odzyskanych."}, kod=HTTPStatus.BAD_REQUEST)
                 if u.path.endswith("diagnoza"):
                     return self._wyslij(naprawa.diagnoza(sc))
-                w = naprawa.napraw(sc, Path(stan.katalog), str(dane.get("wzorzec") or "") or None)
+                wz = str(dane.get("wzorzec") or "") or None
+                if dane.get("auto") and not wz:  # wzorzec dobierany sam spośród filmów z dysków
+                    w = naprawa.napraw_auto(sc, Path(stan.katalog), stan.filmy_na_wzorce(), stan.wzorce_pamiec,
+                                            pomin=(stan.odzysk_zadanie() or {}).get("cel", ""))
+                else:
+                    w = naprawa.napraw(sc, Path(stan.katalog), wz)
                 return self._wyslij(w)
             if u.path == "/api/odzysk/filmy":  # wybór wzorca: filmy w folderze
                 return self._wyslij({"filmy": naprawa.filmy_w(str(dane.get("folder") or ""))})

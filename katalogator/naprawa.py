@@ -54,9 +54,69 @@ def atomy(sciezka: str, limit: int = 200) -> tuple[list[tuple[str, int, int]], b
     return wynik, uciety
 
 
+def to_tekst(sciezka: str) -> bool:
+    """Plik tekstowy z rozszerzeniem filmu (np. „.d.mts” — kod TypeScript), a nie film."""
+    try:
+        with open(sciezka, "rb") as f:
+            d = f.read(512)
+    except OSError:
+        return False
+    if not d:
+        return False
+    drukowalne = sum(1 for b in d if 32 <= b < 127 or b in (9, 10, 13))
+    return drukowalne / len(d) > 0.95
+
+
+def ftyp(sciezka: str) -> tuple[str, list[str]] | None:
+    """„Podpis” programu, który nagrał film: główna marka i zgodne marki z atomu ftyp (np. isom / mp42 / qt)."""
+    try:
+        with open(sciezka, "rb") as f:
+            d = f.read(64)
+    except OSError:
+        return None
+    if len(d) < 16 or d[4:8] != b"ftyp":
+        return None
+    n = min(int.from_bytes(d[:4], "big"), len(d))
+    marki = [d[i:i + 4].decode("latin-1") for i in range(16, n - 3, 4)]
+    return d[8:12].decode("latin-1"), [m for m in marki if m.strip("\0")]
+
+
+def kandydaci(uszkodzony: str, filmy: list[str], limit: int = 5, pomin: str = "") -> list[str]:
+    """Działające filmy najbardziej podobne do uszkodzonego (ta sama marka ftyp, podobny rozmiar) — wzorce dla
+    untrunc. `filmy` — ścieżki filmów znanych programowi (biblioteka, Przeglądarka, foldery użytkownika)."""
+    cel = ftyp(uszkodzony)
+    rozm = os.path.getsize(uszkodzony) or 1
+    oceny = []
+    for p in filmy[:4000]:
+        if pomin and os.path.normcase(p).startswith(os.path.normcase(pomin)):
+            continue
+        if os.path.splitext(p)[1].lower() not in MP4:
+            continue
+        f = ftyp(p)
+        if not f:
+            continue
+        try:
+            a, uciety = atomy(p, 20)
+            r = os.path.getsize(p)
+        except OSError:
+            continue
+        if uciety or "moov" not in [t for t, _, _ in a]:
+            continue  # wzorzec musi sam działać
+        ocena = 0
+        if cel:
+            ocena += 4 * (f[0] == cel[0]) + len(set(f[1]) & set(cel[1]))
+        ocena += 1 if rozm / 5 <= r <= rozm * 50 else 0
+        oceny.append((ocena, -abs(r - rozm), p))
+    oceny.sort(reverse=True)
+    return [p for _, _, p in oceny[:limit]]
+
+
 def diagnoza(sciezka: str) -> dict:
     e = os.path.splitext(sciezka)[1].lower()
     d = {"sciezka": sciezka, "nazwa": os.path.basename(sciezka), "rozmiar": os.path.getsize(sciezka), "mp4": e in MP4}
+    if to_tekst(sciezka):
+        return {**d, "sposob": None, "tekst": True,
+                "opis": "To plik tekstowy z rozszerzeniem filmu (np. kod programu „.d.mts”), a nie film — pomijam."}
     if not d["mp4"]:
         d["opis"] = "Spróbuję przepisać plik programem ffmpeg z pominięciem uszkodzonych fragmentów."
         d["sposob"] = "ffmpeg"
@@ -177,13 +237,22 @@ def napraw_wzorcem(sciezka: str, wzorzec: str, katalog: Path) -> dict:
                            cwd=os.path.dirname(sciezka), creationflags=BEZ_OKNA)
     except (OSError, subprocess.SubprocessError) as er:
         return {"blad": f"untrunc: {er}"}
-    gotowy = next((p for p in (sciezka + "_fixed.mp4", sciezka + "_fixed" + os.path.splitext(sciezka)[1],
-                               os.path.splitext(sciezka)[0] + "_fixed" + os.path.splitext(sciezka)[1])
-                   if os.path.exists(p)), None)
+    # untrunc zapisuje obok: „<plik>_fixed.mp4”, „<plik>_fixed-s.mp4”, „<rdzeń>_fixed.mp4” — zależnie od wersji
+    folder, nazwa = os.path.split(sciezka)
+    rdzen = os.path.splitext(nazwa)[0]
+    gotowe = sorted((os.path.join(folder, n) for n in os.listdir(folder)
+                     if (n.startswith(nazwa + "_fixed") or n.startswith(rdzen + "_fixed")) and n != nazwa),
+                    key=os.path.getmtime, reverse=True)
+    gotowy = gotowe[0] if gotowe else None
     if gotowy and _dziala(gotowy):
         cel = _wynik(sciezka)
         os.replace(gotowy, cel)
         return {"ok": True, "sciezka": cel, "sposob": "wzorzec"}
+    for p in gotowe:  # nieudana próba z tym wzorcem — bez śmieci obok odzyskanych plików
+        try:
+            os.remove(p)
+        except OSError:
+            pass
     tekst = (w.stdout + w.stderr).strip().splitlines()
     return {"blad": "Nie udało się odbudować indeksu" + (f": {tekst[-1][:200]}" if tekst else "") +
                     " — spróbuj innego wzorca (to samo urządzenie / program, podobne ustawienia nagrywania)."}
@@ -201,6 +270,35 @@ def napraw(sciezka: str, katalog: Path, wzorzec: str | None = None) -> dict:
             return {"potrzebny_wzorzec": True, "diagnoza": d, "blad": d["opis"]}
         return {**napraw_wzorcem(sciezka, wzorzec, katalog), "diagnoza": d}
     return {"blad": d.get("opis") or "Nie da się naprawić.", "diagnoza": d}
+
+
+def napraw_auto(sciezka: str, katalog: Path, filmy: list[str], pamiec: dict, pomin: str = "") -> dict:
+    """Bez pytania o wzorzec: ffmpeg, a gdy brak indeksu — po kolei najbardziej podobne działające filmy z dysków
+    jako wzorce (ten, który zadziałał, jest próbowany najpierw przy kolejnych plikach)."""
+    d = diagnoza(sciezka)
+    if d.get("sposob") != "wzorzec":
+        return napraw(sciezka, katalog)
+    w = napraw_ffmpeg(sciezka)
+    if w.get("ok"):
+        return {**w, "diagnoza": d}
+    marka = (ftyp(sciezka) or ("?",))[0]
+    proby = list(dict.fromkeys([*pamiec.get(marka, []), *kandydaci(sciezka, filmy, 4, pomin)]))[:5]
+    if not proby:
+        return {"blad": "Nie znalazłem na dyskach działającego filmu podobnego do tego (wzorca) — wskaż go ręcznie.",
+                "potrzebny_wzorzec": True, "diagnoza": d}
+    ostatni = None
+    for wz in proby:
+        r = napraw_wzorcem(sciezka, wz, katalog)
+        if r.get("ok"):
+            pamiec.setdefault(marka, [])
+            if wz not in pamiec[marka]:
+                pamiec[marka].insert(0, wz)
+            return {**r, "wzorzec": wz, "diagnoza": d}
+        ostatni = r
+        if "untrunc" in (r.get("blad") or "") and "pobrać" in (r.get("blad") or ""):
+            return {**r, "diagnoza": d}  # bez untrunc dalsze próby nic nie dadzą
+    return {"blad": f"Nie udało się odbudować indeksu (sprawdzone wzorce: {len(proby)}) — "
+                    + ((ostatni or {}).get("blad") or "")[:200], "diagnoza": d}
 
 
 def filmy_w(folder: str, limit: int = 300) -> list[dict]:
