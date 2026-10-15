@@ -172,3 +172,8 @@ def test_bezpieczna_sciezka_docelowa(monkeypatch):
     assert not o.bezpieczna("D:\\Odzysk 2026") and not o.bezpieczna("E:\\Zdjęcia")
     monkeypatch.setattr(o, "winfr", lambda: "winfr.exe")
     assert "spacje" in o.uruchom("C:", "D:\\Moje odzyskane", "", "wszystko", "", True)["blad"]
+
+
+def test_czytelny_postep_winfr():
+    t = o._czysc("Pass 1: Scanning and processing disk\r\nScanning disk: 00%\b\b\b01%\b\b\b97%\r\n\x00")
+    assert t == "Pass 1: Scanning and processing disk\nScanning disk: 97%"

@@ -224,6 +224,20 @@ def _czytaj(sciezka: str) -> str:
     return d.decode("utf-8", errors="replace")
 
 
+def _czysc(tekst: str) -> str:
+    """Dziennik winfr: postęp nadpisywany znakami \\b i \\r („45%\\b\\b\\b46%…”) → tylko ostatnia wartość w linii."""
+    tekst = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ufffd]", " ", tekst)
+    wynik = []
+    for linia in re.split(r"[\r\n]+", tekst):
+        pr = re.findall(r"\d{1,3}%", linia)
+        if len(pr) > 1:  # „Scanning disk: 00% 01% … 97%” → „Scanning disk: 97%”
+            linia = linia[:linia.find(pr[0])] + pr[-1]
+        linia = re.sub(r"\s+", " ", linia).strip()
+        if linia:
+            wynik.append(linia)
+    return "\n".join(wynik)
+
+
 def postep(zadanie: dict | None) -> dict | None:
     """Stan trwającego / zakończonego odzyskiwania z dziennika winfr (procent, ostatni komunikat)."""
     if not zadanie or not zadanie.get("cel"):
@@ -233,16 +247,19 @@ def postep(zadanie: dict | None) -> dict | None:
     jest_log = os.path.exists(os.path.join(rob, DZIENNIK)) or os.path.exists(os.path.join(rob, INFO))
     log = _czytaj(os.path.join(rob, DZIENNIK))
     info = _czytaj(os.path.join(rob, INFO))
-    linie = [x.strip() for x in re.split(r"[\r\n]+", info + "\n" + log) if x.strip()]
+    linie = _czysc(info + "\n" + log).split("\n")
+    linie = [x for x in linie if x]
+    etap = next((x for x in reversed(linie) if x.lower().startswith("pass")), "")
     wsk = next((t for k, t in BLEDY_WINFR.items() if k in log.lower() or k in info.lower()), None)
     procent = None
-    for m in re.finditer(r"(\d{1,3})\s*%", log):
+    for m in re.finditer(r"(\d{1,3})%", linie[-1] if linie else ""):
         procent = min(100, int(m.group(1)))
     koniec = _czytaj(os.path.join(rob, KONIEC)).strip()
     kod = int(koniec) if koniec.lstrip("-").isdigit() else None
     # skrypt najpierw zapisuje „Start …” — brak dziennika po minucie: Windows nie uruchomił odzyskiwania
     nie_ruszylo = kod is None and not jest_log and time.time() - zadanie.get("start", 0) > 60
-    return {**zadanie, "procent": procent, "nie_ruszylo": nie_ruszylo, "wskazowka": wsk, "komunikat": linie[-1][:300] if linie else "",
+    return {**zadanie, "procent": procent, "nie_ruszylo": nie_ruszylo, "wskazowka": wsk, "etap": etap,
+            "komunikat": linie[-1][:300] if linie else "",
             "dziennik": "\n".join(linie[-12:]), "zakonczone": kod is not None, "kod": kod,
             "znalezione": len(_pliki_wynikow(cel, zadanie.get("start", 0), limit=100000))}
 

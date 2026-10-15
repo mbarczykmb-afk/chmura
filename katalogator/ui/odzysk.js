@@ -170,6 +170,10 @@ async function rysujGleboko() {
     ` · ${opisFormatow()}` +
     ($("odz-fraza").value.trim() ? ` z „${$("odz-fraza").value.trim()}” w nazwie` : "") +
     ` · tryb ${odzTryb() ? "dokładny — od kilkunastu minut do kilku godzin" : "szybki — kilka minut"}.`}));
+  if (odzTryb() && (zrodlo.length > 3 || $("odz-fraza").value.trim())) t.append(odzEl("div", {className: "info", textContent:
+    "💡 Dawno usunięte pliki często tracą nazwę i folder — wtedy filtr folderu (" + (zrodlo.length > 3 ? zrodlo : "") + ")" +
+    ($("odz-fraza").value.trim() ? " i nazwy" : "") + " je pomija. Gdy nic nie znajdzie: „Gdzie był” → 💽 Cały dysk, bez fragmentu nazwy, " +
+    "zostaw tylko rodzaj (np. 🎬 Filmy) — odzyskane pliki będą miały nazwy w rodzaju file_123.mp4."}));
   const ssdBox = odzEl("div"); t.append(ssdBox);
   api("/api/odzysk/ssd", {dysk}).then(r => {
     if (r.ssd) ssdBox.replaceChildren(odzEl("div", {className: "uwaga", textContent: `Dysk ${dysk} to SSD: po usunięciu Windows zwykle szybko czyści to miejsce (TRIM) — szanse na odzyskanie są małe, ale warto spróbować od razu. Dyski talerzowe, pendrive'y i karty pamięci — szanse znacznie większe.`}));
@@ -235,7 +239,11 @@ function rysujPostep(z) {
   t.append(odzEl("div", {className: "odz-wiersz"}, odzEl("b", {textContent: `⏳ Odzyskiwanie trwa — ${z.zrodlo}`}),
                  odzEl("span", {className: "info", textContent: `od ${kiedyTxt(z.start * 1000)} · znalezione pliki: ${z.znalezione}`})));
   const p = odzEl("div", {className: "odz-pasek"}, odzEl("i")); p.firstChild.style.width = `${z.procent || 2}%`; t.append(p);
-  t.append(odzEl("div", {className: "info", textContent: (z.procent != null ? `${z.procent}% · ` : "") + (z.komunikat || "Czekam na zgodę Windows (okienko „Czy zezwolić…” — kliknij Tak)…")}));
+  const ETAPY = {"pass 1": "Etap 1 z 3: czytanie dysku", "pass 2": "Etap 2 z 3: szukanie fragmentów plików", "pass 3": "Etap 3 z 3: zapisywanie odzyskanych plików"};
+  const etap = z.etap ? (ETAPY[z.etap.slice(0, 6).toLowerCase()] || z.etap) : "";
+  t.append(odzEl("div", {className: "info", textContent: [etap, z.komunikat && z.komunikat !== z.etap ? z.komunikat : ""].filter(Boolean).join(" · ") ||
+    "Czekam na zgodę Windows (okienko „Czy zezwolić…” — kliknij Tak)…"}));
+  if (!z.znalezione) t.append(odzEl("div", {className: "info", textContent: "Pliki pojawiają się dopiero w ostatnim etapie — w pierwszym program tylko czyta dysk."}));
   if (z.dziennik) t.append(odzEl("div", {className: "odz-log", textContent: z.dziennik}));
   t.append(odzEl("div", {className: "info", textContent: "Możesz zamknąć to okno — odzyskiwanie działa dalej. Przerwać: zamknij okno „Katalogator - odzyskiwanie” na pasku zadań."}));
   clearTimeout(odz.zegar);
