@@ -160,7 +160,7 @@ async function rysujGleboko() {
   // dokąd: inny dysk niż przeszukiwany — także sieciowy (NAS); najpierw ten z największą ilością wolnego miejsca
   const cele = (i.cele || i.dyski).filter(d => d.sciezka.slice(0, 2).toUpperCase() !== dysk).sort((a, b) => (b.wolne || 0) - (a.wolne || 0));
   if (z && z.zakonczone && z.kod) t.append(odzEl("div", {className: "uwaga", textContent: `Windows File Recovery zakończył się błędem (kod ${z.kod}). ` +
-    "Jeśli nie zapisał na dysk sieciowy — wybierz pendrive albo dysk USB. Ostatnie komunikaty:"}), odzEl("div", {className: "odz-log", textContent: z.dziennik || "(pusty dziennik)"}));
+    (z.wskazowka || "Ostatnie komunikaty poniżej.")}), odzEl("div", {className: "odz-log", textContent: z.dziennik || "(pusty dziennik)"}));
   if (z && z.zakonczone) t.append(odzEl("div", {className: "info", textContent: `Ostatnie odzyskiwanie: ${z.zrodlo} — ${kiedyTxt(z.start * 1000)}` + (z.kod ? ` (kod zakończenia ${z.kod})` : "")}),
                                   odzEl("div", {className: "odz-wiersz"}, odzPrzycisk("Pokaż odzyskane", () => pokazWyniki(true))));
   t.append(odzEl("div", {className: "info", textContent: `Szukam na dysku ${dysk}` +
@@ -173,7 +173,7 @@ async function rysujGleboko() {
     if (r.ssd) ssdBox.replaceChildren(odzEl("div", {className: "uwaga", textContent: `Dysk ${dysk} to SSD: po usunięciu Windows zwykle szybko czyści to miejsce (TRIM) — szanse na odzyskanie są małe, ale warto spróbować od razu. Dyski talerzowe, pendrive'y i karty pamięci — szanse znacznie większe.`}));
   }).catch(() => {});
   if (!cele.length) {
-    t.append(odzEl("div", {className: "uwaga", textContent: `Odzyskane pliki muszą trafić na INNY dysk niż ${dysk} — podłącz dysk sieciowy (NAS), pendrive albo dysk USB i kliknij „Odśwież”.`}),
+    t.append(odzEl("div", {className: "uwaga", textContent: `Odzyskane pliki muszą trafić na INNY dysk niż ${dysk} — podłącz pendrive albo dysk USB i kliknij „Odśwież” (dysków sieciowych Windows File Recovery nie obsługuje).`}),
              odzPrzycisk("⟳ Odśwież", otworzOdzysk));
     return;
   }
@@ -198,7 +198,11 @@ async function rysujGleboko() {
     });
   };
   opisCelu();
-  t.append(odzEl("div", {className: "odz-wiersz"}, odzEl("span", {className: "odz-et", textContent: "Zapisz odzyskane w"}), sel, celInfo));
+  const odswiez = odzPrzycisk("⟳", async () => {  // właśnie podłączony pendrive
+    try { const i2 = await api("/api/odzysk"); odz.info.dyski = i2.dyski; odz.info.cele = i2.cele; rysujGleboko(); } catch (e) { toast(e.message); }
+  }, "", "Odśwież listę dysków (np. po podłączeniu pendrive'a)");
+  t.append(odzEl("div", {className: "odz-wiersz"}, odzEl("span", {className: "odz-et", textContent: "Zapisz odzyskane w"}), sel, odswiez, celInfo),
+           odzEl("div", {className: "info", textContent: "Pendrive albo dysk USB (dysków sieciowych Windows File Recovery nie obsługuje). Odzyskane pliki możesz potem przenieść na NAS."}));
   t.append(odzEl("div", {className: "odz-wiersz"}, odzPrzycisk("▶ Zacznij odzyskiwanie", async e => {
     e.target.disabled = true;
     try {

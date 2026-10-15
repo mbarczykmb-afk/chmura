@@ -291,7 +291,8 @@ class Stan:
     def odzysk_info(self) -> dict:
         wsz = [x for x in dyski.lista_dyskow() if x.get("dostepny")]
         d = [x for x in wsz if x.get("rodzaj") in ("lokalny", "wymienny")]  # skąd: tylko dyski w komputerze / USB
-        cele = [x for x in wsz if x.get("rodzaj") in ("lokalny", "wymienny", "sieciowy")]  # dokąd: także sieciowe
+        # dokąd: dysk w komputerze albo USB — Windows File Recovery nie zapisuje na sieciowe (błąd 0x80070356)
+        cele = [x for x in wsz if x.get("rodzaj") in ("lokalny", "wymienny")]
         z = self.odzysk_zadanie()
         return {"winfr": bool(odzyskiwanie.winfr()), "windows": odzyskiwanie.WINDOWS, "dyski": d, "cele": cele,
                 "typy": odzyskiwanie.TYPY,
@@ -338,12 +339,10 @@ class Stan:
         udzial = ""
         if odzyskiwanie.WINDOWS:
             d = next((x for x in dyski.lista_dyskow() if x["sciezka"][:1].upper() == cel[:1].upper()), None)
-            if not d or d.get("rodzaj") not in ("lokalny", "wymienny", "sieciowy"):
-                return {"blad": "Wybierz folder na dysku w komputerze, USB albo dysku sieciowym."}
-            if d.get("rodzaj") == "sieciowy":
-                udzial = d.get("siec") or ""
-                if not udzial:
-                    return {"blad": f"Nie znam ścieżki sieciowej dysku {cel[:2]} — podłącz go ponownie w Eksploratorze."}
+            if d and d.get("rodzaj") == "sieciowy":
+                return {"blad": odzyskiwanie.BLEDY_WINFR["80070356"]}
+            if not d or d.get("rodzaj") not in ("lokalny", "wymienny"):
+                return {"blad": "Wybierz folder na dysku w komputerze albo na pendrivie / dysku USB."}
         w = odzyskiwanie.uruchom(dysk, cel, folder, self.odzysk_typ(dane), str(dane.get("fraza") or ""),
                                  bool(dane.get("dokladnie", True)), udzial, str(Path(self.katalog) / "odzysk"))
         if w.get("ok"):

@@ -23,7 +23,15 @@ from datetime import datetime, timedelta, timezone
 WINDOWS = sys.platform == "win32"
 ID_SKLEPU = "9N26S50LN705"  # Windows File Recovery w Microsoft Store
 FOLDER_WYNIKOW = "Odzyskane przez Katalogator"
-SKRYPT, DZIENNIK, KONIEC = ".katalogator-odzysk.cmd", "winfr.log", "koniec.txt"
+SKRYPT, DZIENNIK, KONIEC, INFO = ".katalogator-odzysk.cmd", "winfr.log", "koniec.txt", "start.txt"
+# typowe błędy winfr → podpowiedź po polsku
+BLEDY_WINFR = {
+    "80070356": "Windows File Recovery nie zapisuje na dyski sieciowe — wybierz pendrive albo dysk USB "
+                "(odzyskane pliki możesz potem przenieść na NAS).",
+    "80070005": "Brak dostępu — czy kliknąłeś „Tak” w okienku Windows? Spróbuj ponownie.",
+    "80070070": "Za mało miejsca na dysku docelowym — wybierz większy albo zawęź szukanie (rodzaj, folder, nazwa).",
+    "source and destination": "Odzyskane pliki muszą trafić na inny dysk niż przeszukiwany.",
+}
 
 TYPY = {
     "zdjecia": [".jpg", ".jpeg", ".png", ".heic", ".heif", ".gif", ".bmp", ".tif", ".tiff", ".webp",
@@ -131,19 +139,20 @@ def skrypt_cmd(args_przed: list[str], args_po: list[str], cel: str, udzial: str 
     zapisane hasło z Windows), a gdy się nie da — używamy ścieżki \\\\serwer\\udział."""
     esc = lambda a: _cmd(a).replace("%", "%%")  # noqa: E731
     robocze = robocze or cel
+    # komunikaty skryptu osobno (INFO) — dziennik winfr bywa w UTF-16, a mieszanie kodowań psuło tekst
     linie = ["@echo off", "chcp 65001 >nul", "title Katalogator - odzyskiwanie (zamknij, aby przerwac)",
              f'set "LOG={ntpath.join(robocze, DZIENNIK)}"', f'set "KON={ntpath.join(robocze, KONIEC)}"',
-             'echo Start %date% %time% > "%LOG%"']
+             f'set "INF={ntpath.join(robocze, INFO)}"', 'echo Start %date% %time% > "%INF%"']
     if udzial:
         lit = cel[:2]
         linie += [f'if not exist "{lit}\\" net use {lit} "{udzial}" /persistent:no >nul 2>&1',
                   f'if exist "{lit}\\" (set "CEL={cel}") else (set "CEL={_unc(cel, udzial)}")']
     else:
         linie.append(f'set "CEL={cel}"')
-    linie += ['echo Zapis do: %CEL% >> "%LOG%"',
+    linie += ['echo Zapis do: %CEL% >> "%INF%"',
               'if not exist "%CEL%\\" mkdir "%CEL%" >nul 2>&1',
-              'if not exist "%CEL%\\" (echo BLAD: brak dostepu do miejsca zapisu >> "%LOG%" & echo 3 > "%KON%" & exit /b 3)',
-              f'{esc(args_przed)} "%CEL%" {esc(args_po)} >> "%LOG%" 2>&1',
+              'if not exist "%CEL%\\" (echo BLAD: brak dostepu do miejsca zapisu >> "%INF%" & echo 3 > "%KON%" & exit /b 3)',
+              f'{esc(args_przed)} "%CEL%" {esc(args_po)} > "%LOG%" 2>&1',
               'echo %errorlevel% > "%KON%"']
     return "\n".join(linie) + "\n"
 
@@ -208,9 +217,11 @@ def postep(zadanie: dict | None) -> dict | None:
         return None
     cel = zadanie["cel"]
     rob = zadanie.get("robocze") or cel
-    jest_log = os.path.exists(os.path.join(rob, DZIENNIK))
+    jest_log = os.path.exists(os.path.join(rob, DZIENNIK)) or os.path.exists(os.path.join(rob, INFO))
     log = _czytaj(os.path.join(rob, DZIENNIK))
-    linie = [x.strip() for x in re.split(r"[\r\n]+", log) if x.strip()]
+    info = _czytaj(os.path.join(rob, INFO))
+    linie = [x.strip() for x in re.split(r"[\r\n]+", info + "\n" + log) if x.strip()]
+    wsk = next((t for k, t in BLEDY_WINFR.items() if k in log.lower() or k in info.lower()), None)
     procent = None
     for m in re.finditer(r"(\d{1,3})\s*%", log):
         procent = min(100, int(m.group(1)))
@@ -218,7 +229,7 @@ def postep(zadanie: dict | None) -> dict | None:
     kod = int(koniec) if koniec.lstrip("-").isdigit() else None
     # skrypt najpierw zapisuje „Start …” — brak dziennika po minucie: Windows nie uruchomił odzyskiwania
     nie_ruszylo = kod is None and not jest_log and time.time() - zadanie.get("start", 0) > 60
-    return {**zadanie, "procent": procent, "nie_ruszylo": nie_ruszylo, "komunikat": linie[-1][:300] if linie else "",
+    return {**zadanie, "procent": procent, "nie_ruszylo": nie_ruszylo, "wskazowka": wsk, "komunikat": linie[-1][:300] if linie else "",
             "dziennik": "\n".join(linie[-12:]), "zakonczone": kod is not None, "kod": kod,
             "znalezione": len(_pliki_wynikow(cel, zadanie.get("start", 0), limit=100000))}
 

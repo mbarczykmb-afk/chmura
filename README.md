@@ -174,6 +174,11 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.29.6:** 🛟 Odzyskiwanie — Windows File Recovery nie zapisuje na dyski sieciowe (błąd 0x80070356): odzyskane
+pliki zapisujesz na pendrive / dysk USB (przycisk ⟳ odświeża listę po podłączeniu), potem możesz je przenieść na
+NAS · czytelny dziennik (wcześniej pierwsza linia była nieczytelna) i podpowiedzi po polsku przy typowych błędach.
+Przywracanie z koszy i kopii zapasowej — nadal do dowolnego folderu, także sieciowego.
+
 **1.29.5:** 🛟 Odzyskiwanie — skrypt i dziennik Windows File Recovery leżą lokalnie (w danych programu, kilka KB),
 na dysk docelowy idą tylko odzyskane pliki — start działa także z zapisem na dysk sieciowy; gdy odzyskiwanie nie
 ruszy (brak zgody administratora) — komunikat i *↺ Spróbuj ponownie*; błąd dostępu do miejsca zapisu widać
@@ -192,7 +197,7 @@ zmapowanych liter, więc program sam podłącza udział (`net use`, zapisane has
 **1.29.2:** 🛟 Odzyskiwanie — **skąd i dokąd**: *Gdzie był* (Pobrane, Pulpit…, cały dysk albo *📂 Inny folder…*)
 oraz *Przywróć do*: z koszy i kopii — **na oryginalne miejsce** albo **do wybranego folderu**; głębokie szukanie —
 odzyskane pliki na wybranym dysku („Odzyskane przez Katalogator”) albo w **dowolnym folderze na innym dysku**
-(lokalnym, USB albo sieciowym — od 1.29.3).
+(w komputerze albo USB — dysków sieciowych Windows File Recovery nie obsługuje).
 
 **1.29.1:** 🛟 Odzyskiwanie — **wybrane formaty**: pod rodzajem lista formatów (np. dla filmów MP4, MOV, AVI, MKV,
 MTS…; klik pomija format), pole na własne rozszerzenia (np. `braw, psd`), nowe rodzaje 🎵 Muzyka i 🗜 Archiwa;

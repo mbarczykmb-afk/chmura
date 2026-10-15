@@ -132,7 +132,8 @@ def test_skrypt_z_dyskiem_sieciowym():
     a = o.polecenie("winfr.exe", "C:", "Z:\\Odzysk", True, ["*100%*.mp4"])
     s = o.skrypt_cmd(a[:2], a[3:], "Z:\\Odzysk", "\\\\nas\\Public")
     assert 'net use Z: "\\\\nas\\Public"' in s and 'set "CEL=\\\\nas\\Public\\Odzysk"' in s
-    assert 'winfr.exe C: "%CEL%" /extensive /n *100%%*.mp4 /a >> "%LOG%" 2>&1' in s  # % w filtrze podwojony
+    assert 'winfr.exe C: "%CEL%" /extensive /n *100%%*.mp4 /a > "%LOG%" 2>&1' in s  # % w filtrze podwojony
+    assert 'echo Start %date% %time% > "%INF%"' in s  # komunikaty skryptu osobno od dziennika winfr
     assert 'set "LOG=Z:\\Odzysk\\winfr.log"' in s  # bez folderu roboczego — dziennik obok wyników
     r = o.skrypt_cmd(a[:2], a[3:], "Z:\\Odzysk", "\\\\nas\\Public", "C:\\Dane\\odzysk")
     assert 'set "LOG=C:\\Dane\\odzysk\\winfr.log"' in r and "BLAD: brak dostepu" in r
@@ -152,3 +153,15 @@ def test_odzyskiwanie_ktore_nie_ruszylo(tmp_path):
     assert not p["nie_ruszylo"] and not p["zakonczone"] and "Zapis do" in p["komunikat"]
     (rob / o.KONIEC).write_text("3 ")
     assert o.postep(z)["kod"] == 3
+
+
+def test_dziennik_winfr_utf16_i_podpowiedz(tmp_path):
+    rob = tmp_path / "r"
+    rob.mkdir()
+    (rob / o.INFO).write_text("Start 15.10.2026\nZapis do: Y:\\Odzyskane\n")
+    (rob / o.DZIENNIK).write_bytes("Windows File Recovery\r\nFailed to create destination folder, Error 0x80070356: "
+                                   "Unknown error 0x80070356\r\n".encode("utf-16"))
+    (rob / o.KONIEC).write_text("1")
+    p = o.postep({"cel": str(tmp_path / "w"), "robocze": str(rob), "start": time.time()})
+    assert p["kod"] == 1 and "sieciowe" in p["wskazowka"]
+    assert "Start 15.10.2026" in p["dziennik"] and "Failed to create destination folder" in p["dziennik"]
