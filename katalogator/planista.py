@@ -56,6 +56,9 @@ RANGA_DATY = {"exif": 0, "film": 1, "nazwa": 2, "plik": 3, None: 4}
 PRZERWA_WYJAZDU = timedelta(hours=48)
 MARGINES_WYJAZDU = timedelta(hours=6)
 _NAGRANIE = re.compile(r"^(vid|pxl|img|mov|mvi|dsc|gopr|gh\d|dji|wp_|video|signal|screen)|(19|20)\d{6}", re.I)
+# folder nazwany rokiem (np. „2007”, „2007-05 Wakacje”, „2016_08”) — własne nagrania pogrupowane po latach;
+# tylko gdy nazwa ZACZYNA się od roku („Avatar (2009)” to film kinowy, nie nagranie)
+_ROK_FOLDERU = re.compile(r"^((?:19[89]|20[0-4])\d)(?:[ ._-]+(0[1-9]|1[0-2])(?!\d))?(?:$|[ ._-])")
 _ZLE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 DOKUMENTY = "Dokumenty"
 
@@ -172,8 +175,16 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
     zrodla = dyski.normalizuj_wybor(zrodla)
     pliki = [dict(r) for r in db.execute("SELECT rowid id, * FROM pliki")]
     istniejace, zrodlowe = [], []
+    inne = os.path.join(cel, "Filmy", "Inne")
     for p in pliki:
         if dyski.zawiera(cel, p["sciezka"]):
+            # film odłożony kiedyś do „Filmy/Inne”, który jednak wygląda na własne nagranie (np. folder „2007”) —
+            # teraz trafia do drzewa lat (przeniesienie w obrębie biblioteki)
+            if p["rodzaj"] == "film" and dyski.zawiera(inne, p["sciezka"]):
+                p["tryb"], p["zrodlo"] = "przenies", inne
+                if _wlasne_nagranie(p):
+                    zrodlowe.append(p)
+                    continue
             istniejace.append(p)
             continue
         z = next((z for z in zrodla if dyski.zawiera(z["sciezka"], p["sciezka"])), None)
@@ -220,11 +231,17 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
             d = _dt(p["data"]) or datetime.fromtimestamp(p["mtime"])
             fr, uw_m = etykiety[p["id"]]
             rodz = "Zdjęcia" if p["rodzaj"] == "zdjecie" else "Filmy"
-            f = f"{rodz}/{rodz} z {d.year}/{czysta_nazwa(f'{MIESIACE[d.month - 1]} {fr}'.strip())}"
+            rf = _rok_folderu(p) if p["rodzaj"] == "film" else None
+            if rf and d.year != rf[0]:  # data w pliku nie pasuje do folderu „2007” — wierzymy folderowi
+                f = f"{rodz}/{rodz} z {rf[0]}/" + czysta_nazwa(
+                    (f"{MIESIACE[rf[1] - 1]} {fr}" if rf[1] else f"{rf[0]} {fr}").strip())
+                uw.append(f"data z nazwy folderu ({rf[0]}) — sprawdź")
+            else:
+                f = f"{rodz}/{rodz} z {d.year}/{czysta_nazwa(f'{MIESIACE[d.month - 1]} {fr}'.strip())}"
+                if p["zrodlo_daty"] == "plik" and not rf:
+                    uw.append("data z pliku — sprawdź")
             if uw_m:
                 uw.append(uw_m)
-            if p["zrodlo_daty"] == "plik":
-                uw.append("data z pliku — sprawdź")
         elif p["rodzaj"] == "film":
             f = "Filmy/Inne/" + _prefiks_zrodla(p)
         elif p["rodzaj"] == "muzyka":
@@ -333,8 +350,20 @@ def _prefiks_zrodla(p: dict) -> str:
     return "/".join(cz + ([czysta_sciezka(rel)] if rel else [])).strip("/") or "Pozostałe"
 
 
+def _rok_folderu(p: dict) -> tuple[int, int | None] | None:
+    """(rok, miesiąc|None) z najbliższego folderu nazwanego rokiem (względem wybranego folderu źródłowego)."""
+    if not p.get("zrodlo"):
+        return None
+    for seg in reversed(os.path.dirname(_rel(p["sciezka"], p["zrodlo"])).split("/")):
+        m = _ROK_FOLDERU.match(seg.strip())
+        if m:
+            return int(m.group(1)), int(m.group(2)) if m.group(2) else None
+    return None
+
+
 def _wlasne_nagranie(p: dict) -> bool:
-    return p["lat"] is not None or p["zrodlo_daty"] == "nazwa" or bool(_NAGRANIE.search(os.path.basename(p["sciezka"])))
+    return (p["lat"] is not None or p["zrodlo_daty"] == "nazwa" or bool(_NAGRANIE.search(os.path.basename(p["sciezka"])))
+            or _rok_folderu(p) is not None)
 
 
 def _etykiety_miejsc(media: list[dict], dom_wymuszony: str | None = None

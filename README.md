@@ -174,6 +174,11 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.29.4:** filmy w folderach nazwanych rokiem (`2007`, `2009-07 Mazury`, `2016_08`) to własne nagrania — trafiają do
+`Filmy\Filmy z <rok>\<miesiąc>` zamiast do `Filmy\Inne` (gdy data pliku nie pasuje do folderu, liczy się rok
+z folderu, z uwagą „data z nazwy folderu — sprawdź”). Filmy, które wcześniej trafiły do `Filmy\Inne`, przy nowej
+propozycji drzewa przenoszą się w obrębie biblioteki do drzewa lat. Filmy kinowe („Avatar (2009)”) zostają w Inne.
+
 **1.29.3:** 🛟 Odzyskiwanie — odzyskane pliki można zapisać także na **dysku sieciowym** (np. Z: na NAS-ie) —
 przydatne, gdy w komputerze jest tylko dysk C:. Windows File Recovery działa jako administrator i nie widzi
 zmapowanych liter, więc program sam podłącza udział (`net use`, zapisane hasło Windows), a w razie potrzeby używa

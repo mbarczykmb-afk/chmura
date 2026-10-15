@@ -391,3 +391,32 @@ def test_propozycja_po_uporzadkowaniu_nie_czyta_calej_biblioteki(swiat, monkeypa
         "SELECT rozmiar FROM pliki WHERE korzen = ?", (str(k),))}
     assert all(os.path.getsize(c) in rozm_zr for c in w_celu)
     assert str(k / "nowy.bin") not in czytane
+
+
+def test_filmy_w_folderach_z_rokiem_do_drzewa_lat(tmp_path):
+    """Własne nagrania bez GPS i nazwy z aparatu, ale w folderach „2007”, „2009-07 Mazury” — do „Filmy z <rok>”;
+    także te, które wcześniej trafiły do „Filmy/Inne” w bibliotece. Film kinowy „Avatar (2009)” — dalej Inne."""
+    k = tmp_path / "dysk" / "Filmy"
+    for f in ("2009-07 Mazury", "Avatar (2009)"):
+        (k / f).mkdir(parents=True)
+    (k / "2009-07 Mazury" / "rejs.mp4").write_bytes(b"MP4" * 300)
+    (k / "Avatar (2009)" / "Avatar.mkv").write_bytes(b"MKV" * 300)
+    cel = tmp_path / "Biblioteka"
+    stare = cel / "Filmy" / "Inne" / "mbarczykmb" / "Filmy" / "2007"
+    stare.mkdir(parents=True)
+    (stare / "Barczyk kable dom.mp4").write_bytes(b"AVI" * 300)
+    (cel / "Filmy" / "Inne" / "Kino").mkdir(parents=True)
+    (cel / "Filmy" / "Inne" / "Kino" / "Matrix.mkv").write_bytes(b"MKV" * 301)
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(tmp_path / "dysk"), db, wypisz=lambda *_: None)
+    skaner.skanuj(str(cel), db, wypisz=lambda *_: None)
+    planista.generuj(db, [{"sciezka": str(tmp_path / "dysk"), "tryb": "kopiuj"}], str(cel), dom="Olkusz")
+    c = {os.path.basename(r["sciezka"]): (r["cel"], r["tryb"], r["uwaga"]) for r in db.execute("SELECT * FROM plan")}
+    assert c["rejs.mp4"][0].startswith("Filmy/Filmy z 2009/Lipiec")
+    assert c["Avatar.mkv"][0].startswith("Filmy/Inne/")
+    assert c["Barczyk kable dom.mp4"][0].startswith("Filmy/Filmy z 2007/2007") and c["Barczyk kable dom.mp4"][1] == "przenies"
+    assert "data z nazwy folderu (2007)" in c["Barczyk kable dom.mp4"][2]
+    assert c["Matrix.mkv"][1] == "istniejacy"  # kinowy w „Inne” zostaje
+    wykonawca.wykonaj(db)
+    assert list((cel / "Filmy" / "Filmy z 2007").rglob("Barczyk kable dom.mp4"))
+    assert not (stare / "Barczyk kable dom.mp4").exists() and (cel / "Filmy" / "Inne" / "Kino" / "Matrix.mkv").exists()
