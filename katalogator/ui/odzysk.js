@@ -94,18 +94,25 @@ $("odz-szukaj").onclick = async () => {
       }, odz.doFolderu ? "glowny" : "", "Wybrany folder (ta sama nazwa pliku; gdy zajęta — „(odzyskane)”)"));
   };
   rysujDokad(); l.append(dokad);
-  const grupa = (tytul, lista, opis, akcje) => {
+  // zwiniete: grupa jako jedna linia „▸ … — 500 plików” (kosz programu — to nie są pliki usunięte w Windows)
+  const grupa = (tytul, lista, opis, akcje, zwiniete = false) => {
     if (!lista || !lista.length) return 0;
-    l.append(odzEl("div", {className: "odz-grupa", textContent: `${tytul} — ${lista.length}${lista.length >= 500 ? "+" : ""}`}));
-    if (opis) l.append(odzEl("div", {className: "info", textContent: opis}));
+    const nagl = `${tytul} — ${lista.length}${lista.length >= 500 ? "+" : ""}`;
+    let box = l;
+    if (zwiniete) {
+      box = odzEl("details", {className: "odz-zwin"}, odzEl("summary", {className: "odz-grupa", textContent: nagl}));
+      l.append(box);
+    } else l.append(odzEl("div", {className: "odz-grupa", textContent: nagl}));
+    if (opis) box.append(odzEl("div", {className: "info", textContent: opis}));
     for (const x of lista.slice(0, 200)) {
+      const kiedy = x.usuniety ? "usunięty " + kiedyTxt(x.usuniety) : x.data ? "z " + kiedyTxt(x.data) : "";
       const el = odzEl("div", {className: "odz-el"}, odzEl("span", {className: "ik", textContent: IKONY_ODZ[x.rodzaj] || "📦"}),
         odzEl("div", {className: "op"}, odzEl("b", {textContent: x.nazwa, title: x.nazwa}),
-              odzEl("span", {textContent: [x.oryginal || x.gdzie || "", odzRozmiar(x.rozmiar), x.usuniety ? "usunięty " + kiedyTxt(x.usuniety) : ""].filter(Boolean).join(" · ")})),
+              odzEl("span", {textContent: [x.oryginal || x.gdzie || "", odzRozmiar(x.rozmiar), kiedy].filter(Boolean).join(" · ")})),
         odzEl("div", {className: "akcje"}, ...akcje(x, () => el)));
-      l.append(el);
+      box.append(el);
     }
-    return lista.length;
+    return zwiniete ? 0 : lista.length;
   };
   const pokaz = x => odzPrzycisk("📂", () => api("/api/odzysk/pokaz", {sciezka: x.sciezka}).catch(e => toast(e.message)), "", "Pokaż w Eksploratorze");
   const przywrocBtn = (x, el, tekst) => odzPrzycisk(tekst, async () => {
@@ -123,8 +130,8 @@ $("odz-szukaj").onclick = async () => {
              (w.kopia_przerwane ? " (pokazuję pierwsze znalezione — zawęź nazwą albo rodzajem)" : ""),
              (x, el) => [przywrocBtn(x, el, "↺ Przywróć"), pokaz(x)]);
   n += grupa("🗑 Kosz programu (Odłożone)", w.kosz_programu, "Pliki odłożone w Katalogatorze — przywracasz w 🗑 Koszu (przycisk w nagłówku).",
-             x => [odzPrzycisk("🗑 Kosz", () => { $("okno-odzysk").hidden = true; $("kosz-btn").click(); }), pokaz(x)]);
-  if (!n) l.append(odzEl("div", {className: "info", textContent: "W koszach" + (odz.info.kopia ? " i w kopii zapasowej" : "") + " nic takiego nie ma — spróbuj głębokiego szukania niżej."}));
+             x => [odzPrzycisk("🗑 Kosz", () => { $("okno-odzysk").hidden = true; $("kosz-btn").click(); }), pokaz(x)], true);
+  if (!n) l.append(odzEl("div", {className: "uwaga", textContent: "W koszach Windows" + (odz.info.kopia ? " i w kopii zapasowej" : "") + " nic takiego nie ma — użyj głębokiego szukania niżej (punkt 3): przeszuka sam dysk, także po opróżnieniu kosza."}));
   if (!odz.info.kopia) l.append(odzEl("div", {className: "info", textContent: "💡 Na przyszłość: ⚙ Ustawienia → 💾 Kopia zapasowa — wtedy usunięte zdjęcia zawsze znajdą się tutaj, nawet po latach."}));
   $("odz-gleboko").hidden = false; rysujGleboko();
 };
@@ -192,7 +199,7 @@ async function rysujGleboko() {
   };
   opisCelu();
   t.append(odzEl("div", {className: "odz-wiersz"}, odzEl("span", {className: "odz-et", textContent: "Zapisz odzyskane w"}), sel, celInfo));
-  t.append(odzEl("div", {className: "odz-wiersz"}, odzPrzycisk("🛟 Zacznij odzyskiwanie", async e => {
+  t.append(odzEl("div", {className: "odz-wiersz"}, odzPrzycisk("▶ Zacznij odzyskiwanie", async e => {
     e.target.disabled = true;
     try {
       if (sel.value === "__inny") return;
@@ -210,6 +217,14 @@ function czekajNaWinfr(btn, proby = 0) {
 }
 function rysujPostep(z) {
   const t = $("odz-gleboko-tresc"); t.replaceChildren();
+  if (z.nie_ruszylo) {  // po minucie brak dziennika: Windows nie uruchomił odzyskiwania (odmowa zgody, blokada)
+    t.append(odzEl("div", {className: "uwaga", textContent: "Odzyskiwanie nie ruszyło. Windows powinien był zapytać o zgodę administratora " +
+      "(okienko „Czy zezwolić tej aplikacji…” — czasem miga tylko na pasku zadań). Jeśli kliknąłeś „Nie” albo okienko się nie pojawiło — spróbuj jeszcze raz."}),
+      odzEl("div", {className: "odz-wiersz"}, odzPrzycisk("↺ Spróbuj ponownie", async () => {
+        try { await api("/api/odzysk/zapomnij", {}); odz.info.zadanie = null; rysujGleboko(); } catch (e) { toast(e.message); }
+      }, "glowny")));
+    return;
+  }
   t.append(odzEl("div", {className: "odz-wiersz"}, odzEl("b", {textContent: `⏳ Odzyskiwanie trwa — ${z.zrodlo}`}),
                  odzEl("span", {className: "info", textContent: `od ${kiedyTxt(z.start * 1000)} · znalezione pliki: ${z.znalezione}`})));
   const p = odzEl("div", {className: "odz-pasek"}, odzEl("i")); p.firstChild.style.width = `${z.procent || 2}%`; t.append(p);

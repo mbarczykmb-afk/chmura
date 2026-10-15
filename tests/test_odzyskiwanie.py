@@ -132,8 +132,23 @@ def test_skrypt_z_dyskiem_sieciowym():
     a = o.polecenie("winfr.exe", "C:", "Z:\\Odzysk", True, ["*100%*.mp4"])
     s = o.skrypt_cmd(a[:2], a[3:], "Z:\\Odzysk", "\\\\nas\\Public")
     assert 'net use Z: "\\\\nas\\Public"' in s and 'set "CEL=\\\\nas\\Public\\Odzysk"' in s
-    assert 'winfr.exe C: "%CEL%" /extensive /n *100%%*.mp4 /a > "%CEL%\\winfr.log"' in s  # % w filtrze podwojony
+    assert 'winfr.exe C: "%CEL%" /extensive /n *100%%*.mp4 /a >> "%LOG%" 2>&1' in s  # % w filtrze podwojony
+    assert 'set "LOG=Z:\\Odzysk\\winfr.log"' in s  # bez folderu roboczego — dziennik obok wyników
+    r = o.skrypt_cmd(a[:2], a[3:], "Z:\\Odzysk", "\\\\nas\\Public", "C:\\Dane\\odzysk")
+    assert 'set "LOG=C:\\Dane\\odzysk\\winfr.log"' in r and "BLAD: brak dostepu" in r
     lok = o.skrypt_cmd(a[:2], a[3:], "E:\\Odzyskane przez Katalogator")
     assert "net use" not in lok and 'set "CEL=E:\\Odzyskane przez Katalogator"' in lok
     assert o._unc("Z:\\Odzysk\\.x.cmd", "\\\\nas\\Public\\") == "\\\\nas\\Public\\Odzysk\\.x.cmd"
     assert o._unc("E:\\a", "") == "E:\\a"
+
+
+def test_odzyskiwanie_ktore_nie_ruszylo(tmp_path):
+    rob = tmp_path / "odzysk"
+    rob.mkdir()
+    z = {"cel": str(tmp_path / "wyniki"), "robocze": str(rob), "start": time.time() - 120}
+    assert o.postep(z)["nie_ruszylo"]
+    (rob / o.DZIENNIK).write_text("Start 15.10.2026\nZapis do: Y:\\Odzyskane")
+    p = o.postep(z)
+    assert not p["nie_ruszylo"] and not p["zakonczone"] and "Zapis do" in p["komunikat"]
+    (rob / o.KONIEC).write_text("3 ")
+    assert o.postep(z)["kod"] == 3

@@ -345,9 +345,9 @@ class Stan:
                 if not udzial:
                     return {"blad": f"Nie znam ścieżki sieciowej dysku {cel[:2]} — podłącz go ponownie w Eksploratorze."}
         w = odzyskiwanie.uruchom(dysk, cel, folder, self.odzysk_typ(dane), str(dane.get("fraza") or ""),
-                                 bool(dane.get("dokladnie", True)), udzial)
+                                 bool(dane.get("dokladnie", True)), udzial, str(Path(self.katalog) / "odzysk"))
         if w.get("ok"):
-            zad = {k: w[k] for k in ("cel", "start", "polecenie")} | {"zrodlo": zrodlo, "typ": self.odzysk_typ(dane),
+            zad = {k: w[k] for k in ("cel", "robocze", "start", "polecenie")} | {"zrodlo": zrodlo, "typ": self.odzysk_typ(dane),
                                                                      "fraza": dane.get("fraza") or ""}
             aktualizacje.zapisz_ustawienia(self.katalog, odzysk=zad)
             LOG.info("Odzyskiwanie: winfr %s", w["polecenie"])
@@ -1529,6 +1529,9 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/odzysk/start":
                 w = stan.odzysk_start(dane)
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/odzysk/zapomnij":  # zadanie, które nie ruszyło — można zacząć od nowa
+                aktualizacje.zapisz_ustawienia(stan.katalog, odzysk=None)
+                return self._wyslij({"ok": True})
             if u.path == "/api/odzysk/instaluj":
                 w = odzyskiwanie.instaluj()
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)

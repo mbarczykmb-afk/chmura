@@ -174,6 +174,11 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.29.5:** 🛟 Odzyskiwanie — skrypt i dziennik Windows File Recovery leżą lokalnie (w danych programu, kilka KB),
+na dysk docelowy idą tylko odzyskane pliki — start działa także z zapisem na dysk sieciowy; gdy odzyskiwanie nie
+ruszy (brak zgody administratora) — komunikat i *↺ Spróbuj ponownie*; błąd dostępu do miejsca zapisu widać
+w dzienniku · kosz programu (Odłożone) zwinięty w jedną linię, z datą pliku zamiast „usunięty”.
+
 **1.29.4:** filmy w folderach nazwanych rokiem (`2007`, `2009-07 Mazury`, `2016_08`) to własne nagrania — trafiają do
 `Filmy\Filmy z <rok>\<miesiąc>` zamiast do `Filmy\Inne` (gdy data pliku nie pasuje do folderu, liczy się rok
 z folderu, z uwagą „data z nazwy folderu — sprawdź”). Filmy, które wcześniej trafiły do `Filmy\Inne`, przy nowej

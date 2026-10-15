@@ -125,26 +125,34 @@ def _unc(sciezka: str, udzial: str) -> str:
     return udzial.rstrip("\\") + "\\" + ntpath.splitdrive(sciezka)[1].lstrip("\\") if udzial else sciezka
 
 
-def skrypt_cmd(args_przed: list[str], args_po: list[str], cel: str, udzial: str = "") -> str:
-    """Treść .cmd uruchamianego jako administrator. Dysk sieciowy (Z:) w sesji administratora nie istnieje —
-    podłączamy go („net use”, zapisane hasło z Windows), a gdy się nie da — używamy ścieżki \\\\serwer\\udział."""
+def skrypt_cmd(args_przed: list[str], args_po: list[str], cel: str, udzial: str = "", robocze: str = "") -> str:
+    """Treść .cmd uruchamianego jako administrator. Skrypt i dziennik leżą lokalnie (`robocze`, kilka KB) — tylko
+    odzyskane pliki idą na `cel`. Dysk sieciowy (Z:) w sesji administratora nie istnieje — podłączamy go („net use”,
+    zapisane hasło z Windows), a gdy się nie da — używamy ścieżki \\\\serwer\\udział."""
     esc = lambda a: _cmd(a).replace("%", "%%")  # noqa: E731
-    linie = ["@echo off", "chcp 65001 >nul", "title Katalogator - odzyskiwanie (zamknij, aby przerwac)"]
+    robocze = robocze or cel
+    linie = ["@echo off", "chcp 65001 >nul", "title Katalogator - odzyskiwanie (zamknij, aby przerwac)",
+             f'set "LOG={ntpath.join(robocze, DZIENNIK)}"', f'set "KON={ntpath.join(robocze, KONIEC)}"',
+             'echo Start %date% %time% > "%LOG%"']
     if udzial:
         lit = cel[:2]
         linie += [f'if not exist "{lit}\\" net use {lit} "{udzial}" /persistent:no >nul 2>&1',
                   f'if exist "{lit}\\" (set "CEL={cel}") else (set "CEL={_unc(cel, udzial)}")']
     else:
         linie.append(f'set "CEL={cel}"')
-    linie.append(f'{esc(args_przed)} "%CEL%" {esc(args_po)} > "%CEL%\\{DZIENNIK}" 2>&1')
-    linie.append(f'echo %errorlevel% > "%CEL%\\{KONIEC}"')
+    linie += ['echo Zapis do: %CEL% >> "%LOG%"',
+              'if not exist "%CEL%\\" mkdir "%CEL%" >nul 2>&1',
+              'if not exist "%CEL%\\" (echo BLAD: brak dostepu do miejsca zapisu >> "%LOG%" & echo 3 > "%KON%" & exit /b 3)',
+              f'{esc(args_przed)} "%CEL%" {esc(args_po)} >> "%LOG%" 2>&1',
+              'echo %errorlevel% > "%KON%"']
     return "\n".join(linie) + "\n"
 
 
-def uruchom(dysk: str, cel_miejsce: str, folder: str, typ, fraza: str, dokladnie: bool, udzial: str = "") -> dict:
+def uruchom(dysk: str, cel_miejsce: str, folder: str, typ, fraza: str, dokladnie: bool, udzial: str = "",
+            robocze: str = "") -> dict:
     """Start winfr z uprawnieniami administratora (Windows zapyta o zgodę). Okno winfr — zminimalizowane;
     zamknięcie go przerywa szukanie. `cel_miejsce` — dysk albo folder na odzyskane pliki (na innym dysku);
-    `udzial` — dla dysku sieciowego jego ścieżka \\\\serwer\\udział."""
+    `udzial` — dla dysku sieciowego jego ścieżka \\\\serwer\\udział; `robocze` — lokalny folder na skrypt i dziennik."""
     exe = winfr()
     if not exe:
         return {"blad": "Najpierw zainstaluj Windows File Recovery (przycisk wyżej)."}
@@ -152,26 +160,30 @@ def uruchom(dysk: str, cel_miejsce: str, folder: str, typ, fraza: str, dokladnie
         return {"blad": "Odzyskane pliki muszą trafić na INNY dysk niż ten, na którym ich szukasz — "
                         "inaczej nadpisałyby to, co chcemy odzyskać. Wybierz dysk sieciowy, pendrive albo dysk USB."}
     cel = folder_wynikow(cel_miejsce)
-    os.makedirs(cel, exist_ok=True)
+    try:
+        os.makedirs(cel, exist_ok=True)
+    except OSError as e:
+        return {"blad": f"Nie mogę utworzyć folderu {cel}: {e.strerror or e}"}
+    robocze = robocze or cel
+    os.makedirs(robocze, exist_ok=True)
     for n in (DZIENNIK, KONIEC):
         try:
-            os.remove(os.path.join(cel, n))
+            os.remove(os.path.join(robocze, n))
         except OSError:
             pass
     args = polecenie(exe, dysk[:2], cel, dokladnie, wzorce(folder, typ, fraza))
-    skrypt = os.path.join(cel, SKRYPT)
+    skrypt = os.path.join(robocze, SKRYPT)
     with open(skrypt, "w", encoding="utf-8", newline="\r\n") as f:
-        f.write(skrypt_cmd(args[:2], args[3:], cel, udzial))
+        f.write(skrypt_cmd(args[:2], args[3:], cel, udzial, robocze))
     if not WINDOWS:
         return {"blad": "Windows File Recovery działa tylko w Windows 10/11."}
     import ctypes
-    sk = _unc(skrypt, udzial)  # sesja administratora nie zna litery dysku sieciowego — skrypt po ścieżce \\\\serwer
     w = ctypes.windll.shell32.ShellExecuteW(None, "runas", os.environ.get("ComSpec", "cmd.exe"),
-                                            f'/c "{sk}"', None, 7)  # 7 = zminimalizowane, bez fokusu
+                                            f'/c "{skrypt}"', None, 7)  # 7 = zminimalizowane, bez fokusu
     if w <= 32:
         return {"blad": "Windows nie pozwolił uruchomić odzyskiwania (potrzebna zgoda administratora — "
                         "kliknij „Tak” w okienku Windows)."}
-    return {"ok": True, "cel": cel, "start": time.time(), "polecenie": _cmd(args[1:])}
+    return {"ok": True, "cel": cel, "robocze": robocze, "start": time.time(), "polecenie": _cmd(args[1:])}
 
 
 def _czytaj(sciezka: str) -> str:
@@ -195,14 +207,18 @@ def postep(zadanie: dict | None) -> dict | None:
     if not zadanie or not zadanie.get("cel"):
         return None
     cel = zadanie["cel"]
-    log = _czytaj(os.path.join(cel, DZIENNIK))
+    rob = zadanie.get("robocze") or cel
+    jest_log = os.path.exists(os.path.join(rob, DZIENNIK))
+    log = _czytaj(os.path.join(rob, DZIENNIK))
     linie = [x.strip() for x in re.split(r"[\r\n]+", log) if x.strip()]
     procent = None
     for m in re.finditer(r"(\d{1,3})\s*%", log):
         procent = min(100, int(m.group(1)))
-    koniec = _czytaj(os.path.join(cel, KONIEC)).strip()
+    koniec = _czytaj(os.path.join(rob, KONIEC)).strip()
     kod = int(koniec) if koniec.lstrip("-").isdigit() else None
-    return {**zadanie, "procent": procent, "komunikat": linie[-1][:300] if linie else "",
+    # skrypt najpierw zapisuje „Start …” — brak dziennika po minucie: Windows nie uruchomił odzyskiwania
+    nie_ruszylo = kod is None and not jest_log and time.time() - zadanie.get("start", 0) > 60
+    return {**zadanie, "procent": procent, "nie_ruszylo": nie_ruszylo, "komunikat": linie[-1][:300] if linie else "",
             "dziennik": "\n".join(linie[-12:]), "zakonczone": kod is not None, "kod": kod,
             "znalezione": len(_pliki_wynikow(cel, zadanie.get("start", 0), limit=100000))}
 
@@ -341,7 +357,8 @@ def kosz_programu(korzenie: list[str], typ, fraza: str, limit: int = 500) -> lis
                         continue
                     wynik.append({"zrodlo": "kosz_programu", "sciezka": p, "nazwa": n, "oryginal": "",
                                   "rozmiar": st.st_size, "rodzaj": rodzaj_pliku(n), "gdzie": os.path.relpath(katalog, o),
-                                  "usuniety": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds")})
+                                  "usuniety": None,  # data pliku, nie usunięcia
+                                  "data": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds")})
                     if len(wynik) >= limit:
                         return wynik
     return wynik
