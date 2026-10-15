@@ -269,6 +269,8 @@ async function pokazWyniki(odNowa) {
   for (const [v, n] of [[0, "wszystkie rozmiary"], [10, "≥ 10 KB"], [100, "≥ 100 KB (bez miniaturek)"], [1024, "≥ 1 MB"]]) minSel.append(odzEl("option", {value: v, textContent: n, selected: odz.min === v}));
   minSel.onchange = () => { odz.min = +minSel.value; pokazWyniki(true); };
   pasek.append(odzEl("b", {textContent: `${r.razem.toLocaleString("pl-PL")} plików`}), minSel,
+    odzPrzycisk("🛠 Napraw filmy", () => naprawFilmy(odz.wyniki.filter(p => p.rodzaj === "filmy" && !/_naprawiony\d*\./.test(p.nazwa))),
+                "", "Odbudowuje odzyskane filmy, których nie da się otworzyć (wynik obok: <nazwa>_naprawiony.mp4)"),
     odzPrzycisk("📂 Otwórz folder", () => api("/api/odzysk/pokaz", {sciezka: r.folder}).catch(e => toast(e.message))),
     odzPrzycisk("🔭 Przeglądaj na osi czasu", async () => {
       try {
@@ -295,12 +297,58 @@ async function pokazWyniki(odNowa) {
     }
     const STANY = {pusty: "∅ pusty — SSD wyczyścił zawartość", uszkodzony: "⚠ uszkodzony"};
     if (STANY[p.stan]) ob.append(odzEl("span", {className: "odz-stan " + p.stan, textContent: STANY[p.stan]}));
+    if (p.rodzaj === "filmy" && !/_naprawiony\d*\./.test(p.nazwa)) {
+      const nb = odzEl("button", {className: "odz-napraw", textContent: "🛠", title: "Napraw ten film"});
+      nb.onclick = e => { e.stopPropagation(); naprawFilmy([p]); };
+      ob.append(nb);
+    }
     s.append(odzEl("div", {className: "odz-k" + (p.stan === "pusty" ? " pusty" : ""), title: `${p.gdzie}\\${p.nazwa}\nKliknij — pokaż w Eksploratorze`,
                            onclick: () => api("/api/odzysk/pokaz", {sciezka: p.sciezka}).catch(e => toast(e.message))},
                    ob, odzEl("div", {className: "op"}, odzEl("b", {textContent: p.nazwa}), odzEl("span", {textContent: odzRozmiar(p.rozmiar)}))));
   }
   if (odz.wyniki.length < odz.razem) s.append(odzPrzycisk(`Pokaż kolejne (zostało ${odz.razem - odz.wyniki.length})`, () => pokazWyniki(false), "wiecej"));
   if (!r.razem) s.append(odzEl("div", {className: "info", textContent: "Nic nie odzyskano z tymi filtrami. Spróbuj trybu „dokładnie”, całego dysku albo bez fragmentu nazwy."}));
+}
+
+// 🛠 naprawa odzyskanych filmów: ffmpeg, a gdy brak indeksu (moov) — untrunc z wzorcem (działający film z tego źródła)
+async function naprawFilmy(lista, wzorzec = "") {
+  if (!lista.length) { toast("Brak filmów do naprawy."); return; }
+  let box = $("odz-naprawa");
+  if (!box) { box = odzEl("div", {id: "odz-naprawa", className: "odz-krok"}); $("odz-siatka").before(box); }
+  const stan = odzEl("div", {className: "info"}); box.replaceChildren(odzEl("b", {textContent: "🛠 Naprawa filmów"}), stan);
+  let ok = 0; const wz = [], bl = [];
+  for (const [i, p] of lista.entries()) {
+    stan.textContent = `Naprawiam ${i + 1} z ${lista.length}: ${p.nazwa}` + (wzorzec ? " (odbudowa indeksu — może potrwać)" : "") + "…";
+    try {
+      const r = await api("/api/odzysk/napraw", {sciezka: p.sciezka, wzorzec});
+      if (r.ok) ok++; else if (r.potrzebny_wzorzec) wz.push(p); else bl.push(`${p.nazwa}: ${r.blad}`);
+    } catch (e) { bl.push(`${p.nazwa}: ${e.message}`); }
+  }
+  stan.textContent = `Naprawione: ${ok} z ${lista.length}` + (ok ? " — pliki „…_naprawiony.mp4” obok oryginałów (na początku listy)." : ".") +
+    (bl.length ? ` Nie udało się: ${bl.length}.` : "");
+  if (bl.length) box.append(odzEl("div", {className: "odz-log", textContent: bl.slice(0, 20).join("\n")}));
+  if (wz.length && !wzorzec) {
+    box.append(odzEl("div", {className: "uwaga", textContent: `${wz.length} filmów nie ma indeksu (moov) — dane obrazu są, ale trzeba je odbudować ` +
+      "na podstawie WZORCA: działającego filmu z tego samego źródła (np. inne nagranie Zoom, film z tego samego telefonu), " +
+      "najlepiej o podobnych ustawieniach. Program pobierze raz darmowy untrunc z GitHuba."}));
+    const wyb = odzEl("div", {className: "odz-wiersz"});
+    const rysujWzorce = async folder => {
+      const r = await api("/api/odzysk/filmy", {folder});
+      const sel = odzEl("select");
+      for (const f of r.filmy) sel.append(odzEl("option", {value: f.sciezka, textContent: `${f.nazwa} — ${odzRozmiar(f.rozmiar)}`}));
+      wyb.replaceChildren(odzEl("span", {className: "odz-et", textContent: "Wzorzec"}), sel,
+        odzPrzycisk(`🛠 Napraw ${wz.length} z tym wzorcem`, () => sel.value && naprawFilmy(wz, sel.value), "glowny"),
+        odzPrzycisk("Inny folder…", wybierz));
+      if (!r.filmy.length) wyb.prepend(odzEl("div", {className: "info", textContent: "W tym folderze nie ma filmów — wybierz inny."}));
+    };
+    const wybierz = () => {
+      $("okno-odzysk").hidden = true;
+      otworzWyborFolderu("Folder z DZIAŁAJĄCYM filmem z tego samego źródła (wzorzec)", "", f => { $("okno-odzysk").hidden = false; rysujWzorce(f); });
+    };
+    wyb.append(odzPrzycisk("📂 Wybierz folder z działającym filmem…", wybierz, "glowny"));
+    box.append(wyb);
+  }
+  if (ok) pokazWyniki(true);
 }
 
 // zmiana „co / gdzie / kiedy” — opis głębokiego szukania od razu aktualny

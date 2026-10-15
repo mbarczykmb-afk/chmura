@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, odzyskiwanie, pilot, planista, projekty, przegladarka,
+from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, naprawa, odzyskiwanie, pilot, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, usuwanie, wykonawca, wysylanie)
 from .logi import LOG
 
@@ -1528,6 +1528,16 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/odzysk/start":
                 w = stan.odzysk_start(dane)
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path in ("/api/odzysk/diagnoza", "/api/odzysk/napraw"):  # 🛠 naprawa odzyskanych filmów
+                sc = str(dane.get("sciezka") or "")
+                if not odzyskiwanie.w_wynikach(stan.odzysk_zadanie(), sc):
+                    return self._wyslij({"blad": "Naprawiam tylko pliki z folderu odzyskanych."}, kod=HTTPStatus.BAD_REQUEST)
+                if u.path.endswith("diagnoza"):
+                    return self._wyslij(naprawa.diagnoza(sc))
+                w = naprawa.napraw(sc, Path(stan.katalog), str(dane.get("wzorzec") or "") or None)
+                return self._wyslij(w)
+            if u.path == "/api/odzysk/filmy":  # wybór wzorca: filmy w folderze
+                return self._wyslij({"filmy": naprawa.filmy_w(str(dane.get("folder") or ""))})
             if u.path == "/api/odzysk/zapomnij":  # zadanie, które nie ruszyło — można zacząć od nowa
                 aktualizacje.zapisz_ustawienia(stan.katalog, odzysk=None)
                 return self._wyslij({"ok": True})

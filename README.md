@@ -174,6 +174,12 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.30:** 🛟 Odzyskiwanie — **🛠 Napraw filmy**: odzyskane filmy, których nie da się otworzyć (Windows: 0xc00d36e5).
+Program sprawdza budowę pliku MP4: gdy indeks jest (plik ucięty / uszkodzone fragmenty) — przepisuje go ffmpeg-iem;
+gdy indeksu (`moov`) brak — co zwykle dzieje się przy odzyskiwaniu „po sygnaturze” (pliki `1.mp4`, `2.mp4`…
+w folderze `mp4`) — odbudowuje go darmowym programem **untrunc** na podstawie **wzorca**: działającego filmu z tego
+samego źródła (inne nagranie Zoom, film z tego samego telefonu). Wynik `<nazwa>_naprawiony.mp4` obok oryginału.
+
 **1.29.9:** 🛟 Odzyskiwanie — każdy odzyskany plik jest sprawdzany: **∅ pusty** (same zera — dysk SSD wyczyścił
 zawartość, TRIM; nie do odzyskania), **⚠ uszkodzony** (zły początek pliku) albo dobry; dobre na początku listy,
 podsumowanie „działa X z Y”.
