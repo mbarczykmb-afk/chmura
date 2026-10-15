@@ -127,6 +127,34 @@ button.ikonowy:hover{color:var(--blad)}
 .wybrane-nagl{margin:12px 0 6px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
 details.reczne{margin-top:10px;font-size:13px;color:var(--mut)}
 details.reczne summary{cursor:pointer;margin-bottom:6px}
+/* --- 🛟 odzyskiwanie --- */
+.odz{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:4px}
+.odz-krok{border:1px solid var(--lin);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.odz-krok h3{margin:0;font-size:15px}
+.odz-wiersz{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13.5px}
+.odz-wiersz label{display:flex;gap:6px;align-items:center}
+.odz-et{min-width:120px;color:var(--mut)}
+#odz-fraza{flex:1;min-width:220px;font:inherit;padding:7px 10px;border:1px solid var(--lin);border-radius:8px;background:var(--bg);color:var(--fg)}
+#odz-skad,.odz select{min-width:240px;font:inherit;padding:6px 10px;border:1px solid var(--lin);border-radius:8px;background:var(--bg);color:var(--fg);max-width:100%}
+.odz .seg{display:inline-flex;border:1px solid var(--lin);border-radius:8px;overflow:hidden}
+.odz .seg button{border:0;border-radius:0;border-right:1px solid var(--lin)}
+.odz .seg button:last-child{border-right:0}
+.odz .seg button.akt{background:var(--akc);color:#fff}
+.odz-grupa{font-size:13px;font-weight:600;margin-top:4px}
+.odz-el{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--lin);font-size:13px}
+.odz-el .ik{font-size:26px;text-align:center}
+.odz-el .op{min-width:0}.odz-el .op b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.odz-el .op span{color:var(--mut);font-size:12px;word-break:break-all}
+.odz-el .akcje{display:flex;gap:6px}
+.odz-pasek{height:8px;border-radius:6px;background:var(--lin);overflow:hidden}.odz-pasek i{display:block;height:100%;background:var(--akc);transition:width .6s}
+.odz-log{font:12px/1.4 Consolas,monospace;white-space:pre-wrap;background:var(--bg);border:1px solid var(--lin);border-radius:8px;padding:8px;max-height:140px;overflow:auto;color:var(--mut)}
+.odz-siatka{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.odz-k{border:1px solid var(--lin);border-radius:10px;overflow:hidden;background:var(--bg);cursor:pointer;font-size:12px}
+.odz-k .ob{aspect-ratio:4/3;display:grid;place-items:center;font-size:34px;background:var(--lin)}
+.odz-k .ob img{width:100%;height:100%;object-fit:cover}
+.odz-k .op{padding:5px 7px}.odz-k .op b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.odz-k .op span{color:var(--mut)}
+.odz .uwaga{background:color-mix(in srgb,#f59e0b 15%,transparent);border:1px solid color-mix(in srgb,#f59e0b 45%,transparent);border-radius:8px;padding:8px 10px;font-size:13px}
 /* --- ⚙ Ustawienia --- */
 .ust{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding-right:4px}
 .ust section{border:1px solid var(--lin);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
@@ -440,7 +468,8 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
   rgba(5,8,20,.72) 62%,rgba(5,8,20,.92) 100%);pointer-events:none}
 .wt-okno{position:relative;width:min(1100px,100%)}
 .wt-okno h2{margin:0 0 16px;font-size:28px;text-align:center;text-shadow:0 2px 18px rgba(0,0,0,.8)}
-.wt-kafle{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.wt-kafle{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+@media (max-width:1100px){.wt-kafle{grid-template-columns:repeat(2,1fr)}}
 .wt-kafel{display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:left;padding:24px 22px;min-height:200px;border-radius:20px;
   border:1px solid rgba(160,180,255,.28);background:rgba(13,20,42,.58);backdrop-filter:blur(14px) saturate(1.3);color:#eef2ff;cursor:pointer;
   position:relative;transition:transform .15s,box-shadow .15s,border-color .15s,background .15s;box-shadow:0 10px 40px rgba(0,0,0,.45)}
@@ -570,6 +599,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
   <button id="telefon-btn" title="Telefon jako pilot: co robi program, uruchamianie kolejnych kroków, przeglądanie zdjęć">📱</button>
   <button id="nagl-schowaj" title="Schowaj ten pasek (więcej miejsca na zdjęcia) — wróci strzałką ▾ na środku u góry">▴</button>
   <button id="motyw-btn" title="Motyw: jasny / ciemny" aria-label="Przełącz motyw jasny / ciemny"></button>
+  <button id="odzysk-btn" title="Odzyskiwanie usuniętych plików — także po opróżnieniu kosza i dawno temu">🛟<span class="t"> Odzyskaj</span></button>
   <button id="ust-btn" title="Ustawienia: wygląd, start z Windows, telefon, kopia zapasowa, aktualizacje">⚙</button>
   <div style="position:relative">
     <button id="pomoc-btn" title="Pomoc, zgłaszanie problemów, aktualizacje">?</button>
@@ -578,6 +608,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
       <button id="m-zglos">🐞 Zgłoś problem / wyślij raport…</button>
       <button id="m-aktualizacje">⟳ Sprawdź aktualizacje</button>
       <button id="m-ustawienia">⚙ Ustawienia</button>
+      <button id="m-odzysk">🛟 Odzyskaj usunięte pliki</button>
       <button id="m-o">ℹ O programie</button>
       <button id="m-motyw-auto">🖥 Motyw jak w systemie Windows</button>
     </div>
@@ -921,6 +952,43 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
     <label style="font-size:13px;display:flex;gap:6px;align-items:center">
       <input type="checkbox" id="o-akt"> Sprawdzaj automatycznie, czy jest nowa wersja (raz na 12 godzin, tylko zapytanie do GitHuba)</label>
     <div class="dol"><span class="wybor">Nazwy miejscowości: © GeoNames (CC BY 4.0)</span><button id="o-zamknij">Zamknij</button></div>
+  </div>
+</div>
+
+<div class="nakladka" id="okno-odzysk" hidden>
+  <div class="okno" role="dialog" aria-labelledby="okno-odzysk-tytul" style="width:min(1000px,96vw);height:min(860px,94vh)">
+    <h2 id="okno-odzysk-tytul">🛟 Odzyskiwanie usuniętych plików</h2>
+    <div class="odz" id="odz-tresc">
+      <section class="odz-krok">
+        <h3>1. Co zgubiłeś?</h3>
+        <div class="odz-wiersz"><span class="odz-et">Rodzaj</span>
+          <span class="seg" id="odz-typ"><button data-t="wszystko" class="akt">Wszystko</button><button data-t="zdjecia">📷 Zdjęcia</button><button data-t="filmy">🎬 Filmy</button><button data-t="dokumenty">📄 Dokumenty</button></span></div>
+        <div class="odz-wiersz"><span class="odz-et">Fragment nazwy</span>
+          <input id="odz-fraza" type="search" placeholder="opcjonalnie, np. zoom, faktura, IMG_2019 — puste = wszystkie" autocomplete="off"></div>
+        <div class="odz-wiersz"><span class="odz-et">Gdzie był</span>
+          <select id="odz-skad"></select><span class="info" id="odz-skad-info"></span></div>
+        <div class="odz-wiersz"><span class="odz-et">Kiedy usunięty</span>
+          <label><input type="radio" name="odz-tryb" value="1" checked> dawno, po formatowaniu, karta z aparatu — <b>dokładnie</b> (dłużej)</label>
+          <label><input type="radio" name="odz-tryb" value="0"> przed chwilą — <b>szybko</b></label></div>
+        <div class="odz-wiersz"><button class="glowny" id="odz-szukaj">🔍 Szukaj</button>
+          <span class="info">Najpierw sprawdzę kosze Windows na wszystkich dyskach, kosz programu i kopię zapasową — to trwa chwilę.</span></div>
+      </section>
+      <section class="odz-krok" id="odz-szybkie" hidden>
+        <h3>2. Znalezione od razu</h3>
+        <div id="odz-szybkie-lista"></div>
+      </section>
+      <section class="odz-krok" id="odz-gleboko" hidden>
+        <h3>3. Głębokie szukanie na dysku <small class="info">(Windows File Recovery — darmowy program Microsoftu)</small></h3>
+        <div id="odz-gleboko-tresc"></div>
+      </section>
+      <section class="odz-krok" id="odz-wyniki" hidden>
+        <h3>Odzyskane pliki</h3>
+        <div class="odz-wiersz" id="odz-wyniki-pasek"></div>
+        <div class="odz-siatka" id="odz-siatka"></div>
+      </section>
+    </div>
+    <div class="dol"><span class="wybor" id="odz-info">Nie zapisuj nic na dysku, z którego odzyskujesz — każdy nowy plik może nadpisać usunięty.</span>
+      <button id="odz-zamknij" class="glowny">Zamknij</button></div>
   </div>
 </div>
 
@@ -1689,5 +1757,6 @@ function rysujDup() {
 <script src="/ui/sprzatanie.js"></script>
 <script src="/ui/pomoc.js"></script>
 <script src="/ui/ustawienia.js"></script>
+<script src="/ui/odzysk.js"></script>
 </body>
 </html>

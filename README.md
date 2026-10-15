@@ -174,6 +174,16 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.29:** **🛟 Odzyskiwanie usuniętych plików** (przycisk 🛟 w nagłówku, czwarty kafelek na starcie): wybierasz
+rodzaj (zdjęcia / filmy / dokumenty), fragment nazwy, skąd zniknęły (Pobrane, Pulpit, Dokumenty…, cały dysk, karta
+pamięci) i jak dawno. Najpierw program przeszukuje **kosze Windows na wszystkich dyskach** (przywraca na oryginalne
+miejsce), **kopię zapasową** (pliki, których nie ma już w bibliotece) i kosz programu. Potem **głębokie szukanie**
+nakładką na **Windows File Recovery** (darmowy program Microsoftu — instalacja jednym przyciskiem): tryb *dokładny*
+sięga daleko w przeszłość, także po opróżnieniu kosza, formatowaniu i na kartach z aparatu. Odzyskane pliki trafiają
+na **inny dysk** (pendrive / USB), do folderu „Odzyskane przez Katalogator”, z miniaturami i *🔭 Przeglądaj na osi
+czasu*. Windows pyta o zgodę administratora; przerwanie — zamknięcie okna „Katalogator - odzyskiwanie”. Na dyskach
+SSD szanse spadają z minuty na minutę (TRIM) — program ostrzega.
+
 **1.28.1:** Przeglądarka — **⇅ kolejność**: od najnowszych (domyślnie) albo od najstarszych; dotyczy zdjęć na osi
 czasu, lat i miesięcy, wyników szukania, albumów i „Tego dnia” (zapamiętana; na telefonie w menu ⋯, tam też 📤 Wyślij).
 

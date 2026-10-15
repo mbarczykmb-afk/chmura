@@ -71,9 +71,9 @@ def _info_windows(litera: str) -> dict:
         dl = wintypes.DWORD(1024)
         if ctypes.windll.mpr.WNetGetConnectionW(f"{litera}:", bufor, ctypes.byref(dl)) == 0:
             d["siec"] = bufor.value
-    etykieta = ctypes.create_unicode_buffer(261)
-    if k32.GetVolumeInformationW(korzen, etykieta, 261, None, None, None, None, 0):
-        d["etykieta"] = etykieta.value
+    etykieta, fs = ctypes.create_unicode_buffer(261), ctypes.create_unicode_buffer(261)
+    if k32.GetVolumeInformationW(korzen, etykieta, 261, None, None, None, fs, 261):
+        d["etykieta"], d["system_plikow"] = etykieta.value, fs.value
     try:
         u = shutil.disk_usage(korzen)
         d["wolne"], d["razem"] = u.free, u.total

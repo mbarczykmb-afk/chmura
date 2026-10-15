@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, pilot, planista, projekty, przegladarka,
+from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, odzyskiwanie, pilot, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, usuwanie, wykonawca, wysylanie)
 from .logi import LOG
 
@@ -283,6 +283,53 @@ class Stan:
             return {"blad": f"{e.strerror or e}"}
         finally:
             db.close()
+
+    # --- 🛟 odzyskiwanie usuniętych plików ------------------------------------------------------------
+    def odzysk_zadanie(self) -> dict | None:
+        return aktualizacje._ustawienia(self.katalog).get("odzysk")
+
+    def odzysk_info(self) -> dict:
+        d = [x for x in dyski.lista_dyskow() if x.get("rodzaj") in ("lokalny", "wymienny") and x.get("dostepny")]
+        z = self.odzysk_zadanie()
+        return {"winfr": bool(odzyskiwanie.winfr()), "windows": odzyskiwanie.WINDOWS, "dyski": d,
+                "foldery": odzyskiwanie.foldery_uzytkownika(), "zadanie": odzyskiwanie.postep(z),
+                "kopia": (aktualizacje._ustawienia(self.katalog).get("kopia") or {}).get("folder") or ""}
+
+    def _odzysk_miejsca(self) -> dict:
+        litery = [x["sciezka"] for x in dyski.lista_dyskow() if x.get("rodzaj") in ("lokalny", "wymienny")]
+        return {"dyski": litery, "kopia": (aktualizacje._ustawienia(self.katalog).get("kopia") or {}).get("folder") or ""}
+
+    def odzysk_szybkie(self, typ: str, fraza: str, z_kopii: bool) -> dict:
+        m = self._odzysk_miejsca()
+        w = {"kosz_windows": odzyskiwanie.kosze_windows(m["dyski"], typ, fraza),
+             "kosz_programu": odzyskiwanie.kosz_programu(self.korzenie_kosza(), typ, fraza)}
+        if z_kopii:
+            k = odzyskiwanie.z_kopii(self.ustawienia["cel"], m["kopia"], typ, fraza)
+            w["kopia"], w["kopia_przerwane"] = k["pliki"], k["przerwane"]
+        return w
+
+    def odzysk_przywroc(self, element: dict) -> dict:
+        m = self._odzysk_miejsca()
+        try:
+            w = odzyskiwanie.przywroc(element, {"kosze": odzyskiwanie._kosze(m["dyski"]), "kopia": m["kopia"]})
+        except OSError as e:
+            return {"blad": f"{e.strerror or e}"}
+        if w.get("ok"):
+            self.przegladarka.zglos_zmiany()
+        return w
+
+    def odzysk_start(self, dane: dict) -> dict:
+        zrodlo = str(dane.get("zrodlo") or "")
+        dysk, folder = odzyskiwanie.podziel(zrodlo)
+        w = odzyskiwanie.uruchom(dysk, str(dane.get("cel") or ""), folder, str(dane.get("typ") or "wszystko"),
+                                 str(dane.get("fraza") or ""), bool(dane.get("dokladnie", True)))
+        if w.get("ok"):
+            zad = {k: w[k] for k in ("cel", "start", "polecenie")} | {"zrodlo": zrodlo, "typ": dane.get("typ"),
+                                                                     "fraza": dane.get("fraza") or ""}
+            aktualizacje.zapisz_ustawienia(self.katalog, odzysk=zad)
+            LOG.info("Odzyskiwanie: winfr %s", w["polecenie"])
+            return {"ok": True, "zadanie": odzyskiwanie.postep(zad)}
+        return w
 
     def kopia_po_starcie(self, opoznienie: float = 120) -> None:
         """Automatyczna kopia: raz na dobę (po starcie programu) i po porządkowaniu plików."""
@@ -1234,6 +1281,26 @@ def _handler(stan: Stan, token: str, zamknij):
                     return self._wyslij(w[0], w[1]) if w[0] is not None else \
                         self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
                 return self._wyslij(w[0])
+            if u.path == "/api/odzysk":
+                return self._wyslij(stan.odzysk_info())
+            if u.path == "/api/odzysk/postep":
+                return self._wyslij({"zadanie": odzyskiwanie.postep(stan.odzysk_zadanie())})
+            if u.path == "/api/odzysk/wyniki":
+                return self._wyslij(odzyskiwanie.wyniki(stan.odzysk_zadanie(), q.get("typ", ["wszystko"])[0],
+                                                        q.get("q", [""])[0], _int(q, "min", 0), _int(q, "od", 0),
+                                                        min(_int(q, "ile", 200), 500)))
+            if u.path == "/api/odzysk/min":  # miniatura odzyskanego zdjęcia (tylko z folderu wyników)
+                sc = q.get("p", [""])[0]
+                if not odzyskiwanie.w_wynikach(stan.odzysk_zadanie(), sc):
+                    return self._wyslij(b"", "image/jpeg", HTTPStatus.NOT_FOUND)
+                try:
+                    im, _ = analiza.miniatura(sc, min_bok=150)
+                    im.thumbnail((260, 260))
+                    buf = __import__("io").BytesIO()
+                    im.convert("RGB").save(buf, "JPEG", quality=80)
+                    return self._wyslij(buf.getvalue(), "image/jpeg")
+                except Exception:
+                    return self._wyslij(b"", "image/jpeg", HTTPStatus.NOT_FOUND)
             if u.path == "/api/kopia":
                 return self._wyslij(stan.kopia_info())
             if u.path == "/api/kopia/problemy":
@@ -1427,6 +1494,27 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/nowy-folder":
                 w = dyski.nowy_folder(str(dane.get("w", "")), str(dane.get("nazwa", "")))
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/odzysk/szybkie":
+                return self._wyslij(stan.odzysk_szybkie(str(dane.get("typ") or "wszystko"), str(dane.get("fraza") or ""),
+                                                        bool(dane.get("kopia"))))
+            if u.path == "/api/odzysk/przywroc":
+                w = stan.odzysk_przywroc(dane.get("element") if isinstance(dane.get("element"), dict) else {})
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/odzysk/start":
+                w = stan.odzysk_start(dane)
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/odzysk/instaluj":
+                w = odzyskiwanie.instaluj()
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/odzysk/ssd":
+                return self._wyslij({"ssd": odzyskiwanie.ssd(str(dane.get("dysk") or ""))})
+            if u.path == "/api/odzysk/pokaz":  # Eksplorator z zaznaczonym plikiem (wyniki, kosze, kopia)
+                sc = str(dane.get("sciezka") or "")
+                if not os.path.exists(sc):
+                    return self._wyslij({"blad": "Nie ma takiego pliku."}, kod=HTTPStatus.BAD_REQUEST)
+                if os.name == "nt":
+                    subprocess.Popen(["explorer", "/select,", sc] if os.path.isfile(sc) else ["explorer", sc])
+                return self._wyslij({"ok": True})
             if u.path == "/api/kopia/ustaw":
                 w = stan.kopia_ustaw(dane["folder"] if "folder" in dane else None,
                                      dane["auto"] if "auto" in dane else None)
