@@ -81,6 +81,19 @@ $("odz-szukaj").onclick = async () => {
   catch (e) { l.replaceChildren(odzEl("div", {className: "uwaga", textContent: e.message})); b.disabled = false; b.textContent = "🔍 Szukaj"; return; }
   b.disabled = false; b.textContent = "🔍 Szukaj ponownie";
   l.replaceChildren();
+  // dokąd przywracać: na oryginalne miejsce albo do wybranego folderu
+  const dokad = odzEl("div", {className: "odz-wiersz"});
+  const rysujDokad = () => {
+    dokad.replaceChildren(odzEl("span", {className: "odz-et", textContent: "Przywróć do"}),
+      odzPrzycisk("📍 na oryginalne miejsce", () => { odz.doFolderu = ""; rysujDokad(); }, odz.doFolderu ? "" : "glowny"),
+      odzPrzycisk(odz.doFolderu ? `📁 ${odz.doFolderu}` : "📂 do wybranego folderu…", () => {
+        $("okno-odzysk").hidden = true;
+        otworzWyborFolderu("Dokąd przywrócić znalezione pliki?", odz.doFolderu || "", f => {
+          $("okno-odzysk").hidden = false; odz.doFolderu = f; rysujDokad();
+        });
+      }, odz.doFolderu ? "glowny" : "", "Wybrany folder (ta sama nazwa pliku; gdy zajęta — „(odzyskane)”)"));
+  };
+  rysujDokad(); l.append(dokad);
   const grupa = (tytul, lista, opis, akcje) => {
     if (!lista || !lista.length) return 0;
     l.append(odzEl("div", {className: "odz-grupa", textContent: `${tytul} — ${lista.length}${lista.length >= 500 ? "+" : ""}`}));
@@ -97,18 +110,18 @@ $("odz-szukaj").onclick = async () => {
   const pokaz = x => odzPrzycisk("📂", () => api("/api/odzysk/pokaz", {sciezka: x.sciezka}).catch(e => toast(e.message)), "", "Pokaż w Eksploratorze");
   const przywrocBtn = (x, el, tekst) => odzPrzycisk(tekst, async () => {
     try {
-      const r = await api("/api/odzysk/przywroc", {element: x});
+      const r = await api("/api/odzysk/przywroc", {element: x, do: odz.doFolderu || ""});
       toast(`↺ Przywrócono: ${r.sciezka}`);
       el().replaceWith(odzEl("div", {className: "odz-el"}, odzEl("span", {className: "ik", textContent: "✅"}),
         odzEl("div", {className: "op"}, odzEl("b", {textContent: x.nazwa}), odzEl("span", {textContent: r.sciezka})), odzEl("span")));
     } catch (e) { toast(e.message); }
   }, "glowny");
   let n = 0;
-  n += grupa("🗑 Kosze Windows", w.kosz_windows, "Także kosze na innych dyskach i pendrive'ach — przywracam na oryginalne miejsce.",
+  n += grupa("🗑 Kosze Windows", w.kosz_windows, "Także kosze na innych dyskach i pendrive'ach.",
              (x, el) => [przywrocBtn(x, el, "↺ Przywróć"), pokaz(x)]);
-  n += grupa("💾 Kopia zapasowa Katalogatora", w.kopia, "Pliki, których nie ma już w bibliotece — kopia niczego nie kasuje. Przywracam kopiując z powrotem do biblioteki." +
+  n += grupa("💾 Kopia zapasowa Katalogatora", w.kopia, "Pliki, których nie ma już w bibliotece — kopia niczego nie kasuje (przywracam kopiując; w kopii zostają)." +
              (w.kopia_przerwane ? " (pokazuję pierwsze znalezione — zawęź nazwą albo rodzajem)" : ""),
-             (x, el) => [przywrocBtn(x, el, "↺ Do biblioteki"), pokaz(x)]);
+             (x, el) => [przywrocBtn(x, el, "↺ Przywróć"), pokaz(x)]);
   n += grupa("🗑 Kosz programu (Odłożone)", w.kosz_programu, "Pliki odłożone w Katalogatorze — przywracasz w 🗑 Koszu (przycisk w nagłówku).",
              x => [odzPrzycisk("🗑 Kosz", () => { $("okno-odzysk").hidden = true; $("kosz-btn").click(); }), pokaz(x)]);
   if (!n) l.append(odzEl("div", {className: "info", textContent: "W koszach" + (odz.info.kopia ? " i w kopii zapasowej" : "") + " nic takiego nie ma — spróbuj głębokiego szukania niżej."}));
@@ -154,13 +167,32 @@ async function rysujGleboko() {
              odzPrzycisk("⟳ Odśwież", otworzOdzysk));
     return;
   }
+  // gdzie zapisać: dysk (folder „Odzyskane przez Katalogator”) albo dowolny folder na innym dysku
   const sel = odzEl("select", {id: "odz-cel"});
-  for (const d of cele) sel.append(odzEl("option", {value: d.sciezka, textContent: `${d.sciezka.replace(/\\$/, "")} ${d.etykieta || ""} — wolne ${odzRozmiar(d.wolne)}`}));
-  t.append(odzEl("div", {className: "odz-wiersz"}, odzEl("span", {className: "odz-et", textContent: "Zapisz odzyskane na"}), sel,
-                 odzEl("span", {className: "info", textContent: "folder „Odzyskane przez Katalogator”"})));
+  for (const d of cele) sel.append(odzEl("option", {value: d.sciezka, textContent: `💽 ${d.sciezka.replace(/\\$/, "")} ${d.etykieta || ""} — wolne ${odzRozmiar(d.wolne)}`}));
+  if (odz.celFolder && odz.celFolder.slice(0, 2).toUpperCase() !== dysk) sel.append(odzEl("option", {value: odz.celFolder, textContent: `📁 ${odz.celFolder}`}));
+  sel.append(odzEl("option", {value: "__inny", textContent: "📂 Wybierz folder…"}));
+  if (odz.celWybor && [...sel.options].some(o => o.value === odz.celWybor)) sel.value = odz.celWybor;
+  const celInfo = odzEl("span", {className: "info"});
+  const opisCelu = () => {
+    const v = sel.value, dyskowy = /^[A-Za-z]:[\\/]?$/.test(v) || cele.some(d => d.sciezka === v);
+    celInfo.textContent = dyskowy ? `→ ${v.replace(/[\\/]$/, "")}\\Odzyskane przez Katalogator` : `→ ${v}`;
+  };
+  sel.onchange = () => {
+    if (sel.value !== "__inny") { odz.celWybor = sel.value; opisCelu(); return; }
+    $("okno-odzysk").hidden = true;
+    otworzWyborFolderu(`Gdzie zapisać odzyskane pliki? (inny dysk niż ${dysk})`, odz.celFolder || "", f => {
+      $("okno-odzysk").hidden = false;
+      if (f.slice(0, 2).toUpperCase() === dysk) { toast(`Wybierz folder na innym dysku niż ${dysk} — inaczej odzyskane pliki nadpisałyby szukane.`); rysujGleboko(); return; }
+      odz.celFolder = odz.celWybor = f; rysujGleboko();
+    });
+  };
+  opisCelu();
+  t.append(odzEl("div", {className: "odz-wiersz"}, odzEl("span", {className: "odz-et", textContent: "Zapisz odzyskane w"}), sel, celInfo));
   t.append(odzEl("div", {className: "odz-wiersz"}, odzPrzycisk("🛟 Zacznij odzyskiwanie", async e => {
     e.target.disabled = true;
     try {
+      if (sel.value === "__inny") return;
       const r = await api("/api/odzysk/start", {zrodlo, cel: sel.value, typ: odz.typ, formaty: wybraneFormaty(), fraza: $("odz-fraza").value.trim(), dokladnie: odzTryb()});
       odz.info.zadanie = r.zadanie; rysujPostep(r.zadanie);
     } catch (er) { toast(er.message); e.target.disabled = false; }

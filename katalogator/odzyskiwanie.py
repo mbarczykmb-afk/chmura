@@ -113,16 +113,23 @@ def _cmd(args: list[str]) -> str:
     return " ".join(f'"{a}"' if (" " in a or not a) else a for a in args)
 
 
-def uruchom(dysk: str, cel_dysk: str, folder: str, typ, fraza: str, dokladnie: bool) -> dict:
+def folder_wynikow(cel: str) -> str:
+    """Sam dysk („E:\\”) → E:\\Odzyskane przez Katalogator; wybrany folder — dokładnie ten folder."""
+    cel = ntpath.normpath(cel or "")
+    d, reszta = ntpath.splitdrive(cel)
+    return ntpath.join(d + "\\", FOLDER_WYNIKOW) if reszta.strip("\\") == "" else cel
+
+
+def uruchom(dysk: str, cel_miejsce: str, folder: str, typ, fraza: str, dokladnie: bool) -> dict:
     """Start winfr z uprawnieniami administratora (Windows zapyta o zgodę). Okno winfr — zminimalizowane;
-    zamknięcie go przerywa szukanie."""
+    zamknięcie go przerywa szukanie. `cel_miejsce` — dysk albo folder na odzyskane pliki (na innym dysku)."""
     exe = winfr()
     if not exe:
         return {"blad": "Najpierw zainstaluj Windows File Recovery (przycisk wyżej)."}
-    if not dysk or dysk[:1].upper() == (cel_dysk or "")[:1].upper():
+    if not dysk or not cel_miejsce or dysk[:1].upper() == cel_miejsce[:1].upper():
         return {"blad": "Odzyskane pliki muszą trafić na INNY dysk niż ten, na którym ich szukasz — "
                         "inaczej nadpisałyby to, co chcemy odzyskać. Podłącz pendrive lub dysk USB."}
-    cel = os.path.join(cel_dysk[:2] + "\\", FOLDER_WYNIKOW)
+    cel = folder_wynikow(cel_miejsce)
     os.makedirs(cel, exist_ok=True)
     for n in (DZIENNIK, KONIEC):
         try:
@@ -368,10 +375,15 @@ def _wolna(sciezka: str) -> str:
         i += 1
 
 
-def przywroc(element: dict, dozwolone: dict) -> dict:
+def przywroc(element: dict, dozwolone: dict, do_folderu: str | None = None) -> dict:
     """Kosz Windows: przeniesienie na oryginalne miejsce. Kopia: skopiowanie z powrotem do biblioteki.
+    `do_folderu` — zamiast oryginalnego miejsca: wybrany folder (ta sama nazwa pliku).
     `dozwolone` — {"kosze": [...], "kopia": folder} — przywracamy tylko z tych miejsc."""
     zr, sc, orig = element.get("zrodlo"), element.get("sciezka") or "", element.get("oryginal") or ""
+    if do_folderu:
+        if not os.path.isdir(do_folderu):
+            return {"blad": "Nie ma takiego folderu — wybierz inny."}
+        orig = os.path.join(do_folderu, element.get("nazwa") or os.path.basename(orig.replace("\\", "/")) or "plik")
 
     def wewnatrz(p, katalogi):
         p = os.path.normcase(os.path.realpath(p))

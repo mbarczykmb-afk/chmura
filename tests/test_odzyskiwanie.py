@@ -110,3 +110,19 @@ def test_wybrane_formaty():
     assert o.pasuje("klip.MTS", [".mts"], "") and not o.pasuje("klip.mp4", [".mts"], "")
     assert o.pasuje("utwor.flac", "muzyka", "") and not o.pasuje("zdj.jpg", "muzyka", "")
     assert o.rodzaj_pliku("a.mp3") == "muzyka"
+
+
+def test_dokad_przywracac(tmp_path):
+    assert o.folder_wynikow("E:\\") == "E:\\Odzyskane przez Katalogator"
+    assert o.folder_wynikow("E:") == "E:\\Odzyskane przez Katalogator"
+    assert o.folder_wynikow("E:\\Moje\\Odzysk") == "E:\\Moje\\Odzysk"
+    d = tmp_path / "dysk"
+    k = d / "$Recycle.Bin" / "S-1"
+    k.mkdir(parents=True)
+    (k / "$I9.mp4").write_bytes(_i(str(tmp_path / "Pobrane" / "film.mp4"), 3))
+    (k / "$R9.mp4").write_bytes(b"abc")
+    cel = tmp_path / "Wybrany"
+    el = o.kosze_windows([str(d)], "filmy", "")[0]
+    assert o.przywroc(el, {"kosze": o._kosze([str(d)])}, str(tmp_path / "brak"))["blad"]
+    w = o.przywroc(el, {"kosze": o._kosze([str(d)])}, str(cel) if cel.mkdir() is None else "")
+    assert w["ok"] and (cel / "film.mp4").read_bytes() == b"abc" and not (tmp_path / "Pobrane").exists()

@@ -317,10 +317,11 @@ class Stan:
             w["kopia"], w["kopia_przerwane"] = k["pliki"], k["przerwane"]
         return w
 
-    def odzysk_przywroc(self, element: dict) -> dict:
+    def odzysk_przywroc(self, element: dict, do_folderu: str | None = None) -> dict:
         m = self._odzysk_miejsca()
         try:
-            w = odzyskiwanie.przywroc(element, {"kosze": odzyskiwanie._kosze(m["dyski"]), "kopia": m["kopia"]})
+            w = odzyskiwanie.przywroc(element, {"kosze": odzyskiwanie._kosze(m["dyski"]), "kopia": m["kopia"]},
+                                      do_folderu or None)
         except OSError as e:
             return {"blad": f"{e.strerror or e}"}
         if w.get("ok"):
@@ -330,6 +331,11 @@ class Stan:
     def odzysk_start(self, dane: dict) -> dict:
         zrodlo = str(dane.get("zrodlo") or "")
         dysk, folder = odzyskiwanie.podziel(zrodlo)
+        cel = str(dane.get("cel") or "")
+        if odzyskiwanie.WINDOWS and cel[:1].upper() not in {
+                d["sciezka"][:1].upper() for d in dyski.lista_dyskow() if d.get("rodzaj") in ("lokalny", "wymienny")}:
+            return {"blad": "Odzyskane pliki zapisuję tylko na dysku w komputerze albo USB (nie sieciowym — "
+                            "Windows File Recovery go nie widzi). Wybierz inny folder."}
         w = odzyskiwanie.uruchom(dysk, str(dane.get("cel") or ""), folder, self.odzysk_typ(dane),
                                  str(dane.get("fraza") or ""), bool(dane.get("dokladnie", True)))
         if w.get("ok"):
@@ -1509,7 +1515,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij(stan.odzysk_szybkie(stan.odzysk_typ(dane), str(dane.get("fraza") or ""),
                                                         bool(dane.get("kopia"))))
             if u.path == "/api/odzysk/przywroc":
-                w = stan.odzysk_przywroc(dane.get("element") if isinstance(dane.get("element"), dict) else {})
+                w = stan.odzysk_przywroc(dane.get("element") if isinstance(dane.get("element"), dict) else {},
+                                         str(dane.get("do") or ""))
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/odzysk/start":
                 w = stan.odzysk_start(dane)
