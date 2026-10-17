@@ -236,6 +236,11 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 @media (hover:none){.k .ob .kosz{opacity:.85}}
 #p-usun:hover{background:#dc2626;border-color:#dc2626;color:#fff}
 #toast-g{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:4000;background:var(--fg);color:var(--bg);border-radius:12px;padding:10px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 30px rgba(0,0,0,.35);font-size:14px;max-width:92vw}
+#tlo{position:fixed;right:14px;top:72px;z-index:3900;display:flex;flex-direction:column;gap:8px;width:min(280px,calc(100vw - 32px))}
+#tlo .tlo-z{background:var(--panel,var(--bg));color:var(--fg);border:1px solid rgba(128,128,128,.35);border-radius:10px;padding:8px 10px;font-size:13px;box-shadow:0 6px 22px rgba(0,0,0,.3)}
+#tlo .tlo-p{height:6px;border-radius:3px;background:rgba(128,128,128,.25);margin-top:6px;overflow:hidden}
+#tlo .tlo-p i{display:block;height:100%;width:0;background:var(--akc);transition:width .25s}
+#tlo .gotowe{opacity:.75}
 #toast-g button{background:none;border:0;color:var(--akc);font-weight:700;padding:4px 6px}
 #lok{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3500;display:grid;place-items:center;padding:14px}
 #lok[hidden]{display:none}
@@ -428,6 +433,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   </div>
 </div>
 <div id="toast-g" hidden></div>
+<div id="tlo" hidden title="Operacje w tle — możesz dalej przeglądać"></div>
 <div id="ed" hidden>
   <div id="ed-scena"><canvas id="ed-plotno"></canvas><div id="ed-ramka" hidden><i data-r="nw"></i><i data-r="ne"></i><i data-r="sw"></i><i data-r="se"></i></div></div>
   <div id="ed-panel">

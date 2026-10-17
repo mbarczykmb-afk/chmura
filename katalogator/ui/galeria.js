@@ -993,14 +993,20 @@ $("wyslij-pliki").onchange = async () => {
 
 // ---------- 📍 lokalizacja: dodaj / zmień / usuń (w pliku: JPEG — EXIF, inne — .xmp obok) ----------
 // poprzednie: {id: [lat, lon] | [null, null]} — do „Cofnij”
-async function ustawLokalizacje(ids, lat, lon, poprzednie, cicho = false) {
-  let w;
-  try { w = await post("/api/g/lokalizacja", {ids, lat, lon}); }
-  catch (e) { toastG("Nie zapisano lokalizacji: " + e.message); return false; }
-  if (!w.zmienione) { toastG("Nie zapisano lokalizacji: " + (w.bledy[0] || "")); return false; }
-  for (const tab of [g.pliki, g.lista]) for (const p of tab || []) if (ids.includes(p.id) && w.poprzednie[p.id]) {
-    p.lat = lat; p.lon = lon;
+// postep(zrobione) — przy wielu plikach zapis idzie porcjami (pasek „w tle”)
+async function ustawLokalizacje(ids, lat, lon, poprzednie, cicho = false, postep = null) {
+  const w = {zmienione: 0, bledy: [], poprzednie: {}};
+  const PORCJA = postep ? 20 : ids.length || 1;
+  for (let i = 0; i < ids.length; i += PORCJA) {
+    const czesc = ids.slice(i, i + PORCJA);
+    try {
+      const r = await post("/api/g/lokalizacja", {ids: czesc, lat, lon});
+      w.zmienione += r.zmienione || 0; w.bledy.push(...(r.bledy || [])); Object.assign(w.poprzednie, r.poprzednie || {});
+      for (const tab of [g.pliki, g.lista]) for (const p of tab || []) if (r.poprzednie && r.poprzednie[p.id]) { p.lat = lat; p.lon = lon; }
+    } catch (e) { w.bledy.push(e.message); }
+    if (postep) postep(Math.min(ids.length, i + PORCJA));
   }
+  if (!w.zmienione) { toastG("Nie zapisano lokalizacji: " + (w.bledy[0] || "")); return false; }
   if (g.widok !== "mapa") g.punkty = null;  // mapa wczyta się na nowo
   wczytajLata(true).catch(() => {});
   if (!$("pelny").hidden) { narzedziaPelnego(biezacy()); miniMapa(biezacy()); }
@@ -1086,12 +1092,37 @@ $("lok-zapisz").onclick = async () => {
   const ll = lok.znacznik.getLatLng(), p = lok.p;
   const cele = lok.zbior || [p, ...($("lok-inne-cb").checked ? lok.inne.filter(x => lok.wybrane.has(x.id)) : [])];
   const pop = Object.fromEntries(cele.map(x => [x.id, [x.lat ?? null, x.lon ?? null]]));
-  if (await ustawLokalizacje(cele.map(x => x.id), ll.lat, ll.lng, pop)) { lok.ostatnie = [ll.lat, ll.lng]; zamknijLok(); }
+  lok.ostatnie = [ll.lat, ll.lng]; zamknijLok();  // okno znika od razu — zapis idzie w tle, można dalej przeglądać
+  zadanieTla("📍 Zapisuję lokalizację", cele.length, postep => ustawLokalizacje(cele.map(x => x.id), ll.lat, ll.lng, pop, false, postep));
 };
 $("lok-usun").onclick = async () => {
   const cele = (lok.zbior || [lok.p]).filter(x => x.lat != null);
-  if (await ustawLokalizacje(cele.map(x => x.id), null, null, Object.fromEntries(cele.map(x => [x.id, [x.lat, x.lon]])))) zamknijLok();
+  zamknijLok();
+  if (cele.length) zadanieTla("📍 Usuwam lokalizację", cele.length,
+    postep => ustawLokalizacje(cele.map(x => x.id), null, null, Object.fromEntries(cele.map(x => [x.id, [x.lat, x.lon]])), false, postep));
 };
+
+// ---------- ⏳ operacje w tle: kolejka + panel z paskami z boku ekranu ----------
+const tlo = {kolejka: Promise.resolve(), ile: 0};
+function zadanieTla(nazwa, razem, praca) {
+  const wiersz = document.createElement("div"); wiersz.className = "tlo-z";
+  const tyt = document.createElement("div"), pasek = document.createElement("div"), wyp = document.createElement("i");
+  pasek.className = "tlo-p"; pasek.append(wyp);
+  const pokaz = (n, stan = "") => {
+    tyt.textContent = `${nazwa} · ${n} / ${razem}${stan}`;
+    wyp.style.width = (razem ? Math.round(100 * n / razem) : 100) + "%";
+  };
+  wiersz.append(tyt, pasek); $("tlo").append(wiersz); $("tlo").hidden = false; tlo.ile++;
+  pokaz(0, " · czeka");
+  const koniec = () => {
+    wiersz.classList.add("gotowe"); pokaz(razem, " ✓");
+    setTimeout(() => { wiersz.remove(); if (!--tlo.ile) $("tlo").hidden = true; }, 2500);
+  };
+  tlo.kolejka = tlo.kolejka.then(() => { pokaz(0); return praca(n => pokaz(n)); }).catch(e => toastG(nazwa + ": " + e.message)).finally(koniec);
+  return tlo.kolejka;
+}
+// zamknięcie okna w trakcie — zapytaj (przerwany zapis = część plików bez zmiany)
+window.addEventListener("beforeunload", e => { if (tlo.ile) { e.preventDefault(); e.returnValue = ""; } });
 let lokZegar = null;
 $("lok-szukaj").oninput = () => {
   clearTimeout(lokZegar);
@@ -1210,20 +1241,21 @@ function oknoDaty(p, zbior = null) {
       if (przesun && x.data) cele.push({p: x, data: iso(new Date(new Date(x.data.slice(0, 19)).getTime() + roznica))});
       else if (zbior) cele.push({p: x, data: nowa});  // zaznaczone bez zachowania odstępów: ta sama data
     }
-    $("dt-zapisz").disabled = true;
-    let zm = 0, bl = [];
-    for (const c of cele) {
-      try {
-        const w = await post("/api/g/data", {ids: [c.p.id], data: c.data});
-        if (w.zmienione) { c.p.data = w.data; zm++; } else bl = bl.concat(w.bledy || []);
-      } catch (err) { bl.push(err.message); }
-      if (cele.length > 5) $("dt-tyt").textContent = `📅 ${zm + bl.length} / ${cele.length}…`;
-    }
-    $("dt-zapisz").disabled = false; $("dt").hidden = true;
-    toastG(`📅 Zmieniono datę: ${liczbaZdjec(zm)}` + (bl.length ? ` · nie udało się: ${bl.length} (${bl[0]})` : ""));
-    if (!$("pelny").hidden && biezacy() === p) $("pelny-opis").textContent = `${p.nazwa} · ${dataTxt(p.data)}` + (p.miejsce ? " · " + p.miejsce : "");
-    if (zbior) rysujSiatke();
-    g.punkty = null; wczytajLata(true).catch(() => {});
+    $("dt").hidden = true;  // okno znika od razu — zapis idzie w tle, można dalej przeglądać
+    zadanieTla("📅 Zmieniam datę", cele.length, async postep => {
+      let zm = 0, bl = [];
+      for (const c of cele) {
+        try {
+          const w = await post("/api/g/data", {ids: [c.p.id], data: c.data});
+          if (w.zmienione) { c.p.data = w.data; zm++; } else bl = bl.concat(w.bledy || []);
+        } catch (err) { bl.push(err.message); }
+        postep(zm + bl.length);
+      }
+      toastG(`📅 Zmieniono datę: ${liczbaZdjec(zm)}` + (bl.length ? ` · nie udało się: ${bl.length} (${bl[0]})` : ""));
+      if (!$("pelny").hidden && biezacy() === p) $("pelny-opis").textContent = `${p.nazwa} · ${dataTxt(p.data)}` + (p.miejsce ? " · " + p.miejsce : "");
+      if (zbior) rysujSiatke();
+      g.punkty = null; wczytajLata(true).catch(() => {});
+    });
   };
 }
 // 📅 zmiana daty zrobienia (w pliku: EXIF w JPEG, .xmp obok w innych formatach)

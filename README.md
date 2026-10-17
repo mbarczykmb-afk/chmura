@@ -174,6 +174,8 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.30.2:** Zmiana 📍 miejsca i 📅 daty idzie **w tle**: po „Zapisz” okno znika od razu i można dalej przeglądać, a w prawym górnym rogu widać pasek postępu (np. „📍 Zapisuję lokalizację · 120 / 400”). Kilka zmian ustawia się w kolejkę; na końcu komunikat z „Cofnij”.
+
 **1.30.1:** 🛠 Naprawa filmów **bez pytania o wzorzec**: program sam szuka na dyskach (biblioteka, Przeglądarka,
 Wideo, Zoom, Pobrane) działających filmów z tym samym „podpisem” nagrywającego programu (atom ftyp) i po kolei
 próbuje ich jako wzorców; ten, który zadziałał, służy następnym plikom. Lista odzyskanych pokazuje stan: dobry /
