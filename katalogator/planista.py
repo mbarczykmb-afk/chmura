@@ -485,7 +485,8 @@ def aktualnosc(db: sqlite3.Connection) -> dict:
         return {"jest": False, "nieaktualny": False}
     utw = float(meta(db).get("utworzono") or 0)
     try:
-        odl = db.execute("SELECT COUNT(*) FROM operacje WHERE czas > ?", (utw,)).fetchone()[0]
+        # >= : na Windows zegar tyka co ~15 ms — odłożenie tuż po utworzeniu ma ten sam czas
+        odl = db.execute("SELECT COUNT(*) FROM operacje WHERE czas >= ?", (utw,)).fetchone()[0]
     except sqlite3.OperationalError:
         odl = 0
     skan = db.execute("SELECT MAX(koniec) FROM skany").fetchone()[0] or 0
