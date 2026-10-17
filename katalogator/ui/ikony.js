@@ -47,7 +47,10 @@ const IKONY_LINII = {
 .ikl[data-ik=odzysk]{--ik:var(--ik-blue)}
 .ikl[data-ik=ustawienia],.ikl[data-ik=dyski],.ikl[data-ik=folder]{--ik:var(--ik-steel)}
 .akt>.ikl,.akt .ikl,button.glowny .ikl{--ik:currentColor;--ik-akc:currentColor}
-.akt .ikl .dioda{fill:currentColor}`;
+.akt .ikl .dioda{fill:currentColor}
+/* neonowa poświata w ciemnym motywie — pasuje do kolorowych ikon Przeglądarki */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ikl svg{filter:drop-shadow(0 0 2.5px color-mix(in srgb,currentColor 70%,transparent))}}
+:root[data-theme="dark"] .ikl svg{filter:drop-shadow(0 0 2.5px color-mix(in srgb,currentColor 70%,transparent))}`;
   document.head.append(st);
   const wstaw = (kor = document) => kor.querySelectorAll("i.ikl[data-ik]:not([data-ok])").forEach(i => {
     const k = IKONY_LINII[i.dataset.ik];
