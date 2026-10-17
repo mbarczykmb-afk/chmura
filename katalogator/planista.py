@@ -322,9 +322,13 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
           w["stan"], 1 if w["stan"] in ("juz_jest", "duplikat") else 0, w["uwaga"], w.get("alt"), w.get("kat"),
           w.get("jest")) for w in wpisy])
     opisz_foldery_dokumentow(db)
+    try:  # numer ostatniej operacji (odłożenia / usunięcia) — aktualność bez zgadywania po zegarze
+        ost_op = db.execute("SELECT COALESCE(MAX(id), 0) FROM operacje").fetchone()[0]
+    except sqlite3.OperationalError:
+        ost_op = 0
     db.execute("DELETE FROM plan_meta")
     db.executemany("INSERT INTO plan_meta VALUES (?,?)",
-                   [("cel", cel), ("utworzono", str(time.time())), ("dom", dom or "")])
+                   [("cel", cel), ("utworzono", str(time.time())), ("dom", dom or ""), ("ost_operacja", str(ost_op))])
     db.commit()
     return podsumowanie(db)
 
@@ -483,10 +487,13 @@ def aktualnosc(db: sqlite3.Connection) -> dict:
     „reczne” — Twoje poprawki w drzewie, które utworzenie od nowa by skasowało."""
     if not istnieje(db):
         return {"jest": False, "nieaktualny": False}
-    utw = float(meta(db).get("utworzono") or 0)
+    m = meta(db)
+    utw = float(m.get("utworzono") or 0)
     try:
-        # >= : na Windows zegar tyka co ~15 ms — odłożenie tuż po utworzeniu ma ten sam czas
-        odl = db.execute("SELECT COUNT(*) FROM operacje WHERE czas >= ?", (utw,)).fetchone()[0]
+        if "ost_operacja" in m:  # operacje dopisane po utworzeniu drzewa (zegar Windows tyka co ~15 ms — czas bywa równy)
+            odl = db.execute("SELECT COUNT(*) FROM operacje WHERE id > ?", (int(m["ost_operacja"]),)).fetchone()[0]
+        else:  # drzewo sprzed tej wersji
+            odl = db.execute("SELECT COUNT(*) FROM operacje WHERE czas > ?", (utw,)).fetchone()[0]
     except sqlite3.OperationalError:
         odl = 0
     skan = db.execute("SELECT MAX(koniec) FROM skany").fetchone()[0] or 0
