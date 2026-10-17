@@ -172,6 +172,7 @@ async function wczytajPliki(wiecej = false) {
   const od = wiecej ? g.pliki.length : 0, z = g.zrodlo;
   const r = z.typ === "szukaj" ? await api("/api/g/szukaj", {q: z.q, od, ile: 200})
     : z.typ === "kolekcja" ? await api("/api/g/kolekcja", {typ: z.kol, album: z.album || 0, od, ile: 200})
+    : z.typ === "osoba" ? await api("/api/g/osoba", {id: z.osoba, od, ile: 200})
     : z.typ === "dzien" ? await api("/api/g/tego-dnia", {md: z.md || mdDzis(), dni: z.dni || 0})
     : await api("/api/g/pliki", {rok: g.rok, miesiac: g.mies || 0, od, ile: 200, ...obszarParam()});
   if (z !== g.zrodlo) return;  // w międzyczasie wybrano coś innego
@@ -393,6 +394,7 @@ async function pokazPelny(lista, poz) {
   $("pelny-opis").textContent = `${p.nazwa} · ${dataTxt(p.data)}`;
   $("pelny-opis").title = "Kółko myszy / szczypanie = powiększenie · dwuklik = 250% · przeciągnij, żeby przesunąć · 0 = całe";
   narzedziaPelnego(p); miniMapa(p);
+  if (!$("wl").hidden) wlasciwosci(p);
   if (p.miejsce === undefined) {
     try {
       const d = await api("/api/g/plik", {id: p.id}); p.miejsce = d.miejsce; p.ulubione = d.ulubione; p.dokument = d.dokument;
@@ -402,6 +404,13 @@ async function pokazPelny(lista, poz) {
   }
   if (g.lista[g.poz] === p) { narzedziaPelnego(p); miniMapa(p); }
   if (g.lista[g.poz] === p && p.miejsce) $("pelny-opis").textContent += " · " + p.miejsce;
+  if (p.rodzaj === "zdjecie") {  // 👤 kto jest na zdjęciu (imiona nadane w „Osoby”)
+    if (p.osoby === undefined) {
+      try { p.osoby = [...new Set((await api("/api/g/twarze-pliku", {id: p.id})).twarze.map(t => t.nazwa).filter(Boolean))]; }
+      catch (e) { p.osoby = []; }
+    }
+    if (g.lista[g.poz] === p && p.osoby.length) $("pelny-opis").textContent += " · 👤 " + p.osoby.join(", ");
+  }
   $("pelny").querySelector(".pop").hidden = poz <= 0;
   $("pelny").querySelector(".nast").hidden = poz >= lista.length - 1;
 }
@@ -498,6 +507,7 @@ document.addEventListener("keydown", e => {
   if (!$("lok").hidden) { if (e.key === "Escape") zamknijLok(); return; }
   if (e.key === "Delete" && MOZE_USUWAC) $("p-usun").click();
   if ((e.key === "l" || e.key === "L") && MOZE_USUWAC) $("p-miejsce").click();
+  if (e.key === "i" || e.key === "I") $("p-info").click();
   if ((e.key === "d" || e.key === "D") && W_PROGRAMIE && !$("p-dok").hidden) $("p-dok").click();
   if (e.key === "+" || e.key === "=") zoomUstaw(zoom.s * 1.4);
   if (e.key === "-") zoomUstaw(zoom.s / 1.4);
@@ -706,6 +716,7 @@ function uklad() {  // co widać: oś czasu (wykres, miesiące), wyniki/kolekcja
   $("w-os").classList.toggle("akt", os); $("w-mapa").classList.toggle("akt", w === "mapa");
   $("w-kolekcje").classList.toggle("akt", w === "kolekcje" || (w === "os" && g.zrodlo.typ === "kolekcja"));
   $("w-dzien").classList.toggle("akt", w === "os" && g.zrodlo.typ === "dzien");
+  $("w-osoby").classList.toggle("akt", w === "osoby" || (w === "os" && g.zrodlo.typ === "osoba"));
   $("os").hidden = w === "mapa"; $("lata").hidden = !os; $("miesiace").hidden = !os; tip(null);
   $("wykres").hidden = !os || !$("wykres").childElementCount || !naglowek.wykres;
   $("wykres-btn").hidden = !os; $("wykres-btn").classList.toggle("akt", naglowek.wykres);
@@ -718,6 +729,7 @@ function widok(w) {
   uklad();
   if (w === "mapa") pokazMape().catch(e => info(e.message));
   if (w === "kolekcje") rysujKolekcje();
+  if (w === "osoby") rysujOsoby();
 }
 function pokazWyniki(zrodlo) {  // wyniki szukania, ulubione, album, tego dnia — w tej samej siatce
   g.zrodlo = zrodlo; g.widok = "os"; g.pliki = []; g.razem = 0;
@@ -727,6 +739,7 @@ function pokazWyniki(zrodlo) {  // wyniki szukania, ulubione, album, tego dnia �
 $("w-os").onclick = () => widok("os");
 $("w-mapa").onclick = () => widok("mapa");
 $("w-kolekcje").onclick = () => widok("kolekcje");
+$("w-osoby").onclick = () => widok("osoby");
 $("w-dzien").onclick = () => { g.widok = "os"; pokazWyniki({typ: "dzien", md: mdDzis(), dni: 0}); };
 
 // ---------- w oknie programu: zakres, zamykanie, udostępnianie na telefon ----------
@@ -832,6 +845,21 @@ function rysujFiltr() {
   const pokaz = () => g.pliki.length ? przycisk("▶ Pokaz slajdów", () => { pokazPelny(g.pliki, 0); startPokaz(); }, "Pokaz na cały ekran (P)") : null;
   if (g.widok === "kolekcje") {
     const t = document.createElement("span"); t.className = "tyt"; t.textContent = "⭐ Kolekcje"; f.append(t, inf("ulubione i albumy"));
+  } else if (g.widok === "osoby") {
+    filtrOsob(f, inf);
+  } else if (g.widok === "os" && z.typ === "osoba") {
+    f.append(przycisk("← Osoby", () => widok("osoby")));
+    const t = document.createElement("span"); t.className = "tyt"; t.textContent = "👤 " + (z.nazwa || "Bez imienia"); f.append(t, inf(ile(g.razem)));
+    const p = pokaz(); if (p) f.append(p);
+    if (W_PROGRAMIE) f.append(przycisk("✎ Imię", async () => {
+      const n = prompt("Imię (albo opis, np. „Babcia Zosia”):", z.nazwa || ""); if (n === null) return;
+      const w = await post("/api/g/osoba/nazwa", {id: z.osoba, nazwa: n});
+      if (w.polaczono) { z.osoba = w.polaczono; toastG(`👤 Połączono z „${n.trim()}” — to ta sama osoba.`); }
+      z.nazwa = n.trim(); pokazWyniki(z);
+    }, "Nadaj imię — potem znajdziesz tę osobę także wpisując imię w wyszukiwarkę"),
+    przycisk("🙈 Ukryj", async () => { await post("/api/g/osoba/ukryj", {id: z.osoba, tak: true}); widok("osoby"); },
+             "Ukryj tę osobę na liście (np. obcy w tle) — zdjęcia zostają"));
+    if (g.razem) f.append(przycisk("＋ Zapisz jako album", () => zapiszJakoAlbum(z.nazwa || "Osoba"), "Nowy album ze zdjęciami tej osoby"));
   } else if (g.widok === "os" && z.typ === "szukaj") {
     f.append(znacznik("🔍 " + (z.opis || z.q), () => { $("szukaj").value = ""; widok("os"); }, "Wyczyść szukanie"), inf(ile(g.razem)));
     const p = pokaz(); if (p) f.append(p);
@@ -926,6 +954,83 @@ async function rysujKolekcje() {
     await post("/api/g/album/nowy", {nazwa: n, ids: []}); rysujKolekcje();
   }, "nowy");
   if (!W_PROGRAMIE && !r.albumy.length && !r.ulubione.n) s.innerHTML = '<div class="pusto">Brak ulubionych i albumów — tworzy się je w programie na komputerze.</div>';
+}
+
+// ---------- 👤 osoby: twarze z dysków, grupowane w osoby (wykrywanie w tle, na tym komputerze) ----------
+const osoby = {wyb: new Set(), dane: null, zegar: null, wszystkie: false, uzywane: false};
+function filtrOsob(f, inf) {
+  const t = document.createElement("span"); t.className = "tyt"; t.textContent = "👤 Osoby"; f.append(t);
+  const d = osoby.dane;
+  if (!d) return;
+  const st = d.stan || {};
+  if (st.trwa) {
+    const pr = st.wszystkie ? st.zrobione / st.wszystkie : 0;
+    const p = document.createElement("span"); p.className = "twarze-pasek"; p.innerHTML = "<i></i>"; p.firstChild.style.width = Math.round(pr * 100) + "%";
+    f.append(inf(st.wszystkie ? `Szukam twarzy: ${st.zrobione.toLocaleString("pl-PL")} z ${st.wszystkie.toLocaleString("pl-PL")} zdjęć · twarzy: ${st.twarzy}` : st.komunikat || "…"), p);
+    if (W_PROGRAMIE) f.append(przycisk("Przerwij", async () => { await post("/api/g/twarze/przerwij", {}); rysujOsoby(); }));
+  } else {
+    f.append(inf(st.blad ? "⚠ " + st.blad : `${liczbaOsob(d.osoby.length)} · przejrzane zdjęcia: ${d.przejrzane.toLocaleString("pl-PL")} z ${d.zdjec.toLocaleString("pl-PL")}`));
+    if (W_PROGRAMIE && d.przejrzane < d.zdjec && !d.niedostepne && (d.przejrzane || d.osoby.length))
+      f.append(przycisk(d.przejrzane ? "👤 Szukaj na nowych zdjęciach" : "👤 Znajdź twarze", startTwarzy, "Przegląda zdjęcia na tym komputerze — nic nie wysyła do internetu", "akt"));
+  }
+  if (d.pozostale || osoby.wszystkie) f.append(przycisk(osoby.wszystkie ? "Tylko ważne" : `Pokaż wszystkie (+${d.pozostale})`,
+    () => { osoby.wszystkie = !osoby.wszystkie; rysujOsoby(); }, "Także osoby z jednego zdjęcia i ukryte"));
+  if (W_PROGRAMIE && osoby.wyb.size >= 2) f.append(przycisk(`🔗 Połącz zaznaczone (${osoby.wyb.size})`, async () => {
+    const w = await post("/api/g/osoba/polacz", {ids: [...osoby.wyb]}); osoby.wyb.clear();
+    toastG("👤 Połączono — to jedna osoba."); if (w.ok) rysujOsoby();
+  }, "Ta sama osoba rozpoznana jako kilka — połącz w jedną", "akt"));
+  if (osoby.wyb.size) f.append(przycisk("Odznacz", () => { osoby.wyb.clear(); rysujOsoby(); }));
+}
+function liczbaOsob(n) {
+  const k = n % 10, d = n % 100;
+  return `${n} ${n === 1 ? "osoba" : k >= 2 && k <= 4 && !(d >= 12 && d <= 14) ? "osoby" : "osób"}`;
+}
+async function startTwarzy() {
+  try { await post("/api/g/twarze/start", {}); } catch (e) { toastG(e.message); return; }
+  toastG("👤 Szukam twarzy w tle — możesz dalej oglądać zdjęcia.");
+  rysujOsoby();
+}
+async function rysujOsoby() {
+  const s = $("siatka");
+  if (!osoby.dane) s.innerHTML = '<div class="pusto">Wczytuję…</div>';
+  let d; try { d = await api("/api/g/osoby", osoby.wszystkie ? {wszystkie: 1} : {}); } catch (e) { s.innerHTML = `<div class="pusto">${e.message}</div>`; return; }
+  if (g.widok !== "osoby") return;
+  osoby.dane = d; osoby.uzywane = d.przejrzane > 0;
+  clearTimeout(osoby.zegar);
+  if (d.stan && d.stan.trwa) osoby.zegar = setTimeout(() => { if (g.widok === "osoby") rysujOsoby(); }, 2500);
+  rysujFiltr();
+  s.replaceChildren();
+  if (!d.osoby.length) {
+    s.innerHTML = `<div class="pusto"><img class="ik3d-pusto" alt="" src="/ui/ikony3d/przegladarka.webp"><br>${
+      d.niedostepne ? d.niedostepne
+      : d.stan && d.stan.trwa ? "Szukam twarzy… pierwsze osoby pojawią się tu za chwilę."
+      : d.przejrzane ? "Nie znalazłem jeszcze osób, które są na co najmniej dwóch zdjęciach."
+      : W_PROGRAMIE ? "Katalogator znajdzie twarze na Twoich zdjęciach i zgrupuje je w osoby — wszystko na tym komputerze, bez wysyłania do internetu.<br>Potem nadaj imiona i szukaj zdjęć po imieniu."
+      : "Twarze wyszukuje program na komputerze (👤 Osoby)."}</div>`;
+    if (W_PROGRAMIE && !d.niedostepne && !(d.stan && d.stan.trwa) && d.przejrzane < d.zdjec)
+      s.firstChild.append(document.createElement("br"), document.createElement("br"), przycisk("👤 Znajdź twarze na zdjęciach", startTwarzy, "", "akt"));
+    return;
+  }
+  for (const o of d.osoby) {
+    const k = document.createElement("div"); k.className = "k osoba" + (osoby.wyb.has(o.id) ? " wyb" : "");
+    const ob = document.createElement("div"); ob.className = "ob";
+    if (o.twarz) { const im = new Image(); im.src = url("/api/g/twarz", {id: o.twarz}); im.alt = ""; im.loading = "lazy"; ob.append(im); } else ob.textContent = "👤";
+    const zn = document.createElement("span"); zn.className = "zn-wyb"; zn.textContent = "✓";
+    const op = document.createElement("div"); op.className = "op"; op.innerHTML = "<div></div><div class='m'></div>";
+    op.children[0].textContent = o.nazwa || "Bez imienia"; if (!o.nazwa) op.children[0].className = "bez";
+    op.children[1].textContent = liczbaZdjec(o.n) + (o.ukryta ? " · ukryta" : "");
+    k.title = (o.nazwa || "Bez imienia") + " — kliknij: zdjęcia" + (W_PROGRAMIE ? " · Ctrl+klik: zaznacz (do łączenia)" : "");
+    k.append(zn, ob, op);
+    k.onclick = e => {
+      if (W_PROGRAMIE && (e.ctrlKey || e.metaKey || osoby.wyb.size)) {
+        osoby.wyb.has(o.id) ? osoby.wyb.delete(o.id) : osoby.wyb.add(o.id);
+        k.classList.toggle("wyb", osoby.wyb.has(o.id)); rysujFiltr(); return;
+      }
+      if (o.ukryta && W_PROGRAMIE) post("/api/g/osoba/ukryj", {id: o.id, tak: false}).catch(() => {});
+      pokazWyniki({typ: "osoba", osoba: o.id, nazwa: o.nazwa});
+    };
+    s.append(k);
+  }
 }
 
 // 🔗 udostępnianie albumu: link przez serwer telefonu (sieć domowa / Tailscale), bez PIN-u, tylko ten album
@@ -1201,6 +1306,64 @@ function narzedziaPelnego(p) {
   $("p-pokaz").textContent = g.pokaz ? "⏸ Pauza" : "▶ Pokaz";
 }
 const biezacy = () => g.lista[g.poz];
+// ℹ właściwości: gdzie leży plik (folder, pełna ścieżka), rozmiar, wymiary, aparat, skąd data, miejsce, osoby
+const ZRODLA_DATY = {exif: "z aparatu (EXIF)", film: "z nagrania", nazwa: "z nazwy pliku", folder: "z nazwy folderu",
+                     plik: "data zmiany pliku (brak daty z aparatu — sprawdź)"};
+function rozmiarTxt(b) {
+  if (b == null) return "";
+  const j = ["B", "KB", "MB", "GB"]; let i = 0, v = b;
+  while (v >= 1024 && i < j.length - 1) { v /= 1024; i++; }
+  return (i ? v.toLocaleString("pl-PL", {maximumFractionDigits: 1}) : v) + " " + j[i];
+}
+function czasTxt(s) {
+  s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`;
+}
+async function wlasciwosci(p) {
+  const t = $("wl-tresc"); t.textContent = "Wczytuję…";
+  let d; try { d = await api("/api/g/wlasciwosci", {id: p.id}); } catch (e) { t.textContent = e.message; return; }
+  if (biezacy() !== p) return;
+  t.replaceChildren();
+  const dl = document.createElement("dl");
+  const wiersz = (k, v) => { if (v === null || v === undefined || v === "") return; const dt = document.createElement("dt"); dt.textContent = k;
+    const dd = document.createElement("dd"); if (v instanceof Node) dd.append(v); else dd.textContent = v; dl.append(dt, dd); };
+  const kod = x => { const c = document.createElement("code"); c.textContent = x; return c; };
+  wiersz("Nazwa", d.nazwa);
+  wiersz("Folder", kod(d.folder));
+  wiersz("Rodzaj", (d.rodzaj === "film" ? "🎬 film" : "📷 zdjęcie") + (d.format ? " · " + d.format : "") + (d.kodek ? " · " + d.kodek : ""));
+  wiersz("Rozmiar", rozmiarTxt(d.rozmiar));
+  if (d.szer) wiersz("Wymiary", `${d.szer} × ${d.wys} px` + (d.rodzaj === "zdjecie" ? ` (${(d.szer * d.wys / 1e6).toLocaleString("pl-PL", {maximumFractionDigits: 1})} Mpx)` : ""));
+  if (d.czas) wiersz("Długość", czasTxt(d.czas) + (d.dzwiek ? " · dźwięk " + d.dzwiek : ""));
+  wiersz("Zrobione", d.data ? dataTxt(d.data) + (d.data.length > 10 ? ", " + d.data.slice(11, 16) : "") : "brak daty");
+  wiersz("Skąd data", ZRODLA_DATY[d.zrodlo_daty] || d.zrodlo_daty);
+  wiersz("Aparat", d.aparat);
+  if (d.lat != null) wiersz("Miejsce", (d.miejsce ? d.miejsce + " · " : "") + `${d.lat.toFixed(5)}, ${d.lon.toFixed(5)}`);
+  if (d.osoby && d.osoby.length) wiersz("Osoby", "👤 " + d.osoby.join(", "));
+  wiersz("Zmieniony", d.zmieniony ? new Date(d.zmieniony * 1000).toLocaleString("pl-PL") : "");
+  t.append(dl);
+  if (!d.istnieje) { const z = document.createElement("div"); z.className = "zle"; z.textContent = "⚠ Pliku nie ma w tym miejscu — dysk odłączony albo plik przeniesiono."; t.append(z); }
+  const ak = document.createElement("div"); ak.className = "wl-akcje";
+  if (W_PROGRAMIE) ak.append(przycisk("📂 Pokaż w folderze", async () => {
+    try { await post("/api/g/pokaz-w-folderze", {id: p.id}); } catch (e) { toastG(e.message); }
+  }, "Otwiera Eksplorator Windows z zaznaczonym plikiem"));
+  ak.append(przycisk("📋 Kopiuj ścieżkę", async () => {
+    try { await navigator.clipboard.writeText(d.sciezka); toastG("📋 Skopiowano: " + d.sciezka); }
+    catch (e) { prompt("Ścieżka pliku:", d.sciezka); }
+  }));
+  if (p.rodzaj === "zdjecie" && d.lat == null && MOZE_USUWAC) ak.append(przycisk("📍 Dodaj miejsce", () => $("p-miejsce").click()));
+  t.append(ak);
+  const sc = document.createElement("div"); sc.className = "info"; sc.style.opacity = ".75"; sc.append("Pełna ścieżka: ", kod(d.sciezka)); t.append(sc);
+}
+$("p-info").onclick = e => {
+  e && e.stopPropagation && e.stopPropagation();
+  const w = $("wl"); w.hidden = !w.hidden; $("p-info").classList.toggle("akt", !w.hidden);
+  try { localStorage.setItem("kat_wl", w.hidden ? "0" : "1"); } catch (er) { /* bez pamięci */ }
+  if (!w.hidden && biezacy()) wlasciwosci(biezacy());
+};
+$("wl-zamknij").onclick = e => { e.stopPropagation(); $("p-info").click(); };
+$("wl").addEventListener("click", e => e.stopPropagation());
+$("wl").addEventListener("wheel", e => e.stopPropagation(), {passive: true});
+try { if (localStorage.getItem("kat_wl") === "1") { $("wl").hidden = false; $("p-info").classList.add("akt"); } } catch (e) { /* bez pamięci */ }
 // 📄 zdjęcie ↔ dokument
 $("p-dok").onclick = async e => {
   e && e.stopPropagation && e.stopPropagation();
@@ -1414,9 +1577,24 @@ function rysujPrz(s) {
   const zn = $("dyski-stan");
   zn.hidden = !(s.trwa || s.blad || !s.foldery.length);
   zn.textContent = s.trwa ? (s.wszystkie ? Math.round(100 * Math.min(1, s.zrobione / s.wszystkie)) + "%" : "⟳") : s.blad ? "!" : "+";
+  // 📚 uporządkowana biblioteka — w Przeglądarce od razu (pusta Przeglądarka: sama; inaczej jednym klikiem)
+  const bib = $("prz-bib"); bib.hidden = !s.biblioteka;
+  if (s.biblioteka) {
+    bib.textContent = "📚 Dodaj bibliotekę"; bib.title = "Dodaj uporządkowaną bibliotekę do Przeglądarki: " + s.biblioteka;
+    bib.onclick = () => dodajBiblioteke(s.biblioteka);
+    if (!s.foldery.length && !s.trwa && !prz.bibAuto) { prz.bibAuto = true; dodajBiblioteke(s.biblioteka, true); return; }
+  }
   if (!s.foldery.length && !naglowek.dyski) { naglowek.dyski = true; pokazDyski(); }  // nic nie dodano — od razu pokaż
   if (s.katalogator_pracuje && !s.trwa)  // ten sam dysk sieciowy — dwa zadania naraz idą wolniej
     $("prz-stan").textContent += " · Katalogator teraz porządkuje pliki — odświeżę się sam, gdy skończy";
+}
+async function dodajBiblioteke(sc, samo = false) {
+  try {
+    rysujPrz(await post("/api/przegladarka/foldery", {foldery: [...prz.foldery, sc]}));
+    await post("/api/przegladarka/skanuj", {});
+    toastG(samo ? `📚 Przeglądarka pokazuje Twoją bibliotekę (${sc}) — wczytuję zdjęcia…` : `📚 Dodano bibliotekę — wczytuję zdjęcia…`);
+    odswiezPrz();
+  } catch (e) { toastG(e.message); }
 }
 async function odswiezPrz() {
   try {

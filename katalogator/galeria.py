@@ -333,6 +333,18 @@ class Galeria:
                 mies = mm
                 continue
             reszta.append(s)
+        osoby_ids, osoby_nazwy = [], []
+        if reszta:  # 👤 imię osoby (z widoku „Osoby”)
+            from . import twarze
+            db = self._db()
+            try:
+                for s in list(reszta):
+                    o = twarze.osoba_w_tekscie(db, s)
+                    if o:
+                        osoby_ids.append(o); reszta.remove(s)
+                        osoby_nazwy.append(db.execute("SELECT nazwa FROM g_osoby WHERE id=?", (o,)).fetchone()[0])
+            finally:
+                db.close()
         miejsce, tekstowe = None, reszta
         if reszta:
             miejsce = miejsca.szukaj_miejsca(" ".join(reszta))
@@ -344,7 +356,7 @@ class Galeria:
                     if miejsce:
                         tekstowe = reszta[:i] + reszta[i + 1:]
                         break
-        if not (rok or mies or miejsce or tekstowe):
+        if not (rok or mies or miejsce or tekstowe or osoby_ids):
             return {"razem": 0, "pliki": [], "opis": ""}
         w, arg = self._warunek()
         war, a = [], []
@@ -355,6 +367,8 @@ class Galeria:
         for s in tekstowe:
             war.append("(lower(wzgledna) LIKE ? OR lower(coalesce(aparat, '')) LIKE ?)")
             a += [f"%{s.lower()}%"] * 2
+        for o in osoby_ids:
+            war.append("sciezka IN (SELECT sciezka FROM g_twarze WHERE osoba=?)"); a.append(o)
         if miejsce:
             if miejsce["pl"]:
                 war.append("(" + " OR ".join(["(lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?)"] * len(miejsce["pl"])) + ")")
@@ -382,7 +396,7 @@ class Galeria:
                                                        arg + a + [int(ile), int(od)])]
         finally:
             db.close()
-        opis = [miejsce["nazwa"]] if miejsce else []
+        opis = [f"👤 {n}" for n in osoby_nazwy] + ([miejsce["nazwa"]] if miejsce else [])
         if mies:
             opis.append(_NAZWY_MIES[mies - 1] + (f" {rok}" if rok else ""))
         elif rok:
@@ -734,6 +748,25 @@ class Galeria:
             db.close()
         return {"razem": razem, "pliki": [_nazwa(r) for r in wiersze], "nazwa": nazwa}
 
+    # --- 👤 osoby (twarze) ----------------------------------------------------------------------------------
+    def osoba(self, osoba: int, od: int = 0, ile: int = 200) -> dict:
+        from . import twarze
+        w, arg = self._warunek()
+        db = self._db()
+        try:
+            twarze.przygotuj(db)
+            r = db.execute("SELECT nazwa FROM g_osoby WHERE id=?", (int(osoba),)).fetchone()
+            if not r:
+                return {"blad": "nie ma takiej osoby"}
+            sql = f"FROM pliki WHERE rodzaj='zdjecie' AND sciezka IN ({twarze.sciezki_osoby_sql()}) {w}"
+            razem = db.execute(f"SELECT COUNT(*) {sql}", [int(osoba)] + arg).fetchone()[0]
+            k = self._kier("nowe")
+            wiersze = [dict(x) for x in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data {k}, wzgledna {k} "
+                                                   f"LIMIT ? OFFSET ?", [int(osoba)] + arg + [int(ile), int(od)])]
+        finally:
+            db.close()
+        return {"razem": razem, "pliki": [_nazwa(x) for x in wiersze], "nazwa": r[0] or "Bez imienia"}
+
     # --- filmy: miniatura wyciągnięta przez okno programu, odtwarzacz systemowy ---------------------------
     def zapisz_miniature_filmu(self, id_: int, jpeg: bytes) -> dict:
         film = self.sciezka(id_, "film")
@@ -761,6 +794,57 @@ class Galeria:
             else:
                 import subprocess
                 subprocess.Popen(["xdg-open", sc], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            return {"blad": str(e)}
+        return {"ok": True}
+
+    def wlasciwosci(self, id_: int) -> dict:
+        """ℹ Właściwości: gdzie leży plik, rozmiar, wymiary, skąd data, aparat, miejsce, osoby."""
+        r = self._wiersz(id_)
+        if not r:
+            return {"blad": "nie ma takiego pliku"}
+        sc = r["sciezka"]
+        d = {"sciezka": sc, "folder": os.path.dirname(sc), "nazwa": os.path.basename(sc), "rodzaj": r["rodzaj"],
+             "rozmiar": r["rozmiar"], "zmieniony": r["mtime"], "data": r["data"], "zrodlo_daty": r["zrodlo_daty"],
+             "aparat": r["aparat"], "lat": r["lat"], "lon": r["lon"], "istnieje": os.path.isfile(sc)}
+        if r["lat"] is not None:
+            try:
+                e = miejsca.etykieta(r["lat"], r["lon"])
+                d["miejsce"] = e if not e.startswith("@") else miejsca.fraza(e)
+            except Exception:  # noqa: BLE001
+                pass
+        if d["istnieje"]:
+            if r["rodzaj"] == "zdjecie":
+                try:
+                    from PIL import Image
+                    with Image.open(sc) as im:  # tylko nagłówek — szybko
+                        d["szer"], d["wys"], d["format"] = im.width, im.height, im.format
+                        o = im.getexif().get(0x0112)
+                        if o in (5, 6, 7, 8):
+                            d["szer"], d["wys"] = d["wys"], d["szer"]
+                except Exception:  # noqa: BLE001
+                    pass
+            elif r["rodzaj"] == "film":
+                from . import filmy
+                d.update(filmy.informacje(sc))
+        try:
+            from . import twarze
+            d["osoby"] = sorted({t["nazwa"] for t in twarze.twarze_pliku(self, id_)["twarze"] if t["nazwa"]})
+        except Exception:  # noqa: BLE001
+            d["osoby"] = []
+        return d
+
+    def pokaz_w_folderze(self, id_: int) -> dict:
+        """📂 Eksplorator Windows z zaznaczonym plikiem (inne systemy: sam folder)."""
+        sc = self.sciezka(id_, "film") or self.sciezka(id_, "zdjecie")
+        if not sc or not os.path.exists(sc):
+            return {"blad": "Pliku nie ma już w tym miejscu (odłączony dysk?)."}
+        import subprocess
+        try:
+            if os.name == "nt":
+                subprocess.Popen(["explorer", "/select,", os.path.normpath(sc)])  # noqa: S603,S607
+            else:
+                subprocess.Popen(["xdg-open", os.path.dirname(sc)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except OSError as e:
             return {"blad": str(e)}
         return {"ok": True}
@@ -891,7 +975,8 @@ def wyslij_zip(h: BaseHTTPRequestHandler, sciezki: list[str], nazwa: str) -> Non
 
 
 _FILTR = threading.local()
-_LISTY = ("/api/g/lata", "/api/g/pliki", "/api/g/szukaj", "/api/g/tego-dnia", "/api/g/kolekcja", "/api/g/mapa")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
+_LISTY = ("/api/g/lata", "/api/g/pliki", "/api/g/szukaj", "/api/g/tego-dnia", "/api/g/kolekcja", "/api/g/mapa",
+          "/api/g/osoba")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
 
 
 def obsluz_api(g: Galeria, sciezka: str, q: dict):
@@ -930,8 +1015,19 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict):
         return g.kolekcja(q.get("typ", [""])[0], i("album"), i("od"), min(i("ile", 200), 500)), None
     if sciezka == "/api/g/mapa":
         return g.mapa(), None
+    if sciezka in ("/api/g/osoby", "/api/g/twarz", "/api/g/twarze-pliku", "/api/g/osoba"):
+        from . import twarze
+        if sciezka == "/api/g/osoby":
+            return twarze.osoby(g, bool(q.get("wszystkie"))), None
+        if sciezka == "/api/g/twarz":
+            return twarze.miniatura_twarzy(g, i("id")), "image/jpeg"
+        if sciezka == "/api/g/twarze-pliku":
+            return twarze.twarze_pliku(g, i("id")), None
+        return g.osoba(i("id"), i("od"), min(i("ile", 200), 500)), None
     if sciezka == "/api/g/plik":
         return g.plik(i("id")) or {"blad": "nie ma takiego pliku"}, None
+    if sciezka == "/api/g/wlasciwosci":
+        return g.wlasciwosci(i("id")), None
     if sciezka == "/api/g/miniatura":
         return g.miniatura(i("id"), bool(q.get("srednia"))), "image/jpeg"
     if sciezka == "/api/g/podglad":
@@ -973,10 +1069,31 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
         return g.zapisz_miniature_filmu(int(dane.get("id") or 0), jpeg)
     if sciezka == "/api/g/otworz":
         return g.otworz(int(dane.get("id") or 0))
+    if sciezka == "/api/g/pokaz-w-folderze":
+        return g.pokaz_w_folderze(int(dane.get("id") or 0))
     if sciezka == "/api/g/zip":
         return zip_klucz(ids)
     if sciezka == "/api/g/album/udostepnij":
         return g.udostepnij(int(dane.get("album") or 0), bool(dane.get("wlacz", True)))
+    if sciezka.startswith(("/api/g/twarze/", "/api/g/osoba/", "/api/g/twarz/")):
+        from . import twarze
+        o = int(dane.get("id") or 0)
+        if sciezka == "/api/g/twarze/start":
+            powod = twarze.start(g)
+            return {"blad": powod} if powod else {"ok": True, "stan": twarze.stan(g.baza)}
+        if sciezka == "/api/g/twarze/przerwij":
+            twarze.przerwij(g.baza)
+            return {"ok": True}
+        if sciezka == "/api/g/osoba/nazwa":
+            return twarze.nazwij(g, o, str(dane.get("nazwa", "")))
+        if sciezka == "/api/g/osoba/polacz":
+            return twarze.polacz(g, ids)
+        if sciezka == "/api/g/osoba/ukryj":
+            return twarze.ukryj(g, o, bool(dane.get("tak", True)))
+        if sciezka == "/api/g/twarz/odlacz":
+            return twarze.odlacz(g, o)
+        if sciezka == "/api/g/twarz/przypisz":
+            return twarze.przypisz(g, o, int(dane.get("osoba") or 0))
     return obsluz_usuwanie(g, sciezka, dane)
 
 

@@ -1,5 +1,6 @@
 pillow>=10
 pillow-heif>=0.16   # zdjęcia HEIC (opcjonalnie)
 mutagen>=1.47
+opencv-python-headless>=4.8  # 👤 Osoby: wykrywanie i rozpoznawanie twarzy (YuNet + SFace)
 imageio-ffmpeg>=0.5  # ffmpeg: podgląd i miniatury starych filmów (AVI, MPG, 3GP, WMV…)
 pytest>=8           # tylko do testów

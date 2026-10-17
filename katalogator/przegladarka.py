@@ -206,6 +206,16 @@ class Przegladarka:
         threading.Thread(target=self._skanuj, args=(foldery,), daemon=True, name="przegladarka").start()
         return None
 
+    def _twarze_po_skanie(self, db) -> None:
+        """Gdy w Przeglądarce działa już wykrywanie twarzy — nowe zdjęcia przeglądamy od razu (w tle)."""
+        try:
+            uzywane = db.execute("SELECT 1 FROM g_twarze_pliki LIMIT 1").fetchone()
+        except Exception:  # noqa: BLE001 — tabeli jeszcze nie ma: „Osoby” nieużywane
+            return
+        if uzywane:
+            from . import twarze
+            twarze.start(self.galeria)
+
     def _skanuj(self, foldery: list[str]) -> None:
         db = skaner.otworz_baze(self.baza)
         t0, plikow, pominiete = time.time(), 0, []
@@ -236,6 +246,7 @@ class Przegladarka:
                 k += " Niedostępne: " + ", ".join(pominiete)
             with self.blokada:
                 self.stan.update(trwa=False, komunikat=k, etap="", czeka="")
+            self._twarze_po_skanie(db)
         except skaner.Przerwano:
             db.commit()
             with self.blokada:

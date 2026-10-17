@@ -205,6 +205,34 @@ body.pasek-schowany #pasek-pokaz{display:block;position:fixed;top:0;right:14px;z
 .seg button.akt,.rodzaje button.akt{background:linear-gradient(180deg,color-mix(in srgb,var(--akc) 30%,transparent),color-mix(in srgb,var(--akc) 12%,transparent));
   color:var(--fg);font-weight:600;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--akc) 75%,transparent),inset 0 -2px 0 #38bdf8,0 0 16px color-mix(in srgb,var(--akc) 30%,transparent)}
 .seg button:hover:not(.akt),.rodzaje button:hover:not(.akt){background:color-mix(in srgb,var(--akc) 10%,transparent)}
+.seg .ikl{width:20px;height:20px;vertical-align:-5px}
+/* 👤 osoby: okrągłe twarze */
+.k.osoba{cursor:pointer;text-align:center;background:none;border-color:transparent}
+.k.osoba .ob{aspect-ratio:1;border-radius:50%;overflow:hidden;margin:6px auto 0;width:78%;border:2px solid var(--lin);background:var(--panel);
+  box-shadow:0 0 0 0 transparent;transition:box-shadow .15s,border-color .15s;display:grid;place-items:center;font-size:40px}
+.k.osoba:hover .ob{border-color:var(--akc);box-shadow:0 0 16px color-mix(in srgb,var(--akc) 45%,transparent)}
+.k.osoba .ob img{width:100%;height:100%;object-fit:cover}
+.k.osoba .op div:first-child{font-weight:700}
+.k.osoba .op .bez{color:var(--mut);font-weight:500;font-style:italic}
+.k.osoba.wyb .ob{border-color:#38bdf8;box-shadow:0 0 0 3px #38bdf8,0 0 18px rgba(56,189,248,.5)}
+.k.osoba .zn-wyb{position:absolute;top:8px;right:12px;width:24px;height:24px;border-radius:50%;background:#38bdf8;color:#04121f;
+  display:none;place-items:center;font-weight:800}
+.k.osoba.wyb .zn-wyb{display:grid}
+.twarze-pasek{height:6px;border-radius:3px;background:color-mix(in srgb,var(--akc) 18%,transparent);overflow:hidden;width:180px;display:inline-block;vertical-align:middle}
+.twarze-pasek i{display:block;height:100%;background:linear-gradient(90deg,#22d3ee,#5b8cff)}
+/* ℹ właściwości pliku — panel z boku podglądu */
+#wl{position:absolute;top:64px;right:14px;bottom:70px;width:min(360px,calc(100vw - 28px));z-index:6;overflow:auto;
+  background:rgba(10,16,32,.86);backdrop-filter:blur(14px);color:#e7ecf7;border:1px solid rgba(120,150,255,.3);border-radius:14px;
+  padding:12px 14px;font-size:13px;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+#wl .wl-gora{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:14px}
+#wl .wl-gora button{background:none;border:0;color:inherit;font-size:16px;padding:2px 6px}
+#wl dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 12px;margin:0}
+#wl dt{color:#8a97b4} #wl dd{margin:0;word-break:break-word}
+#wl code{font-size:12px;background:rgba(255,255,255,.07);padding:2px 5px;border-radius:5px;word-break:break-all;user-select:all}
+#wl .wl-akcje{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 4px}
+#wl .wl-akcje button{background:rgba(91,140,255,.16);border:1px solid rgba(91,140,255,.45);color:#fff;border-radius:999px;padding:6px 12px;font-size:12.5px}
+#wl .wl-akcje button:hover{background:rgba(91,140,255,.3)}
+#wl .zle{color:#f87171}
 .ik3d-pusto{width:112px;height:112px;border-radius:26px;margin-bottom:14px;box-shadow:0 14px 40px rgba(37,99,235,.3)}
 /* --- wygląd paska: grupy (widoki | szukaj | rodzaje | narzędzia), równa wysokość, jedna linia --- */
 header{background:var(--panel);row-gap:8px}
@@ -307,11 +335,12 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   <button id="w-os" class="akt" title="Oś czasu"><img class="ikn" alt="" src="/ui/ikony_neon/os.webp"><span class="t"> Oś czasu</span></button>
   <button id="w-mapa" title="Mapa miejsc"><img class="ikn" alt="" src="/ui/ikony_neon/mapa.webp"><span class="t"> Mapa</span></button>
   <button id="w-kolekcje" title="Ulubione i albumy"><img class="ikn" alt="" src="/ui/ikony_neon/kolekcje.webp"><span class="t"> Kolekcje</span></button>
+  <button id="w-osoby" title="Osoby — twarze na zdjęciach, grupowane w osoby (imiona nadajesz Ty)"><i class="ikl" data-ik="osoby"></i><span class="t"> Osoby</span></button>
   <button id="w-dzien" title="Zdjęcia z tego samego dnia w poprzednich latach"><img class="ikn" alt="" src="/ui/ikony_neon/tegodnia.webp"><span class="t"> Tego dnia</span><b class="znaczek" id="dzien-ile" hidden></b></button>
   </span>
   <button id="szukaj-btn" title="Szukaj"><img class="ikn" alt="" src="/ui/ikony_neon/szukaj.webp"></button>
-  <input id="szukaj" type="search" placeholder="Szukaj: Hel, lipiec 2019, Włochy, nazwa…" autocomplete="off"
-         title="Miejsce (miejscowość, kraj), rok, miesiąc, fragment nazwy pliku lub folderu, aparat — można łączyć">
+  <input id="szukaj" type="search" placeholder="Szukaj: Hel, lipiec 2019, Ania, Włochy, nazwa…" autocomplete="off"
+         title="Imię osoby (👤 Osoby), miejsce (miejscowość, kraj), rok, miesiąc, fragment nazwy pliku lub folderu, aparat — można łączyć">
   <span class="rodzaje" id="rodzaje" role="group" aria-label="Pokaż">
     <button data-r="" title="Wszystko"><img class="ikn" alt="" src="/ui/ikony_neon/wszystko.webp"><span class="t"> Wszystko</span></button><button data-r="zdjecie" title="Tylko zdjęcia (bez dokumentów)"><img class="ikn" alt="" src="/ui/ikony_neon/zdjecia.webp"><span class="t"> Zdjęcia</span></button><button data-r="film" title="Tylko filmy"><img class="ikn" alt="" src="/ui/ikony_neon/filmy.webp"><span class="t"> Filmy</span></button><button data-r="dokument" title="Tylko dokumenty (zdjęcia dokumentów: foldery „Dokumenty…” i Twoje decyzje)"><img class="ikn" alt="" src="/ui/ikony_neon/dokumenty.webp"><span class="t"> Dokumenty</span></button>
   </span>
@@ -361,6 +390,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   </span>
   <span id="prz-foldery" style="display:contents"></span>
   <button id="prz-dodaj" title="Dodaj dysk lub folder do przeglądania">＋ Dysk lub folder</button>
+  <button id="prz-bib" class="akt" hidden></button>
   <button id="prz-skanuj" class="akt" title="Skan tylko czyta dyski — zmieniasz coś wyłącznie sam (🗑 Usuń)">⟳ Skanuj</button>
   <button id="prz-przerwij" hidden>Przerwij</button>
   <label title="Przy starcie programu i potem co 6 godzin wczytuję nowe i zmienione pliki (tylko odczyt)">
@@ -386,6 +416,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
     <button id="p-album" hidden title="Dodaj do albumu">＋ Album</button>
     <button id="p-z-albumu" hidden title="Usuń z tego albumu (zdjęcie zostaje na dysku)">− Z albumu</button>
     <button id="p-pokaz" title="Pokaz slajdów (P)">▶ Pokaz</button>
+    <button id="p-info" title="Właściwości: folder, w którym leży plik, rozmiar, wymiary, aparat, skąd data (I)">ℹ Właściwości</button>
     <button id="p-miejsce" hidden title="Dodaj, zmień albo usuń miejsce zrobienia zdjęcia (L)">📍 Miejsce</button>
     <button id="p-edytuj" hidden title="Przytnij, obróć, rozjaśnij, popraw kolory (E) — zapis jako kopia albo zamiast oryginału">✏ Edytuj</button>
     <button id="p-data" hidden title="Zmień datę zrobienia (zapis w pliku: JPEG — EXIF, inne — plik .xmp obok)">📅 Data</button>
@@ -399,6 +430,10 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   <div class="opis" id="pelny-opis"></div>
   <div id="mini-mapa" hidden title="Kliknij — duża mapa w tym miejscu"><div id="mini-mapa-m"></div><div id="mini-mapa-t"></div></div>
   <div class="skala" id="pelny-skala" style="opacity:0"></div>
+  <aside id="wl" hidden aria-label="Właściwości">
+    <div class="wl-gora"><b>ℹ Właściwości</b><button id="wl-zamknij" title="Zamknij (I)">✕</button></div>
+    <div id="wl-tresc"></div>
+  </aside>
 </div>
 
 <div id="login" hidden>

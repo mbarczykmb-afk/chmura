@@ -39,6 +39,14 @@ async function rysujUstawienia() {
   }
   t.append(sekcja("🎨 Wygląd", wiersz(el("span", {className: "info", textContent: "Motyw okna, Przeglądarki i telefonu"}), seg)));
 
+  // 🏠 co otwiera się po uruchomieniu
+  const segS = el("span", {className: "seg"});
+  for (const [m, n] of [["przegladarka", "🔭 Przeglądarka"], ["wybor", "Ekran wyboru"]]) {
+    segS.append(przyc(n, () => { try { localStorage.setItem("kat_start", m); } catch (e) { /* bez pamięci */ } rysujUstawienia(); },
+                      trybStartu() === m ? "akt" : ""));
+  }
+  t.append(sekcja("🏠 Po uruchomieniu", wiersz(el("span", {className: "info", textContent: "Co pokazać zaraz po starcie programu"}), segS)));
+
   // 🚀 start
   if (d.autostart_mozliwy) t.append(sekcja("🚀 Start",
     pole("Uruchamiaj Katalogator razem z Windows (w tle, bez okna) — telefon i automatyczna kopia działają od razu",

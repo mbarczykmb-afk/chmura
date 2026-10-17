@@ -24,7 +24,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, naprawa, odzyskiwanie, pilot, planista, projekty, przegladarka,
-               przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, usuwanie, wykonawca, wysylanie)
+               przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, twarze, usuwanie, wykonawca, wysylanie)
 from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
@@ -53,10 +53,23 @@ class Stan:
         # wspólny indeks odczytów: Porządkowanie, Sprzątanie i Przeglądarka czytają każdy plik z dysku raz
         indeks.ustaw(Path(katalog) / "wspolny_indeks.db")
         self.przegladarka = przegladarka.Przegladarka(katalog)  # dyski do oglądania, osobna baza
+        twarze.KATALOG_MODELI = Path(katalog) / "modele"  # model rozpoznawania twarzy (pobierany raz)
         self.serwer_tel = None
         self.wzorce_pamiec: dict = {}  # marka ftyp → wzorce, które zadziałały przy naprawie filmów
         pid = self.projekty.ostatni() or self.projekty.nowy("Mój projekt")
         self._otworz(pid)
+
+    def biblioteka_poza_przegladarka(self) -> str | None:
+        """Uporządkowana biblioteka (miejsce docelowe), której jeszcze nie ma w Przeglądarce — do dodania jednym klikiem."""
+        cel = self.ustawienia.get("cel")
+        if not cel or not os.path.isdir(cel):
+            return None
+        c = os.path.normcase(os.path.abspath(cel)).rstrip("\\/") + os.sep
+        for f in self.przegladarka.wszystkie_foldery():
+            f = os.path.normcase(os.path.abspath(f)).rstrip("\\/") + os.sep
+            if c.startswith(f):
+                return None
+        return cel
 
     def galeria(self, zakres: str = "biblioteka") -> "galeria.Galeria":
         """Przeglądarka biblioteki: „biblioteka” = miejsce docelowe, „wszystko” = całe dane projektu."""
@@ -1443,7 +1456,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 stan.przygotuj_miniatury([p["id"] for p in pliki])
                 return self._wyslij({"pliki": pliki})
             if u.path == "/api/przegladarka":
-                return self._wyslij({**stan.przegladarka.opis(), "katalogator_pracuje": stan.zajety()})
+                return self._wyslij({**stan.przegladarka.opis(), "katalogator_pracuje": stan.zajety(),
+                                     "biblioteka": stan.biblioteka_poza_przegladarka()})
             if u.path == "/api/ustawienia-programu":  # ⚙ Ustawienia — wszystko w jednym oknie
                 ust = aktualizacje._ustawienia(stan.katalog)
                 st = stan.serwer_tel

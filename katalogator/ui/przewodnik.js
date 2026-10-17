@@ -251,17 +251,24 @@ naStan.push(() => {
   if (powitanieSprawdzone || stan.powitanie_widziane === undefined) return;
   powitanieSprawdzone = true;
   if (!stan.powitanie_widziane) pokazPowitanie();
-  else if (!document.body.classList.contains("zdalnie")) pokazWyborTrybu();
+  else if (!document.body.classList.contains("zdalnie")) startProgramu();
 });
+
+// ---------- start: Przeglądarka (główna część programu) albo ekran wyboru — do ustawienia w ⚙ ----------
+function trybStartu() { try { return localStorage.getItem("kat_start") || "przegladarka"; } catch (e) { return "przegladarka"; } }
+function startProgramu() {
+  if (trybStartu() === "wybor") pokazWyborTrybu();
+  else document.querySelector('.tryby button[data-tryb="przegladarka"]').click();
+}
 
 // ---------- ekran startowy: trzy duże kafelki — czym się dziś zajmujemy ----------
 function pokazWyborTrybu() {
   if ($("wybor-trybu")) return;
   const n = document.createElement("div"); n.className = "wybor-trybu"; n.id = "wybor-trybu"; n.setAttribute("role", "dialog");
   const KAFLE = [
+    ["przegladarka", "przegladarka", "Przeglądarka", "Główna część programu: zdjęcia i filmy z biblioteki i dowolnych dysków — oś czasu, mapa, 👤 osoby, kolekcje, „tego dnia”."],
     ["porzadkowanie", "porzadkowanie", "Porządkowanie", "Kopiuję albo przenoszę zdjęcia i filmy do jednej uporządkowanej biblioteki: Rok → Miesiąc → Miejsce."],
     ["sprzatanie", "sprzatanie", "Sprzątanie", "Duplikaty, podobne, nieostre i śmieci w istniejących folderach — bez kopiowania i bez nowego drzewa."],
-    ["przegladarka", "przegladarka", "Przeglądarka", "Oglądanie zdjęć i filmów z dowolnych dysków: oś czasu, mapa, kolekcje, „tego dnia”."],
     ["odzysk", "odzysk", "Odzyskiwanie", "Usunięte pliki — z koszy Windows, kopii zapasowej, a nawet po opróżnieniu kosza i formatowaniu."],
   ];
   const obecny = sprzatanie() ? "sprzatanie" : "porzadkowanie";

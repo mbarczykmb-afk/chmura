@@ -104,6 +104,31 @@ def metadane(sciezka: str) -> dict:
     return wynik
 
 
+def informacje(sciezka: str) -> dict:
+    """ℹ Właściwości filmu: czas trwania, rozdzielczość, kodek (z ffmpeg)."""
+    import re
+    f = ffmpeg()
+    if not f:
+        return {}
+    try:
+        w = subprocess.run([f, "-hide_banner", "-i", sciezka], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.PIPE, timeout=30, creationflags=_BEZ_OKNA)
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    t = w.stderr.decode("utf-8", errors="replace")
+    out: dict = {}
+    m = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", t)
+    if m:
+        out["czas"] = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+    m = re.search(r"Video: (\w+)[^\n]*?, (\d{2,5})x(\d{2,5})", t)
+    if m:
+        out["kodek"], out["szer"], out["wys"] = m.group(1), int(m.group(2)), int(m.group(3))
+    m = re.search(r"Audio: (\w+)", t)
+    if m:
+        out["dzwiek"] = m.group(1)
+    return out
+
+
 def polecenie_mp4(sciezka: str, od: float = 0, webm: bool = False) -> list[str] | None:
     """MP4 (H.264 + AAC) — najszerzej obsługiwany; WebM (VP8 + Opus) — zapas, gdy w systemie brak H.264
     (np. Windows „N” bez pakietu multimediów)."""
