@@ -402,6 +402,7 @@ body.galeria-otwarta.nagl-schowany #nagl-pokaz:hover{color:var(--fg);background:
 body.galeria-otwarta #projekt-btn{flex:0 1 auto;min-width:0;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:1500px){body.galeria-otwarta #odzysk-btn .t,body.galeria-otwarta #biblioteka-btn .t{display:none}
   body.galeria-otwarta header h1 .logo-tekst{display:none}}
+.ik3d-tyt{width:34px;height:34px;border-radius:9px;vertical-align:middle;margin-right:10px;margin-top:-4px}
 #biblioteka-btn.akt{background:var(--akc-miekki,var(--panel));border-color:var(--akc);color:var(--fg)}
 #galeria-nakladka iframe{border:0;width:100%;height:100%;display:block}
 #biblioteka-btn{font-weight:600}
@@ -493,7 +494,7 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
   position:relative;transition:transform .15s,box-shadow .15s,border-color .15s,background .15s;box-shadow:0 10px 40px rgba(0,0,0,.45)}
 .wt-kafel:hover,.wt-kafel:focus-visible{transform:translateY(-4px);border-color:#7c9cff;background:rgba(30,44,96,.7);
   box-shadow:0 18px 50px rgba(64,110,255,.45);outline:none}
-.wt-kafel .ik{font-size:54px;line-height:1}
+.wt-kafel .ik3d{width:84px;height:84px;border-radius:20px;box-shadow:0 10px 30px rgba(37,99,235,.35)}
 .wt-kafel b{font-size:23px}
 .wt-kafel .op{color:#b9c4e4;font-size:14px;line-height:1.45}
 .wt-kafel small{position:absolute;top:14px;right:14px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;border-radius:999px;padding:2px 10px;font-size:11.5px}
@@ -501,7 +502,7 @@ section.przew.biezacy{border-color:color-mix(in srgb,var(--akc) 60%,var(--lin));
 .wt-dol .info{color:inherit}
 .wt-dol b{color:#fff}
 .wt-dol button{background:rgba(13,20,42,.6);color:#eef2ff;border:1px solid rgba(160,180,255,.3);backdrop-filter:blur(8px)}
-@media (max-width:760px){.wt-kafle{grid-template-columns:1fr}.wt-kafel{min-height:0;padding:16px}.wt-kafel .ik{font-size:34px}
+@media (max-width:760px){.wt-kafle{grid-template-columns:1fr}.wt-kafel{min-height:0;padding:16px}.wt-kafel .ik3d{width:56px;height:56px;border-radius:14px}
   .wybor-trybu{justify-content:center;background-position:30% center}.wt-okno h2{font-size:22px}}
 .start{position:fixed;inset:0;z-index:5000;background:#050814;display:grid;place-items:center;overflow:hidden;transition:opacity .6s ease,visibility .6s;cursor:pointer}
 .start::before{content:"";position:absolute;inset:-40px;background:url(/ui/start.webp) center/cover;filter:blur(38px) brightness(.55);transform:scale(1.1)}
@@ -606,21 +607,21 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
 <header>
   <h1><img src="/ui/ikona.png" alt=""><span class="logo-tekst">Katalogator</span></h1><span class="wersja" id="wersja"></span>
   <nav class="tryby" role="tablist" aria-label="Tryb pracy">
-    <button role="tab" data-tryb="porzadkowanie" title="Porządkowanie: kopiuje lub przenosi pliki do uporządkowanej biblioteki (Rok → Miesiąc → Miejsce)">🗂<span class="t"> Porządkowanie</span></button>
-    <button role="tab" data-tryb="sprzatanie" title="Sprzątanie na miejscu: duplikaty i śmieci w istniejących folderach — bez kopiowania i bez nowego drzewa">🧹<span class="t"> Sprzątanie</span></button>
-    <button role="tab" data-tryb="przegladarka" id="przegladarka-btn" title="Przeglądarka: zdjęcia z dowolnych dysków na osi czasu i mapie — oglądanie (i 🗑 usuwanie, gdy chcesz)">🔭<span class="t"> Przeglądarka</span></button>
+    <button role="tab" data-tryb="porzadkowanie" title="Porządkowanie: kopiuje lub przenosi pliki do uporządkowanej biblioteki (Rok → Miesiąc → Miejsce)"><i class="ikl" data-ik="porzadek"></i><span class="t"> Porządkowanie</span></button>
+    <button role="tab" data-tryb="sprzatanie" title="Sprzątanie na miejscu: duplikaty i śmieci w istniejących folderach — bez kopiowania i bez nowego drzewa"><i class="ikl" data-ik="sprzatanie"></i><span class="t"> Sprzątanie</span></button>
+    <button role="tab" data-tryb="przegladarka" id="przegladarka-btn" title="Przeglądarka: zdjęcia z dowolnych dysków na osi czasu i mapie — oglądanie (i 🗑 usuwanie, gdy chcesz)"><i class="ikl" data-ik="przegladarka"></i><span class="t"> Przeglądarka</span></button>
   </nav>
-  <button class="projekt-btn" id="projekt-btn" title="Zmień projekt">📁 <span id="projekt-nazwa">…</span> ▾</button>
+  <button class="projekt-btn" id="projekt-btn" title="Zmień projekt"><i class="ikl" data-ik="folder"></i> <span id="projekt-nazwa">…</span> ▾</button>
   <span class="odstep"></span>
-  <button id="biblioteka-btn" class="tylko-porz" title="Przeglądaj bibliotekę: oś czasu i mapa miejsc; także na telefonie">📚<span class="t"> Biblioteka</span></button>
-  <button id="kosz-btn" title="Kosz: odłożone i usunięte pliki (folder Odłożone) — przywróć albo opróżnij">🗑<span class="kosz-licz" id="kosz-licz" hidden></span></button>
-  <button id="telefon-btn" title="Telefon jako pilot: co robi program, uruchamianie kolejnych kroków, przeglądanie zdjęć">📱</button>
-  <button id="nagl-schowaj" title="Schowaj ten pasek (więcej miejsca na zdjęcia) — wróci listwą „▾ Menu Katalogatora” u góry">▴</button>
+  <button id="biblioteka-btn" class="tylko-porz" title="Przeglądaj bibliotekę: oś czasu i mapa miejsc; także na telefonie"><i class="ikl" data-ik="biblioteka"></i><span class="t"> Biblioteka</span></button>
+  <button id="kosz-btn" title="Kosz: odłożone i usunięte pliki (folder Odłożone) — przywróć albo opróżnij"><i class="ikl" data-ik="kosz"></i><span class="kosz-licz" id="kosz-licz" hidden></span></button>
+  <button id="telefon-btn" title="Telefon jako pilot: co robi program, uruchamianie kolejnych kroków, przeglądanie zdjęć"><i class="ikl" data-ik="telefon"></i></button>
+  <button id="nagl-schowaj" title="Schowaj ten pasek (więcej miejsca na zdjęcia) — wróci listwą „▾ Menu Katalogatora” u góry"><i class="ikl" data-ik="schowaj"></i></button>
   <button id="motyw-btn" title="Motyw: jasny / ciemny" aria-label="Przełącz motyw jasny / ciemny"></button>
-  <button id="odzysk-btn" title="Odzyskiwanie usuniętych plików — także po opróżnieniu kosza i dawno temu">🛟<span class="t"> Odzyskaj</span></button>
-  <button id="ust-btn" title="Ustawienia: wygląd, start z Windows, telefon, kopia zapasowa, aktualizacje">⚙</button>
+  <button id="odzysk-btn" title="Odzyskiwanie usuniętych plików — także po opróżnieniu kosza i dawno temu"><i class="ikl" data-ik="odzysk"></i><span class="t"> Odzyskaj</span></button>
+  <button id="ust-btn" title="Ustawienia: wygląd, start z Windows, telefon, kopia zapasowa, aktualizacje"><i class="ikl" data-ik="ustawienia"></i></button>
   <div style="position:relative">
-    <button id="pomoc-btn" title="Pomoc, zgłaszanie problemów, aktualizacje">?</button>
+    <button id="pomoc-btn" title="Pomoc, zgłaszanie problemów, aktualizacje"><i class="ikl" data-ik="pomoc"></i></button>
     <div class="menu" id="pomoc-menu" hidden>
       <button id="m-powitanie">👋 Jak zacząć</button>
       <button id="m-zglos">🐞 Zgłoś problem / wyślij raport…</button>
@@ -975,7 +976,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
 
 <div class="nakladka" id="okno-odzysk" hidden>
   <div class="okno" role="dialog" aria-labelledby="okno-odzysk-tytul" style="width:min(1000px,96vw);height:min(860px,94vh)">
-    <h2 id="okno-odzysk-tytul">🛟 Odzyskiwanie usuniętych plików</h2>
+    <h2 id="okno-odzysk-tytul"><img class="ik3d-tyt" alt="" src="/ui/ikony3d/odzysk.webp">Odzyskiwanie usuniętych plików</h2>
     <div class="odz" id="odz-tresc">
       <section class="odz-krok">
         <h3>1. Co zgubiłeś?</h3>
@@ -1014,7 +1015,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
 
 <div class="nakladka" id="okno-ust" hidden>
   <div class="okno" role="dialog" aria-labelledby="okno-ust-tytul" style="width:min(720px,94vw)">
-    <h2 id="okno-ust-tytul">⚙ Ustawienia</h2>
+    <h2 id="okno-ust-tytul"><img class="ik3d-tyt" alt="" src="/ui/ikony3d/ustawienia.webp">Ustawienia</h2>
     <div class="ust" id="ust-tresc">Wczytuję…</div>
     <div class="dol"><span class="wybor" id="ust-info"></span><button class="glowny" id="ust-zamknij">Gotowe</button></div>
   </div>
@@ -1754,6 +1755,7 @@ function rysujDup() {
   setInterval(odswiez, 1000);
 })();
 </script>
+<script src="/ui/ikony.js"></script>
 <script src="/ui/aktywnosc.js"></script>
 <script src="/ui/motyw.js"></script>
 <script src="/ui/plan.js"></script>
@@ -1762,7 +1764,7 @@ function rysujDup() {
 <script src="/ui/przewodnik.js"></script>
 <div class="nakladka" id="okno-kosz" hidden>
   <div class="okno" role="dialog" aria-labelledby="kosz-tytul" style="max-width:560px;min-height:0;height:auto">
-    <h2 id="kosz-tytul">🗑 Kosz</h2>
+    <h2 id="kosz-tytul"><img class="ik3d-tyt" alt="" src="/ui/ikony3d/kosz.webp">Kosz</h2>
     <div class="info">Odłożone i usunięte pliki leżą w folderze <b>Odłożone</b> — przy porządkowaniu jeden wspólny
       w miejscu docelowym (np. <code>Z:\Uporządkowane\Odłożone\Duplikaty</code>), przy sprzątaniu w każdym
       wybranym folderze. Dopóki tu są — możesz je przywrócić

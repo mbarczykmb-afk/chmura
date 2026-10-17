@@ -75,9 +75,9 @@ async function wczytajLata(tylkoLiczby = false) {
   if (!g.lata.length) {
     if (g.zrodlo.typ !== "os") return;
     $("siatka").innerHTML = `<div class="pusto">${g.obszar ? "Brak zdjęć z datą w tym obszarze." : W_PROGRAMIE && g.zakres === "biblioteka"
-      ? "Biblioteka jest jeszcze pusta — uporządkuj pliki albo wybierz „Wszystko w projekcie”."
+      ? "<img class=\"ik3d-pusto\" alt=\"\" src=\"/ui/ikony3d/biblioteka.webp\"><br>Biblioteka jest jeszcze pusta — uporządkuj pliki albo wybierz „Wszystko w projekcie”."
       : g.zakres === "przegladarka"
-        ? "Dodaj dysk lub folder (＋) i kliknij „Skanuj”. Przeglądarka tylko czyta dyski — niczego sama nie zmienia (usuwasz tylko Ty, przyciskiem 🗑, z możliwością cofnięcia)."
+        ? "<img class=\"ik3d-pusto\" alt=\"\" src=\"/ui/ikony3d/przegladarka.webp\"><br>Dodaj dysk lub folder (＋) i kliknij „Skanuj”. Przeglądarka tylko czyta dyski — niczego sama nie zmienia (usuwasz tylko Ty, przyciskiem 🗑, z możliwością cofnięcia)."
         : "Brak zdjęć z datą."}</div>`;
     $("miesiace").replaceChildren(); return;
   }

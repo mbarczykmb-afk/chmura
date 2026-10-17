@@ -259,10 +259,10 @@ function pokazWyborTrybu() {
   if ($("wybor-trybu")) return;
   const n = document.createElement("div"); n.className = "wybor-trybu"; n.id = "wybor-trybu"; n.setAttribute("role", "dialog");
   const KAFLE = [
-    ["porzadkowanie", "🗂", "Porządkowanie", "Kopiuję albo przenoszę zdjęcia i filmy do jednej uporządkowanej biblioteki: Rok → Miesiąc → Miejsce."],
-    ["sprzatanie", "🧹", "Sprzątanie", "Duplikaty, podobne, nieostre i śmieci w istniejących folderach — bez kopiowania i bez nowego drzewa."],
-    ["przegladarka", "🔭", "Przeglądarka", "Oglądanie zdjęć i filmów z dowolnych dysków: oś czasu, mapa, kolekcje, „tego dnia”."],
-    ["odzysk", "🛟", "Odzyskiwanie", "Usunięte pliki — z koszy Windows, kopii zapasowej, a nawet po opróżnieniu kosza i formatowaniu."],
+    ["porzadkowanie", "porzadkowanie", "Porządkowanie", "Kopiuję albo przenoszę zdjęcia i filmy do jednej uporządkowanej biblioteki: Rok → Miesiąc → Miejsce."],
+    ["sprzatanie", "sprzatanie", "Sprzątanie", "Duplikaty, podobne, nieostre i śmieci w istniejących folderach — bez kopiowania i bez nowego drzewa."],
+    ["przegladarka", "przegladarka", "Przeglądarka", "Oglądanie zdjęć i filmów z dowolnych dysków: oś czasu, mapa, kolekcje, „tego dnia”."],
+    ["odzysk", "odzysk", "Odzyskiwanie", "Usunięte pliki — z koszy Windows, kopii zapasowej, a nawet po opróżnieniu kosza i formatowaniu."],
   ];
   const obecny = sprzatanie() ? "sprzatanie" : "porzadkowanie";
   n.innerHTML = `<div class="wt-okno"><h2>Czym się dziś zajmujemy?</h2>
@@ -273,8 +273,7 @@ function pokazWyborTrybu() {
   const kafle = n.querySelector(".wt-kafle");
   for (const [t, ik, tyt, opis] of KAFLE) {
     const b = document.createElement("button"); b.className = "wt-kafel" + (t === obecny ? " ostatni" : "");
-    b.innerHTML = `<span class="ik"></span><b></b><span class="op"></span>`;
-    b.querySelector(".ik").textContent = ik; b.querySelector("b").textContent = tyt; b.querySelector(".op").textContent = opis;
+    b.innerHTML = `<img class="ik3d" alt="" src="/ui/ikony3d/${ik}.webp"><b></b><span class="op"></span>`; b.querySelector("b").textContent = tyt; b.querySelector(".op").textContent = opis;
     if (t === obecny) { const z = document.createElement("small"); z.textContent = "ostatnio"; b.append(z); }
     b.onclick = () => { zamknij(); if (t === "odzysk") otworzOdzysk(); else document.querySelector(`.tryby button[data-tryb="${t}"]`).click(); };
     kafle.append(b);

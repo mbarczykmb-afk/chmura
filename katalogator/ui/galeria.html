@@ -200,6 +200,7 @@ body.pasek-schowany #pasek-pokaz{display:block;position:fixed;top:0;right:14px;z
 @media (max-width:600px){header .rodzaje{display:none}#rodzaj-sel{display:block}}
 .tylko-tel{display:none}
 @media (max-width:600px){header #kolejnosc,header #wyslij-btn{display:none}.tylko-tel:not([hidden]){display:block}}
+.ik3d-pusto{width:112px;height:112px;border-radius:26px;margin-bottom:14px;box-shadow:0 14px 40px rgba(37,99,235,.3)}
 /* --- wygląd paska: grupy (widoki | szukaj | rodzaje | narzędzia), równa wysokość, jedna linia --- */
 header{background:var(--panel);row-gap:8px}
 header button,header select{height:34px;display:inline-flex;align-items:center;gap:5px}
@@ -209,7 +210,7 @@ header button,header select{height:34px;display:inline-flex;align-items:center;g
 .seg button:hover:not(.akt){background:var(--akc-miekki)}
 .seg button.akt{background:var(--akc);color:var(--akc-fg)}
 .rodzaje{border-radius:10px}.rodzaje button{height:32px;padding:0 11px}
-#szukaj{flex:1 1 220px;max-width:440px;height:34px}
+#szukaj{flex:1 1 220px;max-width:440px;height:34px;padding-left:36px;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%238a97b4%27 stroke-width=%272%27 stroke-linecap=%27round%27%3E%3Ccircle cx=%2711%27 cy=%2711%27 r=%278%27/%3E%3Cpath d=%27m21 21-4.3-4.3%27/%3E%3C/svg%3E") no-repeat 13px center/16px}
 .narz{display:inline-flex;align-items:center;gap:6px;flex:none}
 .narz>button,.narz .menu-w>button{padding:0 10px;min-width:34px;justify-content:center}
 #zamknij{min-width:34px;justify-content:center;padding:0 10px;margin-left:4px}
@@ -299,26 +300,26 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 <header>
   <h1 id="tytul">📚<span class="t"> Biblioteka</span></h1>
   <span class="seg widoki" role="group" aria-label="Widok">
-  <button id="w-os" class="akt" title="Oś czasu">📅<span class="t"> Oś czasu</span></button>
-  <button id="w-mapa" title="Mapa miejsc">🗺<span class="t"> Mapa</span></button>
-  <button id="w-kolekcje" title="Ulubione i albumy">⭐<span class="t"> Kolekcje</span></button>
-  <button id="w-dzien" title="Zdjęcia z tego samego dnia w poprzednich latach">🕰<span class="t"> Tego dnia</span><b class="znaczek" id="dzien-ile" hidden></b></button>
+  <button id="w-os" class="akt" title="Oś czasu"><i class="ikl" data-ik="kalendarz"></i><span class="t"> Oś czasu</span></button>
+  <button id="w-mapa" title="Mapa miejsc"><i class="ikl" data-ik="mapa"></i><span class="t"> Mapa</span></button>
+  <button id="w-kolekcje" title="Ulubione i albumy"><i class="ikl" data-ik="gwiazda"></i><span class="t"> Kolekcje</span></button>
+  <button id="w-dzien" title="Zdjęcia z tego samego dnia w poprzednich latach"><i class="ikl" data-ik="tegodnia"></i><span class="t"> Tego dnia</span><b class="znaczek" id="dzien-ile" hidden></b></button>
   </span>
-  <button id="szukaj-btn" title="Szukaj">🔍</button>
-  <input id="szukaj" type="search" placeholder="🔍 Szukaj: Hel, lipiec 2019, Włochy, nazwa…" autocomplete="off"
+  <button id="szukaj-btn" title="Szukaj"><i class="ikl" data-ik="szukaj"></i></button>
+  <input id="szukaj" type="search" placeholder="Szukaj: Hel, lipiec 2019, Włochy, nazwa…" autocomplete="off"
          title="Miejsce (miejscowość, kraj), rok, miesiąc, fragment nazwy pliku lub folderu, aparat — można łączyć">
   <span class="rodzaje" id="rodzaje" role="group" aria-label="Pokaż">
-    <button data-r="" title="Wszystko">Wszystko</button><button data-r="zdjecie" title="Tylko zdjęcia (bez dokumentów)">📷<span class="t"> Zdjęcia</span></button><button data-r="film" title="Tylko filmy">🎬<span class="t"> Filmy</span></button><button data-r="dokument" title="Tylko dokumenty (zdjęcia dokumentów: foldery „Dokumenty…” i Twoje decyzje)">📄<span class="t"> Dokumenty</span></button>
+    <button data-r="" title="Wszystko">Wszystko</button><button data-r="zdjecie" title="Tylko zdjęcia (bez dokumentów)"><i class="ikl" data-ik="zdjecie"></i><span class="t"> Zdjęcia</span></button><button data-r="film" title="Tylko filmy"><i class="ikl" data-ik="film"></i><span class="t"> Filmy</span></button><button data-r="dokument" title="Tylko dokumenty (zdjęcia dokumentów: foldery „Dokumenty…” i Twoje decyzje)"><i class="ikl" data-ik="dokument"></i><span class="t"> Dokumenty</span></button>
   </span>
   <span class="odstep"></span>
   <span class="narz" role="group" aria-label="Narzędzia">
   <button id="kolejnosc" title="Kolejność zdjęć">⇅<span class="t" id="kolejnosc-t"> Od najnowszych</span></button>
-  <button id="dyski-btn" hidden title="Dyski i foldery Przeglądarki, skanowanie">💽<span class="t"> Dyski</span><b class="znaczek" id="dyski-stan" hidden></b></button>
-  <button id="wyslij-btn" hidden title="Wyślij zdjęcia i filmy do biblioteki (z telefonu: prosto z galerii)">📤<span class="t"> Wyślij</span></button>
+  <button id="dyski-btn" hidden title="Dyski i foldery Przeglądarki, skanowanie"><i class="ikl" data-ik="dyski"></i><span class="t"> Dyski</span><b class="znaczek" id="dyski-stan" hidden></b></button>
+  <button id="wyslij-btn" hidden title="Wyślij zdjęcia i filmy do biblioteki (z telefonu: prosto z galerii)"><i class="ikl" data-ik="wyslij"></i><span class="t"> Wyślij</span></button>
   <input type="file" id="wyslij-pliki" multiple accept="image/*,video/*" hidden>
-  <button id="wykres-btn" title="Pokaż / schowaj wykres lat i miesięcy">📊</button>
+  <button id="wykres-btn" title="Pokaż / schowaj wykres lat i miesięcy"><i class="ikl" data-ik="statystyki"></i></button>
   <span class="menu-w">
-    <button id="menu-btn" title="Więcej: zakres, pokaz slajdów, telefon" aria-haspopup="true">⋯</button>
+    <button id="menu-btn" title="Więcej: zakres, pokaz slajdów, telefon" aria-haspopup="true"><i class="ikl" data-ik="wiecej"></i></button>
     <div class="menu" id="menu" hidden>
       <div class="info" id="licznik"></div>
       <select id="zakres" hidden title="Które zdjęcia pokazać">
@@ -344,7 +345,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
     </div>
   </span>
   </span>
-  <button id="zamknij" hidden title="Zamknij Przeglądarkę i wróć do programu">✕</button>
+  <button id="zamknij" hidden title="Zamknij Przeglądarkę i wróć do programu"><i class="ikl" data-ik="zamknij"></i></button>
 </header>
 <button id="pasek-pokaz" title="Pokaż pasek Przeglądarki (widoki, szukanie, filtry, dyski)">▾ Narzędzia</button>
 <div class="prz" id="prz" hidden>
@@ -512,6 +513,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
     <div class="info lok-uwaga">Zapis w pliku: JPEG — dane GPS w samym zdjęciu (obraz bez zmian), inne formaty — plik .xmp obok.</div>
   </div>
 </div>
+<script src="/ui/ikony.js"></script>
 <script src="/ui/aktywnosc.js"></script>
 <script src="/ui/galeria.js"></script>
 <script src="/ui/edytor.js"></script>
