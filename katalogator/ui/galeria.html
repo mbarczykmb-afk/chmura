@@ -115,8 +115,11 @@ body.zwiniete #wykres,body.zwiniete #lata,body.zwiniete #prz,body.zwiniete #filt
 .k.zazn .ob .zz::after{content:"✓";color:#fff;font-size:15px;font-weight:700}
 .zaznaczanie .k .ob .kosz{display:none}
 .zaznaczanie .k{cursor:pointer}
-#zz{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:1500;background:var(--panel);border:1px solid var(--lin);border-radius:14px;padding:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;box-shadow:0 10px 40px rgba(0,0,0,.35);max-width:calc(100vw - 24px)}
+#zz{position:fixed;left:12px;right:12px;margin-inline:auto;width:fit-content;bottom:16px;z-index:1500;background:var(--panel);border:1px solid var(--lin);border-radius:14px;padding:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;box-shadow:0 10px 40px rgba(0,0,0,.35);max-width:calc(100vw - 24px)}
 #zz b{padding:0 6px;font-size:13.5px;white-space:nowrap}
+#zz .zz-ed{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;border-top:1px solid var(--lin);padding-top:7px;margin-top:1px}
+#zz .zz-zastap{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:5px 10px;border:1px solid var(--lin);border-radius:8px;cursor:pointer;white-space:nowrap}
+#zz .zz-zastap:has(input:checked){border-color:#f59e0b;background:color-mix(in srgb,#f59e0b 14%,transparent)}
 #zz .menu-alb{top:auto;bottom:calc(100% + 6px);left:auto;right:0}
 .zaznaczanie #siatka{padding-bottom:90px}
 @media (max-width:600px){.k .ob .zz{opacity:.85;width:24px;height:24px}#zz{bottom:8px;left:8px;right:8px;transform:none;gap:4px;padding:6px}#zz button{padding:6px 8px}}
@@ -485,6 +488,16 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   <button id="zz-zip" title="Pobierz zaznaczone jako ZIP (oryginały)">⬇ ZIP</button>
   <button id="zz-usun" title="Usuń zaznaczone (Delete) — do kosza programu, można cofnąć">🗑 Usuń</button>
   <button id="zz-koniec" title="Zakończ zaznaczanie (Esc)">✕</button>
+  <span class="zz-ed" id="zz-ed" hidden>
+    <span class="info">✏ Hurtem:</span>
+    <button id="zz-lewo" title="Obróć zaznaczone zdjęcia w lewo (o 90° przeciwnie do wskazówek zegara)">↺ W lewo</button>
+    <button id="zz-prawo" title="Obróć zaznaczone zdjęcia w prawo (o 90° zgodnie ze wskazówkami zegara)">↻ W prawo</button>
+    <button id="zz-180" title="Obróć o 180° (zdjęcia do góry nogami)">⟳ 180°</button>
+    <button id="zz-lustro" title="Odbij w poziomie (lustrzane odbicie)">⇋ Odbij</button>
+    <button id="zz-auto" title="Popraw automatycznie: balans bieli, jasność, kontrast (jak ✨ Auto w edytorze)">✨ Auto</button>
+    <label class="zz-zastap" title="Zaznaczone: zmienione zdjęcie zastępuje oryginał, a oryginał trafia do kosza programu (Odłożone/Usunięte) — można cofnąć.
+Bez zaznaczenia: obok powstaje kopia „(edytowane)”."><input type="checkbox" id="zz-zastap"> zastąp oryginały</label>
+  </span>
 </div>
 <div id="udo" hidden>
   <div class="okno">

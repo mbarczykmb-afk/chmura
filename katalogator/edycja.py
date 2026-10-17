@@ -13,7 +13,7 @@ import math
 import os
 import sqlite3
 
-from PIL import Image, ImageEnhance, ImageOps
+from PIL import Image, ImageEnhance, ImageOps, ImageStat
 
 try:  # zdjęcia HEIC z iPhone'a (jak w analizie)
     import pillow_heif
@@ -38,6 +38,7 @@ def normalizuj(op: dict) -> dict:
     wynik = {k: _liczba(op.get(k)) for k in SUWAKI}
     wynik["obrot"] = int(_liczba(op.get("obrot"), 0, 270)) // 90 * 90
     wynik["lustro"] = bool(op.get("lustro"))
+    wynik["auto"] = bool(op.get("auto"))  # ✨ Auto liczone przez program (hurtem — bez podglądu w przeglądarce)
     c = op.get("ciecie")
     if isinstance(c, (list, tuple)) and len(c) == 4:
         x0, y0, x1, y1 = (_liczba(v, 0, 1) for v in c)
@@ -47,7 +48,26 @@ def normalizuj(op: dict) -> dict:
 
 
 def zmienia(op: dict) -> bool:
-    return bool(op.get("obrot") or op.get("lustro") or op.get("ciecie") or any(op.get(k) for k in SUWAKI))
+    return bool(op.get("obrot") or op.get("lustro") or op.get("ciecie") or op.get("auto") or any(op.get(k) for k in SUWAKI))
+
+
+def auto_ustawienia(im: Image.Image) -> dict:
+    """✨ Auto (te same wzory co przycisk w edytorze — edytor.js): balans bieli „szary świat”,
+    jasność do średniej ~46%, kontrast z rozrzutu jasności, lekko więcej nasycenia."""
+    m = im.copy()
+    m.thumbnail((256, 256))
+    r, g, b = ImageStat.Stat(m.convert("RGB")).mean
+    jas = ImageStat.Stat(m.convert("L"))  # jasność 299/587/114 — jak w edytorze
+    l2 = jas.var[0] + jas.mean[0] ** 2
+    sr = (r + g + b) / 3
+    ogr = lambda v, lo, hi: round(max(lo, min(hi, v)))  # noqa: E731
+    sred = min(0.95, max(0.05, sr / 255))
+    sd = math.sqrt(max(0.0, l2 - sr * sr)) / 255
+    return {"temperatura": ogr((sr / max(r, 1) - sr / max(b, 1)) * 200, -60, 60),
+            "odcien": ogr((1 - sr / max(g, 1)) * 500, -40, 40),
+            "jasnosc": ogr(-100 * math.log2(math.log(0.46) / math.log(sred)), -70, 70),
+            "kontrast": ogr((0.21 / max(sd, 0.05) - 1) * 100, -20, 40),
+            "nasycenie": 8}
 
 
 def lut(op: dict) -> list[int]:
@@ -77,6 +97,8 @@ def zastosuj(im: Image.Image, op: dict) -> Image.Image:
         w, h = im.size
         im = im.crop((round(x0 * w), round(y0 * h), max(round(x0 * w) + 1, round(x1 * w)),
                       max(round(y0 * h) + 1, round(y1 * h))))
+    if op.get("auto"):
+        op = {**op, **auto_ustawienia(im)}
     if any(op.get(k) for k in ("jasnosc", "kontrast", "temperatura", "odcien")):
         im = im.point(lut(op))
     if op.get("nasycenie"):

@@ -243,6 +243,54 @@ $("ed-zapisz").onclick = async () => {
     });
 };
 $("p-edytuj").onclick = e => { e.stopPropagation(); otworzEdytor(biezacy()); };
+
+// ---------- ✏ hurtem: obrót / odbicie / ✨ Auto dla zaznaczonych — w tle, z paskiem postępu i „Cofnij” ----------
+try { $("zz-zastap").checked = localStorage.getItem("kat_zz_zastap") === "1"; } catch (e) { /* bez pamięci */ }
+$("zz-zastap").onchange = () => { try { localStorage.setItem("kat_zz_zastap", $("zz-zastap").checked ? "1" : "0"); } catch (e) { /* bez pamięci */ } };
+async function edycjaHurtem(op, nazwa) {
+  const lista = zaznaczone().filter(p => p.rodzaj === "zdjecie");
+  if (!lista.length) { toastG("Wśród zaznaczonych nie ma zdjęć — filmów nie zmieniam."); return; }
+  const zastap = $("zz-zastap").checked;
+  if (zastap && !confirm(`${nazwa}: zastąpić oryginały (${liczbaZdjec(lista.length)})?\n\n` +
+                         "Oryginały trafią do kosza programu (Odłożone/Usunięte) — można cofnąć.")) return;
+  koniecZazn();
+  const zrobione = [];
+  zadanieTla(nazwa, lista.length, async postep => {
+    const bl = [];
+    for (const p of lista) {
+      try {
+        const w = await post("/api/g/edytuj", {id: p.id, op, zastap});
+        const nowy = w.plik || {id: w.id, nazwa: w.nazwa, rodzaj: "zdjecie", data: p.data, lat: p.lat, lon: p.lon};
+        for (const tab of new Set([g.pliki, g.lista])) {
+          const i = tab.indexOf(p); if (i < 0) continue;
+          if (zastap) tab[i] = nowy; else tab.splice(i + 1, 0, nowy);
+        }
+        if (!zastap) g.razem++;
+        zrobione.push({nowy, partia: w.partia || 0});
+      } catch (e) { bl.push(e.message); }
+      const n = zrobione.length + bl.length;
+      postep(n);
+      if (n % 25 === 0) rysujSiatke();  // obrócone miniatury pojawiają się w trakcie
+    }
+    rysujSiatke();
+    toastG(`${nazwa}: ${liczbaZdjec(zrobione.length)}` + (zastap ? " (oryginały w Odłożone/Usunięte)" : " — zapisane jako kopie „(edytowane)”") +
+           (bl.length ? ` · nie udało się: ${bl.length} (${bl[0]})` : ""),
+      zrobione.length ? () => zadanieTla("↶ Cofam " + nazwa.replace(/^\S+\s/, "").toLowerCase(), zrobione.length, async krok => {
+        let i = 0, zle = 0;
+        for (const z of zrobione) {
+          try { await post("/api/g/edytuj/cofnij", {id: z.nowy.id, partia: z.partia}); } catch (e) { zle++; }
+          krok(++i);
+        }
+        wczytajPliki().catch(() => {});
+        toastG(zle ? `↶ Cofnięto, ale nie wszystko: ${zle} błędów` : (zastap ? "↶ Przywrócono oryginały" : "↶ Usunięto kopie"));
+      }) : null);
+  });
+}
+$("zz-lewo").onclick = () => edycjaHurtem({obrot: 270}, "↺ Obrót w lewo");
+$("zz-prawo").onclick = () => edycjaHurtem({obrot: 90}, "↻ Obrót w prawo");
+$("zz-180").onclick = () => edycjaHurtem({obrot: 180}, "⟳ Obrót o 180°");
+$("zz-lustro").onclick = () => edycjaHurtem({lustro: true}, "⇋ Odbicie");
+$("zz-auto").onclick = () => edycjaHurtem({auto: true}, "✨ Auto-poprawa");
 document.addEventListener("keydown", e => {
   if ($("ed").hidden) {
     if ((e.key === "e" || e.key === "E") && !$("pelny").hidden && !$("p-edytuj").hidden && $("dt").hidden && $("lok").hidden

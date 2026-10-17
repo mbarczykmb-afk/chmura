@@ -268,6 +268,7 @@ function odswiezZazn() {
   const kilka = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20);
   $("zz-ile").textContent = `${n.toLocaleString("pl-PL")} ${n === 1 || kilka ? "zaznaczone" : "zaznaczonych"}`;
   $("zz-data").hidden = $("zz-miejsce").hidden = $("zz-usun").hidden = !MOZE_USUWAC;
+  $("zz-ed").hidden = !MOZE_USUWAC;
   $("zz-dok").hidden = !W_PROGRAMIE || !wyb.some(p => p.rodzaj === "zdjecie");
   $("zz-album").hidden = !W_PROGRAMIE;
   $("zz-z-albumu").hidden = !(W_PROGRAMIE && g.zrodlo.typ === "kolekcja" && g.zrodlo.kol === "album");
