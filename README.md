@@ -174,6 +174,8 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.35.0:** **🙈 Ukryte albumy**, np. „Praca”. W widoku albumu przycisk „🙈 Ukryj w Przeglądarce” sprawia, że zdjęcia z tego albumu znikają z osi czasu, mapy, wyszukiwania, „Tego dnia” i „Osób”. Na telefonie i w serwerze 24/7 nie widać ani tego albumu, ani jego zdjęć. Sam album zostaje w ⭐ Kolekcjach i w programie na komputerze można go otworzyć, a pliki zostają na dysku. Główny przełącznik w ⭐ Kolekcjach albo w menu ⋯ („🙈 Ukrywaj wybrane albumy”) jednym kliknięciem włącza i wyłącza ukrywanie wszystkich takich albumów. Zmienić to można tylko na komputerze.
+
 **1.34.0:** **✏ Edycja hurtem** zaznaczonych zdjęć. Na pasku zaznaczania jest nowy rząd przycisków: ↺ W lewo, ↻ W prawo, ⟳ 180°, ⇋ Odbij i ✨ Auto (automatyczny balans bieli, jasność i kontrast). Obok jest pole **„zastąp oryginały”**: gdy jest zaznaczone, zmienione zdjęcie zachowuje nazwę i miejsce, a oryginał trafia do kosza programu (Odłożone/Usunięte). Bez zaznaczenia obok powstaje kopia „(edytowane)”. Praca idzie w tle z paskiem postępu, a na końcu jest „Cofnij” dla całej partii. Data, miejsce i EXIF zostają zachowane, filmy są pomijane.
 
 **1.33.1:** OpenCV przypięte do sprawdzonej serii 4.x — wykrywanie twarzy działa tak samo na każdym komputerze.

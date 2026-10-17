@@ -613,7 +613,22 @@ function pokazDyski() {
 }
 $("dyski-btn").onclick = () => { naglowek.dyski = !naglowek.dyski; zapamietaj("kat_g_dyski", naglowek.dyski); pokazDyski(); };
 $("wykres-btn").onclick = () => { naglowek.wykres = !naglowek.wykres; zapamietaj("kat_g_wykres", naglowek.wykres); uklad(); };
-$("menu-btn").onclick = e => { e.stopPropagation(); $("menu").hidden = !$("menu").hidden; };
+$("menu-btn").onclick = e => {
+  e.stopPropagation(); $("menu").hidden = !$("menu").hidden;
+  if (!$("menu").hidden && W_PROGRAMIE) odswiezUkrywanie();
+};
+// 🙈 ukryte albumy: główny przełącznik (włącz / wyłącz ukrywanie wszystkich albumów oznaczonych 🙈)
+async function odswiezUkrywanie() {
+  try { const r = await api("/api/g/albumy"); $("menu-ukr").checked = r.ukrywanie; $("menu-ukr-w").hidden = !r.ukrytych;
+        $("menu-ukr-w").lastChild.textContent = ` 🙈 Ukrywaj wybrane albumy (${r.ukrytych})`; } catch (e) { /* bez zmian */ }
+}
+async function ustawUkrywanie(wlacz) {
+  await post("/api/g/ukrywanie", {wlacz});
+  toastG(wlacz ? "🙈 Ukryte albumy znów są ukryte" : "👁 Pokazuję wszystko — także ukryte albumy (włączysz w ⋯ albo w ⭐ Kolekcje)");
+  g.punkty = null; g.przeladuj = true;
+  if (g.widok === "kolekcje") rysujKolekcje(); else if (g.zrodlo.typ === "os") { g.przeladuj = false; start(); } else pokazWyniki(g.zrodlo);
+}
+$("menu-ukr").onchange = () => ustawUkrywanie($("menu-ukr").checked).catch(e => toastG(e.message));
 $("menu").onclick = e => { if (e.target.tagName === "BUTTON" && !e.target.closest(".menu-rz")) $("menu").hidden = true; };
 document.addEventListener("click", e => { if (!$("menu").hidden && !e.target.closest(".menu-w")) $("menu").hidden = true; });
 // --- przestrzeń robocza: rozmiar miniatur, podpisy, chowanie pasków, pełny ekran (zapamiętane na tym urządzeniu) ---
@@ -726,7 +741,8 @@ function uklad() {  // co widać: oś czasu (wykres, miesiące), wyniki/kolekcja
 }
 function widok(w) {
   g.widok = w;
-  if (w === "os" && g.zrodlo.typ !== "os") { g.zrodlo = {typ: "os"}; $("szukaj").value = ""; wczytajPliki(); }
+  if (w === "os" && g.przeladuj) { g.przeladuj = false; g.zrodlo = {typ: "os"}; $("szukaj").value = ""; g.rok = null; start(); }
+  else if (w === "os" && g.zrodlo.typ !== "os") { g.zrodlo = {typ: "os"}; $("szukaj").value = ""; wczytajPliki(); }
   uklad();
   if (w === "mapa") pokazMape().catch(e => info(e.message));
   if (w === "kolekcje") rysujKolekcje();
@@ -846,6 +862,10 @@ function rysujFiltr() {
   const pokaz = () => g.pliki.length ? przycisk("▶ Pokaz slajdów", () => { pokazPelny(g.pliki, 0); startPokaz(); }, "Pokaz na cały ekran (P)") : null;
   if (g.widok === "kolekcje") {
     const t = document.createElement("span"); t.className = "tyt"; t.textContent = "⭐ Kolekcje"; f.append(t, inf("ulubione i albumy"));
+    const k = g.kolekcje || {};
+    if (W_PROGRAMIE && k.ukrytych) f.append(przycisk(k.ukrywanie ? `🙈 Ukrywanie włączone (${k.ukrytych})` : "👁 Ukrywanie wyłączone",
+      () => ustawUkrywanie(!k.ukrywanie), k.ukrywanie ? "Zdjęcia z albumów 🙈 nie pokazują się w Przeglądarce — kliknij, żeby pokazać wszystko"
+                                                   : "Teraz widać wszystko — kliknij, żeby znów ukryć albumy 🙈", k.ukrywanie ? "akt" : ""));
   } else if (g.widok === "osoby") {
     filtrOsob(f, inf);
   } else if (g.widok === "os" && z.typ === "osoba") {
@@ -873,6 +893,12 @@ function rysujFiltr() {
                                    "Pobierz cały album jako ZIP (oryginały)"));
     if (W_PROGRAMIE && z.kol === "album") f.append(przycisk(z.udostepniony ? "🔗 Udostępniony" : "🔗 Udostępnij",
       () => udostepnij(z), "Link do tego albumu dla rodziny — bez PIN-u, tylko oglądanie i pobieranie", z.udostepniony ? "akt" : ""));
+    if (W_PROGRAMIE && z.kol === "album") f.append(przycisk(z.ukryty ? "👁 Pokazuj w Przeglądarce" : "🙈 Ukryj w Przeglądarce", async () => {
+      const w = await post("/api/g/album/ukryj", {album: z.album, tak: !z.ukryty}); z.ukryty = w.ukryty; rysujFiltr(); g.punkty = null; g.przeladuj = true;
+      toastG(z.ukryty ? `🙈 „${z.nazwa}” ukryty — jego zdjęć nie widać na osi czasu, mapie, w szukaniu i na telefonie. Sam album zostaje w ⭐ Kolekcje.`
+                      : `👁 „${z.nazwa}” znów widoczny wszędzie.`);
+    }, z.ukryty ? "Zdjęcia z tego albumu znów będą widoczne na osi czasu, mapie i w szukaniu"
+                : "Np. „Praca”: zdjęcia z tego albumu znikną z osi czasu, mapy, szukania i telefonu (pliki zostają na dysku)", z.ukryty ? "akt" : ""));
     if (W_PROGRAMIE && z.kol === "album") {
       f.append(przycisk("✎ Zmień nazwę", async () => {
         const n = prompt("Nowa nazwa albumu:", z.nazwa || ""); if (!n) return;
@@ -939,6 +965,7 @@ async function rysujKolekcje() {
   const s = $("siatka"); s.innerHTML = '<div class="pusto">Wczytuję…</div>';
   let r; try { r = await api("/api/g/albumy"); } catch (e) { s.innerHTML = `<div class="pusto">${e.message}</div>`; return; }
   if (g.widok !== "kolekcje") return;
+  g.kolekcje = r; rysujFiltr();
   s.replaceChildren();
   const kafel = (ikona, nazwa, n, okladka, klik, klasa = "") => {
     const k = document.createElement("div"); k.className = "k album " + klasa; k.style.cursor = "pointer";
@@ -949,7 +976,7 @@ async function rysujKolekcje() {
     k.append(ob, op); k.onclick = klik; s.append(k);
   };
   kafel("⭐", "Ulubione", r.ulubione.n, r.ulubione.okladka, () => pokazWyniki({typ: "kolekcja", kol: "ulubione"}));
-  for (const a of r.albumy) kafel("🗂", a.nazwa, a.n, a.okladka, () => pokazWyniki({typ: "kolekcja", kol: "album", album: a.id, nazwa: a.nazwa, udostepniony: a.udostepniony}));
+  for (const a of r.albumy) kafel("🗂", a.nazwa, a.n, a.okladka, () => pokazWyniki({typ: "kolekcja", kol: "album", album: a.id, nazwa: a.nazwa, udostepniony: a.udostepniony, ukryty: a.ukryty}), a.ukryty ? "ukryty" : "");
   if (W_PROGRAMIE) kafel("＋", "Nowy album", null, null, async () => {
     const n = prompt("Nazwa nowego albumu:", "Wakacje " + new Date().getFullYear()); if (!n) return;
     await post("/api/g/album/nowy", {nazwa: n, ids: []}); rysujKolekcje();

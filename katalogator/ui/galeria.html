@@ -176,6 +176,8 @@ body.zwiniete #wykres,body.zwiniete #lata,body.zwiniete #prz,body.zwiniete #filt
 .filtr .dzien{border-radius:999px;font-size:13px;padding:4px 12px;background:linear-gradient(90deg,color-mix(in srgb,var(--akc) 14%,transparent),transparent);border-color:color-mix(in srgb,var(--akc) 40%,var(--lin))}
 .k.album .ob{font-size:46px}
 .k.album .op div:first-child{font-weight:700}
+.k.album.ukryty .ob{opacity:.55;filter:grayscale(.6)}
+.k.album.ukryty .op div:first-child::after{content:"  🙈";font-weight:400}
 .k.nowy .ob{border:2px dashed var(--lin);background:none}
 .k .znak-f{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.65);color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;z-index:1}
 .k .gw{position:absolute;left:6px;top:6px;z-index:1;font-size:15px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
@@ -375,6 +377,8 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
         <option value="film">🎬 Filmy</option><option value="dokument">📄 Dokumenty</option></select>
       <button id="menu-kol" class="tylko-tel">⇅ Od najnowszych</button>
       <button id="menu-wyslij" class="tylko-tel" hidden>📤 Wyślij zdjęcia do biblioteki</button>
+      <label class="menu-cb" id="menu-ukr-w" hidden title="Zdjęcia z albumów oznaczonych 🙈 (np. „Praca”) nie pokazują się na osi czasu, mapie, w szukaniu ani na telefonie">
+        <input type="checkbox" id="menu-ukr"> 🙈 Ukrywaj wybrane albumy</label>
       <button id="menu-pokaz">▶ Pokaz slajdów</button>
       <button id="pasek-schowaj" title="Więcej miejsca na zdjęcia — pasek wróci przyciskiem „▾ Narzędzia” w prawym górnym rogu">▴ Schowaj ten pasek</button>
       <button id="na-telefon" hidden title="Oglądaj bibliotekę na telefonie (sieć domowa / Tailscale)">📱 Na telefon</button>

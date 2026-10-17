@@ -54,6 +54,7 @@ _MIESIACE_SZUKANIA = [("stycz", 1), ("lut", 2), ("mar", 3), ("kwie", 4), ("maj",
 _NAZWY_MIES = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień",
                "październik", "listopad", "grudzień"]
 _KOLUMNY = "rowid id, wzgledna, rodzaj, data, lat, lon, rozmiar"
+_UKR: dict = {}  # baza → (ukrywanie włączone, id ukrytych albumów) — wspólne dla wszystkich galerii tej bazy
 
 
 def _nazwa(r: dict) -> dict:
@@ -78,6 +79,9 @@ class Galeria:
         db = skaner.otworz_baze(self.baza)
         if not getattr(self, "_schemat", False):
             db.executescript(SCHEMAT_KOLEKCJI)
+            if "ukryty" not in {r[1] for r in db.execute("PRAGMA table_info(g_albumy)")}:  # od 1.35: 🙈 ukryte albumy
+                db.execute("ALTER TABLE g_albumy ADD COLUMN ukryty INTEGER NOT NULL DEFAULT 0")
+            db.execute("CREATE TABLE IF NOT EXISTS g_ustawienia (klucz TEXT PRIMARY KEY, wartosc TEXT)")
             for t in ("g_ulubione", "g_album_pliki"):  # od 1.9.3: nazwa|rozmiar|data — odnajdywanie po przeniesieniu
                 if "klucz" not in {r[1] for r in db.execute(f"PRAGMA table_info({t})")}:
                     db.execute(f"ALTER TABLE {t} ADD COLUMN klucz TEXT")
@@ -113,8 +117,8 @@ class Galeria:
         db.commit()
         return n
 
-    def _warunek(self, obszar: tuple | None = None) -> tuple[str, list]:
-        w, arg = self._zakres()
+    def _warunek(self, obszar: tuple | None = None, ukryte: bool = True) -> tuple[str, list]:
+        w, arg = self._zakres(ukryte)
         if obszar:  # prostokąt z mapy: (lat1, lat2, lon1, lon2)
             w += " AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?"
             arg = arg + [min(obszar[:2]), max(obszar[:2]), min(obszar[2:]), max(obszar[2:])]
@@ -143,10 +147,52 @@ class Galeria:
         """⇅ Kolejność z bieżącego zapytania (parametr kol): „nowe” = od najnowszych, „stare” = od najstarszych."""
         return "DESC" if (getattr(_FILTR, "kolejnosc", "") or domyslna) == "nowe" else "ASC"
 
-    def _zakres(self) -> tuple[str, list]:
+    # --- 🙈 ukryte albumy (np. „Praca”): ich zdjęcia nie pokazują się na osi czasu, mapie, w szukaniu… -------
+    def ukrywanie(self) -> tuple[bool, tuple]:
+        """(włączone, id ukrytych albumów) — zapamiętane, odświeżane po każdej zmianie."""
+        k = str(self.baza)
+        if _UKR.get(k) is None:
+            db = self._db()
+            try:
+                r = db.execute("SELECT wartosc FROM g_ustawienia WHERE klucz='ukrywanie'").fetchone()
+                ids = tuple(x[0] for x in db.execute("SELECT id FROM g_albumy WHERE ukryty=1"))
+            finally:
+                db.close()
+            _UKR[k] = (r is None or r[0] != "0", ids)
+        return _UKR[k]
+
+    def _bez_ukrytych(self) -> str:
+        wl, ids = self.ukrywanie()
+        if not wl or not ids:
+            return ""
+        return (" AND sciezka NOT IN (SELECT sciezka FROM g_album_pliki WHERE album IN (%s))"
+                % ",".join(str(int(i)) for i in ids))
+
+    def album_ukryj(self, album: int, tak: bool = True) -> dict:
+        db = self._db()
+        try:
+            db.execute("UPDATE g_albumy SET ukryty=? WHERE id=?", (1 if tak else 0, int(album)))
+            db.commit()
+        finally:
+            db.close()
+        _UKR.pop(str(self.baza), None)
+        return {"ok": True, "ukryty": bool(tak)}
+
+    def ustaw_ukrywanie(self, wlacz: bool) -> dict:
+        db = self._db()
+        try:
+            db.execute("INSERT OR REPLACE INTO g_ustawienia VALUES ('ukrywanie', ?)", ("1" if wlacz else "0",))
+            db.commit()
+        finally:
+            db.close()
+        _UKR.pop(str(self.baza), None)
+        return {"ok": True, "ukrywanie": bool(wlacz)}
+
+    def _zakres(self, ukryte: bool = True) -> tuple[str, list]:
+        u = self._bez_ukrytych() if ukryte else ""
         k = self.korzenie()
         if k is None:  # wszystko w bazie
-            return self.filtr + self._rodzaj(), []
+            return self.filtr + self._rodzaj() + u, []
         if not k:  # zakres pusty (np. biblioteka, gdy nie wybrano miejsca docelowego)
             return " AND 0", []
         czesci, arg = [], []
@@ -155,7 +201,7 @@ class Galeria:
             pref = r.rstrip("\\/") + os.sep
             czesci.append("(korzen = ? OR substr(sciezka, 1, ?) = ?)")
             arg += [r, len(pref), pref]
-        return " AND (" + " OR ".join(czesci) + ")" + self.filtr + self._rodzaj(), arg
+        return " AND (" + " OR ".join(czesci) + ")" + self.filtr + self._rodzaj() + u, arg
 
     def lata(self, obszar: tuple | None = None) -> dict:
         w, arg = self._warunek(obszar)
@@ -211,7 +257,7 @@ class Galeria:
         return {"punkty": punkty}
 
     def _wiersz(self, id_: int):
-        w, arg = self._warunek()
+        w, arg = self._warunek(ukryte=not getattr(_FILTR, "okno", False))
         db = self._db()
         try:
             return db.execute(f"SELECT rowid id, * FROM pliki WHERE rowid = ? {w}", [int(id_)] + arg).fetchone()
@@ -614,22 +660,28 @@ class Galeria:
 
     def albumy(self) -> dict:
         w, arg = self._warunek()
+        wa, arga = self._warunek(ukryte=False)  # licznik zdjęć w samym albumie (także ukrytym)
+        wl, ukryte = self.ukrywanie()
+        okno = getattr(_FILTR, "okno", False)
         db = self._db()
         try:
             self._napraw_kolekcje(db)
             wynik = []
-            for a in db.execute("SELECT id, nazwa FROM g_albumy ORDER BY czas DESC").fetchall():
+            for a in db.execute("SELECT id, nazwa, ukryty FROM g_albumy ORDER BY czas DESC").fetchall():
+                if a["ukryty"] and wl and not okno:  # telefon / serwer 24/7: ukrytych albumów nie widać wcale
+                    continue
                 r = db.execute(f"""SELECT COUNT(*) n, MIN(rowid) okladka FROM pliki WHERE rodzaj IN ('zdjecie','film')
-                                   AND sciezka IN (SELECT sciezka FROM g_album_pliki WHERE album=?) {w}""",
-                               [a["id"]] + arg).fetchone()
+                                   AND sciezka IN (SELECT sciezka FROM g_album_pliki WHERE album=?) {wa}""",
+                               [a["id"]] + arga).fetchone()
                 t = db.execute("SELECT token FROM g_udostepnione WHERE album=?", (a["id"],)).fetchone()
                 wynik.append({"id": a["id"], "nazwa": a["nazwa"], "n": r["n"], "okladka": r["okladka"],
-                              "udostepniony": bool(t)})
+                              "udostepniony": bool(t), "ukryty": bool(a["ukryty"])})
             u = db.execute(f"""SELECT COUNT(*) n, MIN(rowid) okladka FROM pliki WHERE rodzaj IN ('zdjecie','film')
                                AND sciezka IN (SELECT sciezka FROM g_ulubione) {w}""", arg).fetchone()
         finally:
             db.close()
-        return {"albumy": wynik, "ulubione": {"n": u["n"], "okladka": u["okladka"]}}
+        return {"albumy": wynik, "ulubione": {"n": u["n"], "okladka": u["okladka"]}, "ukrywanie": wl,
+                "ukrytych": len(ukryte)}
 
     def album_nowy(self, nazwa: str, ids=()) -> dict:
         nazwa = " ".join(str(nazwa or "").split())[:80] or "Nowy album"
@@ -709,6 +761,7 @@ class Galeria:
             db.execute("DELETE FROM g_album_pliki WHERE album=?", (int(album),))
             db.execute("DELETE FROM g_albumy WHERE id=?", (int(album),))
             db.commit()
+            _UKR.pop(str(self.baza), None)
             return {"ok": True}
         finally:
             db.close()
@@ -734,10 +787,12 @@ class Galeria:
         db = self._db()
         try:
             if typ != "ulubione":
-                r = db.execute("SELECT nazwa FROM g_albumy WHERE id=?", (int(album),)).fetchone()
-                if not r:
+                r = db.execute("SELECT nazwa, ukryty FROM g_albumy WHERE id=?", (int(album),)).fetchone()
+                if not r or (r["ukryty"] and self.ukrywanie()[0] and not getattr(_FILTR, "okno", False)):
                     return {"blad": "nie ma takiego albumu"}
                 nazwa = r[0]
+                if r["ukryty"]:  # sam ukryty album pokazuje swoje zdjęcia
+                    w, arg = self._warunek(ukryte=False)
             self._napraw_kolekcje(db)
             sql = f"FROM pliki WHERE rodzaj IN ('zdjecie','film') AND sciezka IN ({pod}) {w}"
             razem = db.execute(f"SELECT COUNT(*) {sql}", a + arg).fetchone()[0]
@@ -979,8 +1034,10 @@ _LISTY = ("/api/g/lata", "/api/g/pliki", "/api/g/szukaj", "/api/g/tego-dnia", "/
           "/api/g/osoba")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
 
 
-def obsluz_api(g: Galeria, sciezka: str, q: dict):
-    """/api/g/… -> (treść, typ) albo („film”, ścieżka) albo None, gdy to nie ścieżka galerii."""
+def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
+    """/api/g/… -> (treść, typ) albo („film”, ścieżka) albo None, gdy to nie ścieżka galerii.
+    `okno` — zapytanie z okna programu na komputerze (tam widać ukryte albumy); telefon/serwer 24/7 — nie."""
+    _FILTR.okno = okno
     r = q.get("r", [""])[0]
     # filtr tylko dla list (oś czasu, mapa, szukanie…) — pojedynczy plik, miniatura, film zawsze bez filtra
     _FILTR.rodzaj = r if r in ("zdjecie", "film", "dokument") and sciezka in _LISTY else ""
@@ -1047,6 +1104,7 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict):
 def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
     """Zmiany kolekcji (ulubione, albumy) i miniatury filmów — tylko z okna programu (telefon jest tylko do odczytu)."""
     _FILTR.rodzaj = ""
+    _FILTR.okno = True
     ids = [int(x) for x in (dane.get("ids") or []) if str(x).lstrip("-").isdigit()]
     if sciezka == "/api/g/ulubione":
         return g.ulubione(int(dane.get("id") or 0), dane.get("wlacz"))
@@ -1075,6 +1133,10 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
         return zip_klucz(ids)
     if sciezka == "/api/g/album/udostepnij":
         return g.udostepnij(int(dane.get("album") or 0), bool(dane.get("wlacz", True)))
+    if sciezka == "/api/g/album/ukryj":
+        return g.album_ukryj(int(dane.get("album") or 0), bool(dane.get("tak", True)))
+    if sciezka == "/api/g/ukrywanie":
+        return g.ustaw_ukrywanie(bool(dane.get("wlacz", True)))
     if sciezka.startswith(("/api/g/twarze/", "/api/g/osoba/", "/api/g/twarz/")):
         from . import twarze
         o = int(dane.get("id") or 0)
@@ -1101,9 +1163,10 @@ ZMIANY_PLIKOW = ("/api/g/usun", "/api/g/usun/cofnij", "/api/g/lokalizacja", "/ap
                  "/api/g/edytuj/cofnij")
 
 
-def obsluz_usuwanie(g: Galeria, sciezka: str, dane: dict) -> dict | None:
+def obsluz_usuwanie(g: Galeria, sciezka: str, dane: dict, okno: bool = True) -> dict | None:
     """🗑 Usuń / Cofnij, 📍 lokalizacja — w oknie programu i na telefonie (gdy pozwolono sterować z telefonu)."""
     _FILTR.rodzaj = ""  # zmiany dotyczą wskazanych plików — bez filtra widoku
+    _FILTR.okno = okno
     if sciezka == "/api/g/usun":
         return g.usun([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()])
     if sciezka == "/api/g/usun/cofnij":
@@ -1266,7 +1329,7 @@ class SerwerGalerii:
                 n = int(self.headers.get("Content-Length") or 0)
                 # duże wysyłki (📤 filmy z telefonu) — przekazywane kawałkami, bez trzymania w pamięci
                 tresc = (_Kawalki(self.rfile, n) if n > 8 * 1024 * 1024 else self.rfile.read(n)) if n else None
-                naglowki = {"X-Token": token}
+                naglowki = {"X-Token": token, "X-Z-Telefonu": "1"}  # program wie, że to telefon (ukryte albumy)
                 if n:
                     naglowki["Content-Length"] = str(n)
                 for k in ("Content-Type", "Range"):
@@ -1440,7 +1503,7 @@ class SerwerGalerii:
                         dane = {}
                     z = q.get("z", [""])[0]
                     g = s.galerie(z) if s.galerie is not None and z in s.ZAKRESY else s.galeria
-                    w = obsluz_usuwanie(g, u.path, dane if isinstance(dane, dict) else {})
+                    w = obsluz_usuwanie(g, u.path, dane if isinstance(dane, dict) else {}, okno=False)
                     s.pilot.po_usunieciu(z, w, u.path)
                     return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
                 if u.path != "/api/g/zaloguj":

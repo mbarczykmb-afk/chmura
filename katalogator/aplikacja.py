@@ -1331,7 +1331,8 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/galeria":
                 return self._wyslij((UI / "galeria.html").read_bytes(), "text/html; charset=utf-8")
             if u.path.startswith("/api/g/"):
-                w = galeria.obsluz_api(stan.galeria(q.get("z", ["biblioteka"])[0]), u.path, q)
+                w = galeria.obsluz_api(stan.galeria(q.get("z", ["biblioteka"])[0]), u.path, q,
+                                       okno=not self.headers.get("X-Z-Telefonu"))
                 if w is None:
                     return self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
                 if w[0] == "film":
@@ -1527,6 +1528,9 @@ def _handler(stan: Stan, token: str, zamknij):
                 usuwa = u.path in galeria.ZMIANY_PLIKOW
                 if usuwa and z != "przegladarka" and stan.zajety():
                     return self._wyslij({"blad": "Poczekaj, aż skończy się bieżące zadanie."}, kod=HTTPStatus.CONFLICT)
+                if self.headers.get("X-Z-Telefonu") and u.path in ("/api/g/ukrywanie", "/api/g/album/ukryj"):
+                    return self._wyslij({"blad": "Ukrywanie albumów zmienia się tylko na komputerze."},
+                                        kod=HTTPStatus.FORBIDDEN)
                 w = galeria.obsluz_post(stan.galeria(z), u.path, dane)
                 if w is None:
                     return self._wyslij({"blad": "nie ma"}, kod=HTTPStatus.NOT_FOUND)
