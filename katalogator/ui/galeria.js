@@ -731,6 +731,7 @@ $("w-dzien").onclick = () => { g.widok = "os"; pokazWyniki({typ: "dzien", md: md
 
 // ---------- w oknie programu: zakres, zamykanie, udostępnianie na telefon ----------
 if (W_PROGRAMIE) {
+  document.body.classList.add("w-programie");
   $("zakres").hidden = false; $("na-telefon").hidden = false; $("zamknij").hidden = false;
   g.zakres = P.get("z") || "biblioteka"; $("zakres").value = g.zakres;
   $("zakres").onchange = () => { g.zakres = $("zakres").value; g.punkty = null; g.rok = null; ustawZakres(); start(); };

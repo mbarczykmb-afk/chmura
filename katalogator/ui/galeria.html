@@ -199,7 +199,24 @@ body.pasek-schowany #pasek-pokaz{display:block;position:fixed;top:0;right:14px;z
 #rodzaj-sel{display:none}
 @media (max-width:600px){header .rodzaje{display:none}#rodzaj-sel{display:block}}
 .tylko-tel{display:none}
-@media (max-width:600px){header>#kolejnosc,header>#wyslij-btn{display:none}.tylko-tel:not([hidden]){display:block}}
+@media (max-width:600px){header #kolejnosc,header #wyslij-btn{display:none}.tylko-tel:not([hidden]){display:block}}
+/* --- wygląd paska: grupy (widoki | szukaj | rodzaje | narzędzia), równa wysokość, jedna linia --- */
+header{background:var(--panel);row-gap:8px}
+header button,header select{height:34px;display:inline-flex;align-items:center;gap:5px}
+.seg{display:inline-flex;border:1px solid var(--lin);border-radius:10px;overflow:hidden;flex:none;background:var(--bg)}
+.seg button{border:0;border-radius:0;height:32px;padding:0 12px;background:none}
+.seg button+button{border-left:1px solid var(--lin)}
+.seg button:hover:not(.akt){background:var(--akc-miekki)}
+.seg button.akt{background:var(--akc);color:var(--akc-fg)}
+.rodzaje{border-radius:10px}.rodzaje button{height:32px;padding:0 11px}
+#szukaj{flex:1 1 220px;max-width:440px;height:34px}
+.narz{display:inline-flex;align-items:center;gap:6px;flex:none}
+.narz>button,.narz .menu-w>button{padding:0 10px;min-width:34px;justify-content:center}
+#zamknij{min-width:34px;justify-content:center;padding:0 10px;margin-left:4px}
+body.w-programie header h1{display:none}  /* nazwa modułu jest na pasku programu wyżej */
+@media (max-width:1560px){.narz .t{display:none}}
+@media (max-width:1320px){.rodzaje .t{display:none}}
+@media (max-width:1000px){#szukaj{flex-basis:140px}}
 /* --- zwarty nagłówek: ikony, a reszta pod ⋯ / 💽 / 📊 --- */
 header button{white-space:nowrap;position:relative}
 header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);color:var(--akc-fg);border-radius:999px;font-size:10.5px;line-height:1;padding:3px 5px;font-weight:700}
@@ -281,10 +298,12 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 <body>
 <header>
   <h1 id="tytul">📚<span class="t"> Biblioteka</span></h1>
+  <span class="seg widoki" role="group" aria-label="Widok">
   <button id="w-os" class="akt" title="Oś czasu">📅<span class="t"> Oś czasu</span></button>
   <button id="w-mapa" title="Mapa miejsc">🗺<span class="t"> Mapa</span></button>
   <button id="w-kolekcje" title="Ulubione i albumy">⭐<span class="t"> Kolekcje</span></button>
   <button id="w-dzien" title="Zdjęcia z tego samego dnia w poprzednich latach">🕰<span class="t"> Tego dnia</span><b class="znaczek" id="dzien-ile" hidden></b></button>
+  </span>
   <button id="szukaj-btn" title="Szukaj">🔍</button>
   <input id="szukaj" type="search" placeholder="🔍 Szukaj: Hel, lipiec 2019, Włochy, nazwa…" autocomplete="off"
          title="Miejsce (miejscowość, kraj), rok, miesiąc, fragment nazwy pliku lub folderu, aparat — można łączyć">
@@ -292,6 +311,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
     <button data-r="" title="Wszystko">Wszystko</button><button data-r="zdjecie" title="Tylko zdjęcia (bez dokumentów)">📷<span class="t"> Zdjęcia</span></button><button data-r="film" title="Tylko filmy">🎬<span class="t"> Filmy</span></button><button data-r="dokument" title="Tylko dokumenty (zdjęcia dokumentów: foldery „Dokumenty…” i Twoje decyzje)">📄<span class="t"> Dokumenty</span></button>
   </span>
   <span class="odstep"></span>
+  <span class="narz" role="group" aria-label="Narzędzia">
   <button id="kolejnosc" title="Kolejność zdjęć">⇅<span class="t" id="kolejnosc-t"> Od najnowszych</span></button>
   <button id="dyski-btn" hidden title="Dyski i foldery Przeglądarki, skanowanie">💽<span class="t"> Dyski</span><b class="znaczek" id="dyski-stan" hidden></b></button>
   <button id="wyslij-btn" hidden title="Wyślij zdjęcia i filmy do biblioteki (z telefonu: prosto z galerii)">📤<span class="t"> Wyślij</span></button>
@@ -319,13 +339,14 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
       <button id="menu-kol" class="tylko-tel">⇅ Od najnowszych</button>
       <button id="menu-wyslij" class="tylko-tel" hidden>📤 Wyślij zdjęcia do biblioteki</button>
       <button id="menu-pokaz">▶ Pokaz slajdów</button>
+      <button id="pasek-schowaj" title="Więcej miejsca na zdjęcia — pasek wróci przyciskiem „▾ Narzędzia” w prawym górnym rogu">▴ Schowaj ten pasek</button>
       <button id="na-telefon" hidden title="Oglądaj bibliotekę na telefonie (sieć domowa / Tailscale)">📱 Na telefon</button>
     </div>
   </span>
-  <button id="pasek-schowaj" title="Schowaj ten pasek — wróci strzałką ▾ w prawym górnym rogu">▴</button>
-  <button id="zamknij" hidden title="Wróć do porządkowania">✕</button>
+  </span>
+  <button id="zamknij" hidden title="Zamknij Przeglądarkę i wróć do programu">✕</button>
 </header>
-<button id="pasek-pokaz" title="Pokaż pasek Przeglądarki (widoki, szukanie, filtry, dyski)">▾ Menu</button>
+<button id="pasek-pokaz" title="Pokaż pasek Przeglądarki (widoki, szukanie, filtry, dyski)">▾ Narzędzia</button>
 <div class="prz" id="prz" hidden>
   <span class="zestaw" title="Zestaw dysków — np. „Rodzina”, „Praca”: każdy ma swoją listę dysków i folderów">
     <select id="prz-zestaw" aria-label="Zestaw dysków"></select>

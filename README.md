@@ -174,6 +174,8 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.31.0:** Czytelniejsza nawigacja w Przeglądarce i Bibliotece. Pasek programu z modułami (🗂 Porządkowanie · 🧹 Sprzątanie · 🔭 Przeglądarka · 📚 Biblioteka, kosz, odzyskiwanie, ustawienia) zostaje teraz widoczny nad zdjęciami w zwartej formie. Podświetlony jest otwarty moduł, a jedno kliknięcie przenosi do innego. Schowany pasek wraca listwą „▾ Menu Katalogatora”, która nie zasłania już wyszukiwarki. Pasek Przeglądarki mieści się w jednej linii i jest podzielony na grupy: widoki, szukanie, rodzaje plików i narzędzia. Na węższym ekranie zostają same ikony z podpowiedziami. „▴ Schowaj ten pasek” jest teraz w menu ⋯. Wszystkie funkcje działają jak wcześniej.
+
 **1.30.2:** Zmiana 📍 miejsca i 📅 daty idzie **w tle**: po „Zapisz” okno znika od razu i można dalej przeglądać, a w prawym górnym rogu widać pasek postępu (np. „📍 Zapisuję lokalizację · 120 / 400”). Kilka zmian ustawia się w kolejkę; na końcu komunikat z „Cofnij”.
 
 **1.30.1:** 🛠 Naprawa filmów **bez pytania o wzorzec**: program sam szuka na dyskach (biblioteka, Przeglądarka,
