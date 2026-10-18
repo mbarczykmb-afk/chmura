@@ -174,6 +174,8 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.38.1:** Podgląd zdjęcia: obraz nie nachodzi już na pasek narzędzi — mieści się pod nim (także gdy pasek zawija się w wąskim oknie), strzałki ‹ › wyśrodkowane względem obrazu.
+
 **1.38.0:** Przeglądarka:
 - **Typ pliku: 📷 Zdjęcie ⇄ 📄 Dokument** w podglądzie, a hurtem na pasku zaznaczania. W uporządkowanej bibliotece plik od razu trafia do właściwego folderu: Dokumenty/Dokumenty z RRRR albo Zdjęcia/Zdjęcia z RRRR/<miesiąc>, do istniejącego folderu tego miesiąca, np. „Kwiecień w domu”. Jest „Cofnij”, który przywraca też miejsce pliku. Albumy, ulubione i osoby przenoszą się razem z plikiem.
 - **Nowy pasek w podglądzie**: przyciski w grupach na ciemnym tle, przez które nie prześwituje pasek Przeglądarki. Aktywny przycisk ma niebieskie podświetlenie, złoty kolor zostaje tylko dla ★ Ulubionych.

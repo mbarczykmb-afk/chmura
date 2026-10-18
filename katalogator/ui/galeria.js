@@ -526,6 +526,9 @@ function zoomRysuj() {
   im.style.transform = zoom.s === 1 ? "" : `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.s})`;
   im.classList.toggle("zoom", zoom.s > 1);
 }
+// obraz zaczyna się pod paskiem narzędzi (pasek zawija się w wąskim oknie — mierzymy jego wysokość)
+new ResizeObserver(() => $("pelny").style.setProperty("--pn", ($("pelny").querySelector(".narz").offsetHeight || 58) + "px"))
+  .observe($("pelny").querySelector(".narz"));
 function zoomReset() { zoom.s = 1; zoom.x = 0; zoom.y = 0; zoom.palce.clear(); zoomRysuj(); $("pelny-skala").style.opacity = 0; }
 $("pelny-tresc").addEventListener("wheel", e => {
   if (!obrazPelny()) return;

@@ -52,8 +52,8 @@ body.zwiniete #wykres,body.zwiniete #lata,body.zwiniete #prz,body.zwiniete #filt
 .popup button{margin-top:6px;width:100%;padding:4px}
 .leaflet-popup-content{margin:10px}
 /* podgląd na cały ekran */
-#pelny{position:fixed;inset:0;background:#04060c;z-index:2000;display:flex;align-items:center;justify-content:center;color:#fff}
-#pelny img,#pelny video{max-width:96vw;max-height:88vh;object-fit:contain}
+#pelny{position:fixed;inset:0;background:#04060c;z-index:2000;display:flex;align-items:center;justify-content:center;color:#fff;--pn:58px;padding:var(--pn) 0 36px;box-sizing:border-box}
+#pelny img,#pelny video{max-width:calc(100vw - 132px);max-height:calc(100vh - var(--pn) - 44px);object-fit:contain}
 #pelny-tresc{touch-action:none}
 #pelny img{transform-origin:0 0;will-change:transform;user-select:none;-webkit-user-drag:none}
 #pelny img.zoom{cursor:grab} #pelny img.zoom.ciagnie{cursor:grabbing}
@@ -61,8 +61,8 @@ body.zwiniete #wykres,body.zwiniete #lata,body.zwiniete #prz,body.zwiniete #filt
 #pelny .opis{position:absolute;left:0;right:0;bottom:0;padding:10px 14px;background:linear-gradient(transparent,rgba(0,0,0,.7));font-size:13px;text-align:center}
 #pelny .zam,#pelny .pop,#pelny .nast{position:absolute;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:22px;border-radius:999px;width:44px;height:44px;padding:0}
 #pelny .zam{top:12px;right:12px;z-index:4}
-#pelny .pop{left:12px;top:50%}
-#pelny .nast{right:12px;top:50%}
+#pelny .pop{left:12px;top:calc(50% + var(--pn) / 2 - 22px)}
+#pelny .nast{right:12px;top:calc(50% + var(--pn) / 2 - 22px)}
 /* logowanie PIN-em (telefon) */
 #login{position:fixed;inset:0;background:var(--bg);z-index:3000;display:grid;place-items:center;padding:20px}
 #login form{max-width:320px;width:100%;text-align:center}
@@ -183,7 +183,7 @@ body.zwiniete #wykres,body.zwiniete #lata,body.zwiniete #prz,body.zwiniete #filt
 .k .gw{position:absolute;left:6px;top:6px;z-index:1;font-size:15px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
 #mapa-os{position:absolute;right:12px;top:10px;z-index:600;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 #pelny .narz{position:absolute;top:0;left:0;right:68px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;z-index:3;padding:10px 12px;
-  background:linear-gradient(180deg,rgba(4,6,12,.95),rgba(4,6,12,.72) 75%,rgba(4,6,12,0));pointer-events:none}
+  background:linear-gradient(180deg,rgba(4,6,12,.96),rgba(4,6,12,.9));pointer-events:none}
 #pelny .narz>*{pointer-events:auto}
 #pelny .narz .grp{display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}
 #pelny .narz .grp:not(:has(button:not([hidden]))){display:none}
