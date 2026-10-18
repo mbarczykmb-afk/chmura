@@ -1370,6 +1370,7 @@ function oknoLokalizacji(p, zbior = null) {
   lok.inne = inne; lok.wybrane = new Set(inne.map(x => x.id));
   rysujInneLok();
   $("lok-usun").hidden = zbior ? !zbior.some(x => x.lat != null) : p.lat == null;
+  wczytajZnaneMiejsca();
   if (!lok.mapa) {
     lok.mapa = L.map("lok-mapa", {doubleClickZoom: false}).setView([52, 19], 6);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19,
@@ -1386,12 +1387,31 @@ function oknoLokalizacji(p, zbior = null) {
   $("lok-pomoc").textContent = p.lat == null ? "Kliknij na mapie, gdzie zrobiono zdjęcie — albo wyszukaj miejscowość."
                                               : "Przeciągnij pinezkę albo kliknij w nowe miejsce.";
 }
+// 📍 miejsca, które już są w bibliotece — jedno kliknięcie zamiast szukania na mapie
+async function wczytajZnaneMiejsca() {
+  if (!lok.znane) try { lok.znane = (await api("/api/g/znane-miejsca")).miejsca || []; } catch (e) { lok.znane = []; }
+  rysujZnane();
+}
+function rysujZnane() {
+  const q = $("lok-szukaj").value.trim().toLowerCase(), l = $("lok-znane-l");
+  const lista = (lok.znane || []).filter(m => !q || m.nazwa.toLowerCase().includes(q)).slice(0, q ? 30 : 16);
+  $("lok-znane").hidden = !lista.length; l.replaceChildren();
+  const zn = lok.znacznik && lok.znacznik.getLatLng();
+  for (const m of lista) {
+    const b = document.createElement("button"); b.type = "button";
+    b.className = zn && Math.abs(zn.lat - m.lat) < 1e-6 && Math.abs(zn.lng - m.lon) < 1e-6 ? "akt" : "";
+    b.title = `${m.nazwa} — ${liczbaZdjec(m.n)}` + (m.data ? `, ostatnio ${m.data}` : "") + " · kliknij, żeby wybrać to miejsce";
+    b.append("📍 " + m.nazwa, Object.assign(document.createElement("small"), {textContent: m.n}));
+    b.onclick = () => { ustawZnacznik(m.lat, m.lon); lok.mapa.setView([m.lat, m.lon], 13); $("lok-wyniki").replaceChildren(); };
+    l.append(b);
+  }
+}
 function ustawZnacznik(la, lo) {
   if (!lok.znacznik) {
     lok.znacznik = L.marker([la, lo], {draggable: true}).addTo(lok.mapa);
-    lok.znacznik.on("dragend", () => { $("lok-zapisz").disabled = false; });
+    lok.znacznik.on("dragend", () => { $("lok-zapisz").disabled = false; rysujZnane(); });
   } else lok.znacznik.setLatLng([la, lo]);
-  $("lok-zapisz").disabled = false;
+  $("lok-zapisz").disabled = false; rysujZnane();
 }
 // miniatury pozostałych zdjęć z tego dnia: widać, czego dotyczy zmiana; klik — wyłącz / włącz zdjęcie
 function rysujInneLok() {
@@ -1419,7 +1439,7 @@ $("lok-zapisz").onclick = async () => {
   const ll = lok.znacznik.getLatLng(), p = lok.p;
   const cele = lok.zbior || [p, ...($("lok-inne-cb").checked ? lok.inne.filter(x => lok.wybrane.has(x.id)) : [])];
   const pop = Object.fromEntries(cele.map(x => [x.id, [x.lat ?? null, x.lon ?? null]]));
-  lok.ostatnie = [ll.lat, ll.lng]; zamknijLok();  // okno znika od razu — zapis idzie w tle, można dalej przeglądać
+  lok.ostatnie = [ll.lat, ll.lng]; lok.znane = null; zamknijLok();  // okno znika od razu — zapis idzie w tle, można dalej przeglądać
   zadanieTla("📍 Zapisuję lokalizację", cele.length, postep => ustawLokalizacje(cele.map(x => x.id), ll.lat, ll.lng, pop, false, postep));
 };
 $("lok-usun").onclick = async () => {
@@ -1454,6 +1474,7 @@ let lokZegar = null;
 $("lok-szukaj").oninput = () => {
   clearTimeout(lokZegar);
   const q = $("lok-szukaj").value.trim();
+  rysujZnane();
   if (q.length < 2) { $("lok-wyniki").replaceChildren(); return; }
   lokZegar = setTimeout(async () => {
     let wyniki = [];

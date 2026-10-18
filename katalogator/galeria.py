@@ -295,6 +295,40 @@ class Galeria:
             db.close()
         return {"punkty": punkty}
 
+    def znane_miejsca(self, ile: int = 60) -> dict:
+        """Miejsca, które już są w bibliotece (zdjęcia z GPS) — do szybkiego wyboru przy ustawianiu lokalizacji.
+        W Polsce — miejscowość, za granicą — okolica ~10 km w danym kraju; punkt = najczęstsze miejsce w grupie."""
+        from . import miejsca
+        w, arg = self._warunek()
+        db = self._db()
+        try:
+            komorki = db.execute(
+                f"""SELECT round(lat, 3), round(lon, 3), COUNT(*), MAX(data) FROM pliki
+                    WHERE rodzaj IN ('zdjecie','film') AND lat IS NOT NULL AND lon IS NOT NULL {w}
+                    GROUP BY 1, 2""", arg).fetchall()
+        finally:
+            db.close()
+        kraje = {}
+        for nazwa, kod in miejsca.KRAJE_NAZWY.items():
+            kraje.setdefault(kod, nazwa[:1].upper() + nazwa[1:])
+        grupy = {}
+        for la, lo, n, data in komorki:
+            et = miejsca.etykieta(la, lo)
+            klucz = (et, round(la, 1), round(lo, 1)) if et.startswith("@") else (et,)
+            gr = grupy.setdefault(klucz, {"n": 0, "data": "", "naj": (0, la, lo)})
+            gr["n"] += n
+            gr["data"] = max(gr["data"], data or "")
+            if n > gr["naj"][0]:
+                gr["naj"] = (n, la, lo)
+        wynik = []
+        for klucz, gr in grupy.items():
+            et = klucz[0]
+            nazwa = (kraje.get(et[1:]) or miejsca.fraza(et)) if et.startswith("@") else et
+            wynik.append({"nazwa": nazwa, "lat": gr["naj"][1], "lon": gr["naj"][2], "n": gr["n"],
+                          "data": gr["data"][:10]})
+        wynik.sort(key=lambda x: (-x["n"], x["nazwa"]))
+        return {"miejsca": wynik[:ile]}
+
     def _wiersz(self, id_: int):
         w, arg = self._warunek(ukryte=not getattr(_FILTR, "okno", False))
         db = self._db()
@@ -1509,6 +1543,8 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
         from . import miejsca
         w = miejsca.szukaj_miejsca(q.get("q", [""])[0][:100])
         return {"miejsca": [{"nazwa": n, "lat": la, "lon": lo} for la, lo, n in (w or {}).get("pl", [])[:8]]}, None
+    if sciezka == "/api/g/znane-miejsca":
+        return g.znane_miejsca(min(i("ile", 60), 300)), None
     if sciezka == "/api/g/tego-dnia":
         return g.tego_dnia(q.get("md", [""])[0], i("dni")), None
     if sciezka == "/api/g/albumy":

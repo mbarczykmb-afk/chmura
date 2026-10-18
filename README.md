@@ -174,6 +174,8 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.39.0:** Zmiana miejsca zdjęcia: w oknie lokalizacji od razu widać „Znane miejsca” — miejscowości (i kraje za granicą), które już są w bibliotece, od najczęstszych, z liczbą zdjęć. Jedno kliknięcie ustawia pinezkę; wpisywanie w wyszukiwarce zawęża też tę listę. Działa również przy zmianie miejsca wielu zaznaczonych zdjęć.
+
 **1.38.1:** Podgląd zdjęcia: obraz nie nachodzi już na pasek narzędzi — mieści się pod nim (także gdy pasek zawija się w wąskim oknie), strzałki ‹ › wyśrodkowane względem obrazu.
 
 **1.38.0:** Przeglądarka:

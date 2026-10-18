@@ -399,6 +399,12 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 #dt .okno{background:var(--bg);color:var(--fg);border-radius:14px;padding:16px;width:min(440px,100%);display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
 #dt input[type=datetime-local]{display:block;margin-top:6px;font:inherit;font-size:16px;padding:8px 10px;border:1px solid var(--lin);border-radius:8px;background:var(--panel);color:var(--fg);width:100%}
 #dt-inne{display:flex;gap:6px;align-items:center;font-size:13.5px}
+#lok-znane{display:flex;gap:8px;align-items:flex-start}
+#lok-znane .et{font-size:12px;color:var(--szary,#8a94a8);padding-top:7px;white-space:nowrap}
+#lok-znane-l{display:flex;flex-wrap:wrap;gap:6px;max-height:76px;overflow:auto;flex:1;padding:2px}
+#lok-znane-l button{border-radius:999px;padding:4px 11px;font-size:13px;white-space:nowrap;height:auto}
+#lok-znane-l button small{opacity:.6;margin-left:4px}
+#lok-znane-l button.akt small{opacity:.85}
 #lok-inne-min{display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow:auto;padding:2px}
 .lok-min{width:76px;height:58px;padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;background:var(--lin);font-size:22px;opacity:.35;filter:grayscale(1)}
 .lok-min img{width:100%;height:100%;object-fit:cover;display:block}
@@ -701,6 +707,7 @@ Bez zaznaczenia: obok powstaje kopia „(edytowane)”."><input type="checkbox" 
     <div class="lok-gora"><b id="lok-tyt">📍 Lokalizacja</b>
       <input id="lok-szukaj" type="search" placeholder="🔍 Szukaj miejscowości: Hel, Zakopane, Rzym…" autocomplete="off"></div>
     <div id="lok-wyniki"></div>
+    <div id="lok-znane" hidden><span class="et">Znane miejsca</span><span id="lok-znane-l"></span></div>
     <div id="lok-mapa"></div>
     <div class="info" id="lok-pomoc"></div>
     <label id="lok-inne" hidden><input type="checkbox" id="lok-inne-cb"> <span id="lok-inne-t"></span></label>
