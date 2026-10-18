@@ -191,7 +191,7 @@ function dokDalej() {
 async function dokZbiorczo(kat, wszystkie = false) {  // ta strona (domyślnie) albo cała lista
   const bez = (wszystkie ? an.dok : dokWidoczne()).filter(d => !dokZapisana(d));
   if (!bez.length) { toast("Wszystkie wyświetlone zdjęcia mają już decyzję."); return; }
-  if (wszystkie && !confirm(`Oznaczyć ${bez.length} zdjęć jako 📷 zdjęcia (nie dokumenty)?\n\nMożna cofnąć.`)) return;
+  if (wszystkie && !await oknoTak(`Oznaczyć ${bez.length} zdjęć jako 📷 zdjęcia (nie dokumenty)?\n\nMożna cofnąć.`)) return;
   const wybor = {}, bylo = {};
   for (const d of bez) for (const id of [d.id, ...(d.kopie || [])]) { wybor[id] = kat || dokSugestia(d); bylo[id] = ""; }
   try {
@@ -407,7 +407,7 @@ function podobneHurtem() {
   const przycisk = (tekst, tytul, tryb, ile, pytanie) => {
     const b = document.createElement("button"); b.className = "maly"; b.textContent = tekst; b.title = tytul; b.disabled = !ile;
     b.onclick = async () => {
-      if (!confirm(pytanie + "\n\nNic nie jest kasowane — trafią do folderu Odłożone, a operację można cofnąć.")) return;
+      if (!await oknoTak(pytanie + "\n\nNic nie jest kasowane — trafią do folderu Odłożone, a operację można cofnąć.")) return;
       b.disabled = true; b.textContent = "Odkładam…";
       try {
         const w = await api("/api/podobne/auto", {tryb});
@@ -516,7 +516,7 @@ $("pod-odloz").onclick = async () => {
     .map(g => g.map(w => w.sciezka).sort().join("|")) : [];
   if (przejrzane.length) await api("/api/przejrzane", {rodzaj: "podobne", klucze: przejrzane});
   if (!ids.length) { toast(`Przejrzane: ${przejrzane.length} grup zostaje bez zmian.`); an.podWczytane = false; wczytajPodobne(); return; }
-  if (!confirm(`Odłożyć ${ids.length} zdjęć do kosza (folder Odłożone)?\n\nNic nie jest kasowane — operację można cofnąć.`)) return;
+  if (!await oknoTak(`Odłożyć ${ids.length} zdjęć do kosza (folder Odłożone)?\n\nNic nie jest kasowane — operację można cofnąć.`)) return;
   try {
     const w = await api("/api/odloz", {ids, typ: an.tryb});
     toast(`Odłożono ${w.przeniesione} zdjęć.` + (w.pominiete.length ? ` Pominięto: ${w.pominiete.length}.` : ""), async () => {

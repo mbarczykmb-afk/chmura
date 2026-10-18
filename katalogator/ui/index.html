@@ -1271,7 +1271,7 @@ async function zapisz(ust) {
       toast(t.join(" "));
     }
   }
-  catch (e) { alert(e.message); }
+  catch (e) { oknoInfo(e.message); }
 }
 
 $("dodaj-wklejone").onclick = () => {
@@ -1433,13 +1433,13 @@ $("okno-cel").onclick = e => { if (e.target === $("okno-cel")) $("okno-cel").hid
 document.addEventListener("keydown", e => { if (e.key === "Escape") $("okno-cel").hidden = true; });
 $("zatwierdz-cel").onclick = () => { $("okno-cel").hidden = true; if (naWyborFolderu) naWyborFolderu(celWybor); };
 $("nowy-folder").onclick = async () => {
-  const nazwa = prompt("Nazwa nowego folderu w:\n" + celWybor, "Uporządkowane");
+  const nazwa = await oknoWpisz("Nazwa nowego folderu w:\n" + celWybor, "Uporządkowane");
   if (!nazwa) return;
   try {
     const r = await api("/api/nowy-folder", {w: celWybor, nazwa});
     await drzewoCelu.przeladuj(celWybor);
     celWybor = r.sciezka; rysujWyborCelu();
-  } catch (e) { alert(e.message); }
+  } catch (e) { oknoInfo(e.message); }
 };
 $("ustaw-cel").onclick = () => {
   const v = $("wklej-cel").value.trim();
@@ -1452,7 +1452,7 @@ $("skanuj").onclick = async () => {
 $("przerwij").onclick = () => api("/api/przerwij", {});
 $("odswiez").onclick = pokazRaport;
 $("zamknij").onclick = async () => {
-  if (stan.skan && stan.skan.trwa && !confirm("Skan trwa. Przerwać i zamknąć? Postęp zostanie zapisany.")) return;
+  if (stan.skan && stan.skan.trwa && !await oknoTak("Skan trwa. Przerwać i zamknąć? Postęp zostanie zapisany.")) return;
   try { await api("/api/zamknij", {}); } catch (e) {}
   document.body.innerHTML = '<p style="padding:40px;text-align:center">Katalogator zamknięty. Możesz zamknąć to okno.</p>';
   window.close();
@@ -1677,7 +1677,7 @@ $("odloz").onclick = async () => {
   const przejrzane = dupGrupy.filter(g => dupDecyzje[g.h].pomin).map(g => g.h);
   const n = decyzje.reduce((s, d) => s + d.usun.length, 0);
   const trwale = trwaleDup() && n;
-  if (n && !confirm(trwale
+  if (n && !await oknoTak(trwale
       ? `Usunąć NA STAŁE ${n} identycznych kopii?\n\nOryginały zostają. Tego nie da się cofnąć (na dysku sieciowym nie ma Kosza Windows).`
       : `Przenieść ${n} kopii do kosza (folder Odłożone\\Duplikaty)?\n\nOryginały zostają na miejscu. Operację można cofnąć.`)) return;
   $("odloz").disabled = true;
@@ -1685,7 +1685,7 @@ $("odloz").onclick = async () => {
     if (przejrzane.length) await api("/api/przejrzane", {rodzaj: "dup", klucze: przejrzane});
     if (n) {
       const w = await api("/api/duplikaty/przenies", {decyzje});
-      if (w.pominiete.length) alert(`Pominięto ${w.pominiete.length}:\n` + w.pominiete.slice(0, 8).join("\n"));
+      if (w.pominiete.length) oknoInfo(`Pominięto ${w.pominiete.length}:\n` + w.pominiete.slice(0, 8).join("\n"));
       if (trwale) {
         stan = await api("/api/odlozone/usun", {partia: w.partia});
         toast(`🗑 Usuwam na stałe ${w.przeniesione} kopii (${rozmiar(w.bajty)}) — postęp u góry okna.`);
@@ -1696,16 +1696,16 @@ $("odloz").onclick = async () => {
         });
       }
     } else toast(`Przejrzane: ${przejrzane.length} grup zostaje bez zmian.`);
-  } catch (e) { alert(e.message); }
+  } catch (e) { oknoInfo(e.message); }
   await odswiez(); await wczytajGrupy(true);
   $("lista-dup").scrollTop = 0; $("lista-dup").scrollIntoView({block: "nearest"});
 };
 $("cofnij").onclick = async () => {
-  if (!confirm("Przywrócić pliki z ostatniego odłożenia na ich miejsce?")) return;
+  if (!await oknoTak("Przywrócić pliki z ostatniego odłożenia na ich miejsce?")) return;
   try {
     const w = await api("/api/duplikaty/cofnij", {});
-    alert(`Przywrócono ${w.przywrocone} plików.` + (w.bledy.length ? "\n\nProblemy:\n" + w.bledy.slice(0, 8).join("\n") : ""));
-  } catch (e) { alert(e.message); }
+    oknoInfo(`Przywrócono ${w.przywrocone} plików.` + (w.bledy.length ? "\n\nProblemy:\n" + w.bledy.slice(0, 8).join("\n") : ""));
+  } catch (e) { oknoInfo(e.message); }
   await odswiez(); wczytajGrupy(true);
 };
 
@@ -1762,6 +1762,7 @@ function rysujDup() {
 })();
 </script>
 <script src="/ui/podpowiedzi.js"></script>
+<script src="/ui/okna.js"></script>
 <script src="/ui/ikony.js"></script>
 <script src="/ui/aktywnosc.js"></script>
 <script src="/ui/motyw.js"></script>

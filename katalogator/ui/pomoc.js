@@ -63,7 +63,7 @@ $("baner-pozniej").onclick = () => {
 $("baner-co").onclick = () => api("/api/otworz-strone", {url: akt.info.url_strony});
 $("baner-instaluj").onclick = async () => {
   if (zajety()) { toast("Poczekaj, aż skończy się bieżące zadanie."); return; }
-  if (!confirm(`Pobrać i zainstalować wersję ${akt.info.najnowsza}?\n\nKatalogator zamknie się, a instalator poprowadzi Cię dalej. ` +
+  if (!await oknoTak(`Pobrać i zainstalować wersję ${akt.info.najnowsza}?\n\nKatalogator zamknie się, a instalator poprowadzi Cię dalej. ` +
                "Twoje projekty i ustawienia zostaną zachowane.")) return;
   try {
     await api("/api/aktualizacja/instaluj", {url: akt.info.url_instalatora});

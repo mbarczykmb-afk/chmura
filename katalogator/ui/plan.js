@@ -58,7 +58,7 @@ naStan.push(rysujPlanLewa);
 
 $("generuj").onclick = async () => {
   if (stan.plan && (stan.plan.cofnij) &&
-      !confirm("Utworzyć propozycję od nowa? Twoje zmiany w drzewie zostaną utracone.")) return;
+      !await oknoTak("Utworzyć propozycję od nowa? Twoje zmiany w drzewie zostaną utracone.")) return;
   try { stan = await api("/api/plan/generuj", {}); rysuj(); } catch (e) { toast(e.message); }
 };
 $("k3").onclick = () => { if (stan.plan) pokazZakladke("drzewo"); };
@@ -71,7 +71,7 @@ $("k4").onclick = async () => {  // przed porządkowaniem — drzewo musi znać 
   otworzWykonanie();
 };
 $("cofnij-wyk").onclick = async () => {
-  if (!confirm("Cofnąć ostatnie porządkowanie?\n\nKopie zostaną usunięte, a przeniesione pliki wrócą na swoje miejsca.")) return;
+  if (!await oknoTak("Cofnąć ostatnie porządkowanie?\n\nKopie zostaną usunięte, a przeniesione pliki wrócą na swoje miejsca.")) return;
   try { stan = await api("/api/wykonanie/cofnij", {}); rysuj(); } catch (e) { toast(e.message); }
 };
 
@@ -150,7 +150,7 @@ async function sprawdzAktualnosc() {
   b.replaceChildren(`⚠ Drzewo jest starsze niż Twoje zmiany (${a.powod}). `);
   const p = document.createElement("button"); p.className = "maly"; p.textContent = "Utwórz drzewo od nowa";
   p.onclick = async () => {
-    if (!confirm(`Utworzyć drzewo od nowa?\n\n` + (a.reczne ? `Przepadnie ${a.reczne} Twoich ręcznych poprawek w drzewie ` +
+    if (!await oknoTak(`Utworzyć drzewo od nowa?\n\n` + (a.reczne ? `Przepadnie ${a.reczne} Twoich ręcznych poprawek w drzewie ` +
         "(zmiany nazw, przeniesienia, daty, miejsca).\n" : "") + (a.wykonane ? "Wyniki poprzedniego porządkowania znikną z listy (pliki zostają).\n" : ""))) return;
     b.hidden = true;
     try { stan = await api("/api/plan/generuj", {}); rysuj(); } catch (e) { toast(e.message); }
@@ -455,7 +455,7 @@ function zapytajFolder(tytul, opis, poczatek) {
 $("f-zmien").onclick = async () => {
   const stara = plan.folder;
   const rodzic = stara.includes("/") ? stara.slice(0, stara.lastIndexOf("/")) : "";
-  const nazwa = prompt("Nowa nazwa folderu:", stara.split("/").pop());
+  const nazwa = await oknoWpisz("Nowa nazwa folderu:", stara.split("/").pop());
   if (!nazwa || nazwa === stara.split("/").pop()) return;
   const nowa = (rodzic ? rodzic + "/" : "") + nazwa.replace(/[\\/]/g, "_");
   if (await edycja("/api/plan/zmien-nazwe", {stara, nowa})) { plan.folder = nowa; wczytajPliki(true); rysujDrzewo(); }
@@ -500,13 +500,13 @@ $("f-nastepny").onclick = () => {
   rysujDrzewo(); wczytajPliki(true);
 };
 $("f-wszystkie").onclick = () => { plan.pliki.forEach(f => { if (f.tryb !== "istniejacy") plan.zazn.add(f.id); }); rysujPliki(); };
-$("z-miejsce").onclick = () => {
-  const m = prompt(`Miejsce dla ${plan.zazn.size} zaznaczonych zdjęć/filmów (np. Hel, Zakopane, dom).\n` +
+$("z-miejsce").onclick = async () => {
+  const m = await oknoWpisz(`Miejsce dla ${plan.zazn.size} zaznaczonych zdjęć/filmów (np. Hel, Zakopane, dom).\n` +
                    "Pliki trafią do folderów „<Miesiąc> na Helu” według swojej daty.", "");
   if (m && m.trim()) edycja("/api/plan/ustaw-miejsce", {ids: [...plan.zazn], miejsce: m.trim()});
 };
-$("z-data").onclick = () => {
-  const d = prompt(`Nowa data dla ${plan.zazn.size} zaznaczonych (RRRR-MM-DD albo RRRR-MM).\n` +
+$("z-data").onclick = async () => {
+  const d = await oknoWpisz(`Nowa data dla ${plan.zazn.size} zaznaczonych (RRRR-MM-DD albo RRRR-MM).\n` +
                    "Zmieni się tylko miejsce w drzewie (rok/miesiąc) — plik nie jest modyfikowany.", "");
   if (d && d.trim()) edycja("/api/plan/ustaw-date", {ids: [...plan.zazn], data: d.trim()});
 };

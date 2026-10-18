@@ -68,8 +68,8 @@ async function rysujUstawienia() {
     pole("Pozwól sterować z telefonu (kolejne kroki, 🗑 usuwanie, 📍 miejsce, ✏ edycja, 📤 wysyłanie zdjęć)", tel.sterowanie,
          v => { tel.sterowanie = v; return tel.wlaczony ? telefonUst({sterowanie: v}) : null; }),
     wiersz(el("span", {className: "info", textContent: tel.wlasny_pin ? "Twój PIN jest stały — telefony nie muszą logować się po restarcie." : "PIN losowany przy każdym włączeniu."}),
-           przyc("✎ Ustaw swój PIN", () => {
-             const n = prompt("Twój PIN (4–12 cyfr) — zapamiętany na stałe.\nPuste = losowy przy każdym włączeniu.", "");
+           przyc("✎ Ustaw swój PIN", async () => {
+             const n = await oknoWpisz("Twój PIN (4–12 cyfr) — zapamiętany na stałe.\nPuste = losowy przy każdym włączeniu.", "");
              if (n !== null) telefonUst({wlacz: true, pin: n.trim()}).catch(e => toast(e.message));
            }))));
 

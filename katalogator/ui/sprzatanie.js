@@ -148,7 +148,7 @@ $("odl-usun").onclick = async () => {
   const o = window.odlozoneStan; if (!o) return;
   const wyb = o.kategorie.filter(k => odlZazn.get(k.nazwa));
   const n = wyb.reduce((a, k) => a + k.plikow, 0), b = wyb.reduce((a, k) => a + k.bajty, 0);
-  if (!confirm(`Usunąć NA STAŁE ${plikow(n)} (${rozmiar(b)}) z folderów Odłożone: ${wyb.map(k => k.nazwa).join(", ")}?\n\n` +
+  if (!await oknoTak(`Usunąć NA STAŁE ${plikow(n)} (${rozmiar(b)}) z folderów Odłożone: ${wyb.map(k => k.nazwa).join(", ")}?\n\n` +
                "Tego NIE da się cofnąć. Na dysku sieciowym (My Cloud) nie ma Kosza — pliki znikną od razu.")) return;
   try { stan = await api("/api/odlozone/usun", {kategorie: wyb.map(k => k.nazwa), puste: $("odl-puste").checked}); rysuj(); }
   catch (e) { toast(e.message); }
@@ -205,7 +205,7 @@ function rysujKosz() {
       b.disabled = zajety();
       b.title = "Pliki trafią do <miejsce docelowe>\\Odłożone\\<kategoria>\\<źródło>\\… — ↶ Cofnij dalej działa";
       b.onclick = async () => {
-        if (!confirm(`Przenieść wszystkie pliki z folderów „Odłożone” w źródłach do ${o.docelowy}?\n\n` +
+        if (!await oknoTak(`Przenieść wszystkie pliki z folderów „Odłożone” w źródłach do ${o.docelowy}?\n\n` +
                      "Między dyskami (np. Y: → Z:) to kopiowanie i usuwanie oryginału — może potrwać.")) return;
         try { stan = await api("/api/odlozone/do-celu", {}); rysuj(); $("okno-kosz").hidden = true; toast("Przenoszę kosz do miejsca docelowego — postęp u góry okna."); }
         catch (e) { toast(e.message); }
@@ -229,7 +229,7 @@ $("okno-kosz").onclick = e => { if (e.target.id === "okno-kosz") $("okno-kosz").
 $("kosz-oproznij").onclick = async () => {
   const wyb = (koszStan || {kategorie: []}).kategorie.filter(k => koszZazn.get(k.nazwa));
   const n = wyb.reduce((a, k) => a + k.plikow, 0), b = wyb.reduce((a, k) => a + k.bajty, 0);
-  if (!confirm(`Usunąć NA STAŁE ${plikow(n)} (${rozmiar(b)}) z kosza: ${wyb.map(k => k.nazwa).join(", ")}?\n\n` +
+  if (!await oknoTak(`Usunąć NA STAŁE ${plikow(n)} (${rozmiar(b)}) z kosza: ${wyb.map(k => k.nazwa).join(", ")}?\n\n` +
                "Tego NIE da się cofnąć. Na dysku sieciowym (My Cloud) nie ma Kosza Windows — pliki znikną od razu.")) return;
   try { stan = await api("/api/odlozone/usun", {kategorie: wyb.map(k => k.nazwa), puste: $("kosz-puste").checked}); rysuj(); }
   catch (e) { toast(e.message); }

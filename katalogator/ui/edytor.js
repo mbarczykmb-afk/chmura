@@ -209,8 +209,8 @@ const edPrzed = v => { ed.przed = v; edRysuj(); };
 $("ed-porownaj").addEventListener("pointerdown", () => edPrzed(true));
 for (const t of ["pointerup", "pointerleave", "pointercancel"]) $("ed-porownaj").addEventListener(t, () => { if (ed.przed) edPrzed(false); });
 $("ed-zastap").onchange = () => { $("ed-zapisz").textContent = $("ed-zastap").checked ? "Zapisz (zastąp)" : "Zapisz kopię"; };
-$("ed-anuluj").onclick = () => {
-  if (edZmiany(edOp()) && !confirm("Porzucić zmiany?")) return;
+$("ed-anuluj").onclick = async () => {
+  if (edZmiany(edOp()) && !await oknoTak("Porzucić zmiany?")) return;
   zamknijEdytor();
 };
 
@@ -257,9 +257,9 @@ async function edycjaHurtem(op, nazwa) {
   edycjaPlikow(lista, op, nazwa, true, koniecZazn);
 }
 // wspólne dla edycji hurtem i szybkiego obrotu na miniaturze (tryb edycji)
-function edycjaPlikow(lista, op, nazwa, pytaj = true, poZgodzie = () => {}) {
+async function edycjaPlikow(lista, op, nazwa, pytaj = true, poZgodzie = () => {}) {
   const zastap = $("zz-zastap").checked;
-  if (zastap && pytaj && !confirm(`${nazwa}: zastąpić oryginały (${liczbaZdjec(lista.length)})?\n\n` +
+  if (zastap && pytaj && !await oknoTak(`${nazwa}: zastąpić oryginały (${liczbaZdjec(lista.length)})?\n\n` +
                          "Oryginały trafią do kosza programu (Odłożone/Usunięte) — można cofnąć.")) return;
   poZgodzie();
   const zrobione = [];

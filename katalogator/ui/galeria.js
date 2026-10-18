@@ -367,7 +367,7 @@ $("zz-data").onclick = () => { const w = zaznaczone(); if (w.length) oknoDaty(w[
 $("zz-miejsce").onclick = () => { const w = zaznaczone(); if (w.length) oknoLokalizacji(w[0], w); };
 $("zz-usun").onclick = async () => {
   const w = zaznaczone(); if (!w.length) return;
-  if (w.length > 1 && !confirm(`Usunąć ${liczbaZdjec(w.length)}? Trafią do kosza programu (Odłożone/Usunięte) — można cofnąć.`)) return;
+  if (w.length > 1 && !await oknoTak(`Usunąć ${liczbaZdjec(w.length)}? Trafią do kosza programu (Odłożone/Usunięte) — można cofnąć.`)) return;
   await usunPliki(w); koniecZazn();
 };
 $("zz-dok").onclick = async () => {
@@ -406,7 +406,7 @@ async function menuAlbumow(gdzie, ids, gotowe) {
     await post("/api/g/album/dodaj", {album: a.id, ids}); zamknijMenuAlb(); gotowe(a.nazwa);
   }));
   m.append(przycisk("＋ Nowy album…", async () => {
-    const n = prompt("Nazwa nowego albumu:"); if (!n) return;
+    const n = await oknoWpisz("Nazwa nowego albumu:"); if (!n) return;
     const w = await post("/api/g/album/nowy", {nazwa: n, ids}); zamknijMenuAlb(); gotowe(w.nazwa);
   }));
 }
@@ -914,12 +914,12 @@ async function telefon(wlacz, pin) {
         const w = await r.json();
         if (!r.ok || w.blad) throw new Error(w.blad || r.statusText);
         c.checked = !!w.autostart;
-      } catch (e) { c.checked = !c.checked; alert(e.message); }
+      } catch (e) { c.checked = !c.checked; oknoInfo(e.message); }
     };
     $("tel-ster").checked = j.sterowanie !== false;
     $("tel-pin-info").textContent = j.wlasny_pin ? "Twój PIN — stały" : "losowy przy każdym włączeniu";
-    $("tel-pin").onclick = () => {
-      const n = prompt("Twój PIN na telefon (4–12 cyfr) — zostanie zapamiętany.\nZostaw puste, żeby wrócić do losowego PIN-u.",
+    $("tel-pin").onclick = async () => {
+      const n = await oknoWpisz("Twój PIN na telefon (4–12 cyfr) — zostanie zapamiętany.\nZostaw puste, żeby wrócić do losowego PIN-u.",
                        j.wlasny_pin ? j.pin : "");
       if (n !== null) telefon(true, n.trim());
     };
@@ -931,7 +931,7 @@ async function telefon(wlacz, pin) {
     $("tel-adr").textContent = adr;
     $("tel-inne").textContent = j.adresy.slice(1).join(", ") || "—";
   } catch (e) {
-    if (pin !== undefined) { alert(e.message); return telefon(true); }  // zły PIN — wracamy do bieżącego
+    if (pin !== undefined) { oknoInfo(e.message); return telefon(true); }  // zły PIN — wracamy do bieżącego
     $("tel-tresc").textContent = e.message;
   }
 }
@@ -994,7 +994,7 @@ function rysujFiltr() {
     const t = document.createElement("span"); t.className = "tyt"; t.textContent = "👤 " + (z.nazwa || "Bez imienia"); f.append(t, inf(ile(g.razem)));
     const p = pokaz(); if (p) f.append(p);
     if (W_PROGRAMIE) f.append(przycisk("✎ Imię", async () => {
-      const n = prompt("Imię (albo opis, np. „Babcia Zosia”):", z.nazwa || ""); if (n === null) return;
+      const n = await oknoWpisz("Imię (albo opis, np. „Babcia Zosia”):", z.nazwa || ""); if (n === null) return;
       const w = await post("/api/g/osoba/nazwa", {id: z.osoba, nazwa: n});
       if (w.polaczono) { z.osoba = w.polaczono; toastG(`👤 Połączono z „${n.trim()}” — to ta sama osoba.`); }
       z.nazwa = n.trim(); pokazWyniki(z);
@@ -1022,10 +1022,10 @@ function rysujFiltr() {
                 : "Np. „Praca”: zdjęcia z tego albumu znikną z osi czasu, mapy, szukania i telefonu (pliki zostają na dysku)", z.ukryty ? "akt" : ""));
     if (W_PROGRAMIE && z.kol === "album") {
       f.append(przycisk("✎ Zmień nazwę", async () => {
-        const n = prompt("Nowa nazwa albumu:", z.nazwa || ""); if (!n) return;
+        const n = await oknoWpisz("Nowa nazwa albumu:", z.nazwa || ""); if (!n) return;
         const w = await post("/api/g/album/nazwa", {album: z.album, nazwa: n}); z.nazwa = w.nazwa; rysujFiltr();
       }), przycisk("🗑 Usuń album", async () => {
-        if (!confirm(`Usunąć album „${z.nazwa}”?\n\nZdjęcia zostają na dysku — znika tylko album.`)) return;
+        if (!await oknoTak(`Usunąć album „${z.nazwa}”?\n\nZdjęcia zostają na dysku — znika tylko album.`)) return;
         await post("/api/g/album/usun", {album: z.album}); widok("kolekcje");
       }));
     }
@@ -1098,10 +1098,10 @@ async function wszystkieId() {  // wszystkie wyniki (do 5000) — np. do zapisan
   return g.pliki.map(p => p.id);
 }
 async function zapiszJakoAlbum(nazwa) {
-  const n = prompt("Nazwa nowego albumu:", nazwa); if (!n) return;
+  const n = await oknoWpisz("Nazwa nowego albumu:", nazwa); if (!n) return;
   const ids = await wszystkieId();
   const w = await post("/api/g/album/nowy", {nazwa: n, ids});
-  alert(`Utworzono album „${w.nazwa}” (${w.dodane} zdjęć). Znajdziesz go w ⭐ Kolekcje.`);
+  oknoInfo(`Utworzono album „${w.nazwa}” (${w.dodane} zdjęć). Znajdziesz go w ⭐ Kolekcje.`);
 }
 
 // ---------- kolekcje: ulubione i albumy ----------
@@ -1122,7 +1122,7 @@ async function rysujKolekcje() {
   kafel("⭐", "Ulubione", r.ulubione.n, r.ulubione.okladka, () => pokazWyniki({typ: "kolekcja", kol: "ulubione"}));
   for (const a of r.albumy) kafel("🗂", a.nazwa, a.n, a.okladka, () => pokazWyniki({typ: "kolekcja", kol: "album", album: a.id, nazwa: a.nazwa, udostepniony: a.udostepniony, ukryty: a.ukryty}), a.ukryty ? "ukryty" : "");
   if (W_PROGRAMIE) kafel("＋", "Nowy album", null, null, async () => {
-    const n = prompt("Nazwa nowego albumu:", "Wakacje " + new Date().getFullYear()); if (!n) return;
+    const n = await oknoWpisz("Nazwa nowego albumu:", "Wakacje " + new Date().getFullYear()); if (!n) return;
     await post("/api/g/album/nowy", {nazwa: n, ids: []}); rysujKolekcje();
   }, "nowy");
   if (!W_PROGRAMIE && !r.albumy.length && !r.ulubione.n) s.innerHTML = '<div class="pusto">Brak ulubionych i albumów — tworzy się je w programie na komputerze.</div>';
@@ -1308,7 +1308,7 @@ $("edycja-zast-cb").onchange = () => { $("zz-zastap").checked = $("edycja-zast-c
 // 🔗 udostępnianie albumu: link przez serwer telefonu (sieć domowa / Tailscale), bez PIN-u, tylko ten album
 async function udostepnij(z, wlacz = true) {
   let w;
-  try { w = await post("/api/g/album/udostepnij", {album: z.album, wlacz}); } catch (e) { alert(e.message); return; }
+  try { w = await post("/api/g/album/udostepnij", {album: z.album, wlacz}); } catch (e) { oknoInfo(e.message); return; }
   z.udostepniony = !!w.token; rysujFiltr();
   if (!w.token) { $("udo").hidden = true; toastG("🔗 Link do albumu wyłączony — przestał działać."); return; }
   const t = $("udo-tresc"); t.replaceChildren();
@@ -1330,10 +1330,10 @@ async function udostepnij(z, wlacz = true) {
     $("udo-inne").textContent = w.adresy.slice(1).join(", ") || "—";
     $("udo-kopiuj").onclick = async () => {
       try { await navigator.clipboard.writeText(adr); $("udo-kopiuj").textContent = "✓ Skopiowano"; }
-      catch (e) { prompt("Skopiuj link:", adr); }
+      catch (e) { await oknoWpisz("Skopiuj link:", adr); }
     };
   }
-  $("udo-wylacz").onclick = () => { if (confirm("Wyłączyć link? Kto go ma, nie zobaczy już albumu.")) udostepnij(z, false); };
+  $("udo-wylacz").onclick = async () => { if (await oknoTak("Wyłączyć link? Kto go ma, nie zobaczy już albumu.")) udostepnij(z, false); };
   $("udo").hidden = false;
 }
 $("udo-zamknij").onclick = () => { $("udo").hidden = true; };
@@ -1662,7 +1662,7 @@ async function wlasciwosci(p) {
   }, "Otwiera Eksplorator Windows z zaznaczonym plikiem"));
   ak.append(przycisk("📋 Kopiuj ścieżkę", async () => {
     try { await navigator.clipboard.writeText(d.sciezka); toastG("📋 Skopiowano: " + d.sciezka); }
-    catch (e) { prompt("Ścieżka pliku:", d.sciezka); }
+    catch (e) { await oknoWpisz("Ścieżka pliku:", d.sciezka); }
   }));
   if (p.rodzaj === "zdjecie" && d.lat == null && MOZE_USUWAC) ak.append(przycisk("📍 Dodaj miejsce", () => $("p-miejsce").click()));
   t.append(ak);
@@ -1763,7 +1763,7 @@ $("dt").onclick = e => { if (e.target.id === "dt") $("dt").hidden = true; };
 $("p-ulub").onclick = async e => {
   e && e.stopPropagation && e.stopPropagation();
   const p = biezacy(); if (!p) return;
-  try { const w = await post("/api/g/ulubione", {id: p.id}); p.ulubione = w.ulubione; narzedziaPelnego(p); } catch (err) { alert(err.message); }
+  try { const w = await post("/api/g/ulubione", {id: p.id}); p.ulubione = w.ulubione; narzedziaPelnego(p); } catch (err) { oknoInfo(err.message); }
 };
 $("p-z-albumu").onclick = async e => {
   e.stopPropagation(); const p = biezacy(); if (!p) return;
@@ -1772,7 +1772,7 @@ $("p-z-albumu").onclick = async e => {
   if (!g.pliki.length) zamknijPelny(); else pokazPelny(g.pliki, Math.min(i, g.pliki.length - 1));
 };
 $("p-otworz").onclick = e => { e.stopPropagation(); const p = biezacy(); if (p) otworzWProgramie(p); };
-async function otworzWProgramie(p) { stopPokaz(); try { await post("/api/g/otworz", {id: p.id}); } catch (e) { alert(e.message); } }
+async function otworzWProgramie(p) { stopPokaz(); try { await post("/api/g/otworz", {id: p.id}); } catch (e) { oknoInfo(e.message); } }
 function zamknijMenuAlb() { document.querySelectorAll(".menu-alb").forEach(m => m.remove()); }
 $("p-album").onclick = e => {
   e.stopPropagation();
@@ -1946,7 +1946,7 @@ $("prz-skanuj").onclick = async () => {
 $("prz-przerwij").onclick = () => post("/api/przegladarka/przerwij").catch(() => {});
 async function zestaw(akcja, dane = {}) {  // przełączenie zestawu = nowa oś czasu, mapa i wyszukiwanie
   try { rysujPrz(await post("/api/przegladarka/zestaw", {akcja, ...dane})); }
-  catch (e) { alert(e.message); return; }
+  catch (e) { oknoInfo(e.message); return; }
   if (akcja === "nazwa") return;
   g.punkty = null; g.rok = null; g.obszar = null; g.zrodlo = {typ: "os"}; $("szukaj").value = "";
   if (g.widok === "kolekcje") g.widok = "os";
@@ -1954,14 +1954,14 @@ async function zestaw(akcja, dane = {}) {  // przełączenie zestawu = nowa oś 
   if (akcja === "nowy") { $("wybierz").hidden = false; pokazWybor(null); }  // od razu dodaj pierwszy dysk
 }
 $("prz-zestaw").onchange = () => zestaw("wybierz", {id: +$("prz-zestaw").value});
-$("prz-z-nowy").onclick = () => {
-  const n = prompt("Nazwa nowego zestawu dysków (np. Rodzina, Praca, Stary laptop):"); if (n) zestaw("nowy", {nazwa: n});
+$("prz-z-nowy").onclick = async () => {
+  const n = await oknoWpisz("Nazwa nowego zestawu dysków (np. Rodzina, Praca, Stary laptop):"); if (n) zestaw("nowy", {nazwa: n});
 };
-$("prz-z-nazwa").onclick = () => {
-  const n = prompt("Nowa nazwa zestawu:", prz.nazwa); if (n) zestaw("nazwa", {id: prz.aktywny, nazwa: n});
+$("prz-z-nazwa").onclick = async () => {
+  const n = await oknoWpisz("Nowa nazwa zestawu:", prz.nazwa); if (n) zestaw("nazwa", {id: prz.aktywny, nazwa: n});
 };
-$("prz-z-usun").onclick = () => {
-  if (confirm(`Usunąć zestaw „${prz.nazwa}”?\n\nDyski i zdjęcia zostają — znika tylko ta lista w Przeglądarce.`))
+$("prz-z-usun").onclick = async () => {
+  if (await oknoTak(`Usunąć zestaw „${prz.nazwa}”?\n\nDyski i zdjęcia zostają — znika tylko ta lista w Przeglądarce.`))
     zestaw("usun", {id: prz.aktywny});
 };
 $("prz-auto").onchange = () => post("/api/przegladarka/auto", {auto: $("prz-auto").checked}).then(rysujPrz).catch(() => {});

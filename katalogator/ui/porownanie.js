@@ -141,7 +141,7 @@ $("por-zostaw").onclick = async () => {
   if (!por.zost.size) { toastG("Zaznacz ✓ co najmniej jedno zdjęcie, które zostaje."); return; }
   const usun = por.ids.filter(id => !por.zost.has(id));
   if (!usun.length) { zamknijPor(); return; }
-  if (!confirm(`Zostawić ${por.zost.size}, a ${usun.length} pozostałych przenieść do kosza programu (Odłożone/Usunięte)?\n\nMożna cofnąć.`)) return;
+  if (!await oknoTak(`Zostawić ${por.zost.size}, a ${usun.length} pozostałych przenieść do kosza programu (Odłożone/Usunięte)?\n\nMożna cofnąć.`)) return;
   zamknijPor();
   const lista = usun.map(id => g.pliki.find(p => p.id === id) || {id, nazwa: ""});
   if (!$("pelny").hidden) zamknijPelny();

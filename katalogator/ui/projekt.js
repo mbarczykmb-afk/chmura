@@ -91,12 +91,12 @@ async function rysujListeProjektow() {
     };
     const zm = document.createElement("button"); zm.className = "maly"; zm.textContent = "Zmień nazwę";
     zm.onclick = async () => {
-      const n = prompt("Nowa nazwa projektu:", p.nazwa);
+      const n = await oknoWpisz("Nowa nazwa projektu:", p.nazwa);
       if (n && n.trim()) { await api("/api/projekty/zmien", {id: p.id, nazwa: n.trim()}); stan = await api("/api/stan"); rysuj(); rysujListeProjektow(); }
     };
     const us = document.createElement("button"); us.className = "maly"; us.textContent = "Usuń";
     us.onclick = async () => {
-      if (!confirm(`Usunąć projekt „${p.nazwa}”?\n\nUsunę tylko dane projektu (ustawienia, skan, propozycję, historię). ` +
+      if (!await oknoTak(`Usunąć projekt „${p.nazwa}”?\n\nUsunę tylko dane projektu (ustawienia, skan, propozycję, historię). ` +
                    "Twoje zdjęcia i pliki NIE zostaną ruszone.")) return;
       try { stan = await api("/api/projekty/usun", {id: p.id}); rysuj(); rysujListeProjektow(); } catch (e) { toast(e.message); }
     };
@@ -138,7 +138,7 @@ function rysujPrzychodzace() {
       : `Brak nowych plików do przeniesienia.${s.pominiete ? ` Do ręcznego przejrzenia: ${s.pominiete}.` : ""}`;
     const b = document.getElementById("przych-wykonaj");
     if (b) b.onclick = async () => {
-      if (!confirm(`Przenieść ${s.przenies} plików do biblioteki?\n\nKażda kopia jest sprawdzana, operację można cofnąć.`)) return;
+      if (!await oknoTak(`Przenieść ${s.przenies} plików do biblioteki?\n\nKażda kopia jest sprawdzana, operację można cofnąć.`)) return;
       try { stan = await api("/api/przychodzace/wykonaj", {}); rysuj(); } catch (e) { toast(e.message); }
     };
     if (s.ostatnie && !z.trwa) {
@@ -146,7 +146,7 @@ function rysujPrzychodzace() {
       c.innerHTML = `<span>Ostatnio przeniesiono ${s.ostatnie.n} plików.</span>`;
       const cb = document.createElement("button"); cb.className = "maly"; cb.textContent = "Cofnij";
       cb.onclick = async () => {
-        if (!confirm("Cofnąć ostatnie przeniesienie z folderu przychodzącego?")) return;
+        if (!await oknoTak("Cofnąć ostatnie przeniesienie z folderu przychodzącego?")) return;
         try { stan = await api("/api/przychodzace/cofnij", {}); rysuj(); } catch (e) { toast(e.message); }
       };
       c.append(cb); box.append(c);
