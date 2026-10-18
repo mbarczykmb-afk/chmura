@@ -219,6 +219,10 @@ body.pasek-schowany #pasek-pokaz{display:block;position:fixed;top:0;right:14px;z
 .k.osoba .ob img{width:100%;height:100%;object-fit:cover}
 .k.osoba .op div:first-child{font-weight:700}
 .k.osoba .op .bez{color:var(--mut);font-weight:500;font-style:italic}
+.k.osoba .op .imie{cursor:text;border-radius:6px;padding:1px 6px;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.k.osoba .op .imie:hover{background:var(--akc-miekki);outline:1px dashed var(--akc)}
+.k.osoba .op .imie:hover::after{content:" ✎";color:var(--akc);font-style:normal}
+.k.osoba .op input.imie-pole{width:92%;font:inherit;font-weight:700;text-align:center;border:1px solid var(--akc);border-radius:6px;padding:2px 6px;background:var(--bg);color:var(--fg)}
 .k.osoba.wyb .ob{border-color:#38bdf8;box-shadow:0 0 0 3px #38bdf8,0 0 18px rgba(56,189,248,.5)}
 .k.osoba .zn-wyb{position:absolute;top:8px;right:12px;width:24px;height:24px;border-radius:50%;background:#38bdf8;color:#04121f;
   display:none;place-items:center;font-weight:800}
@@ -269,6 +273,42 @@ body.ciagnie,body.ciagnie *{user-select:none!important}
 body.tryb-edycji .k:hover .ob .szyb{display:flex}
 .k .ob .szyb button{width:28px;height:28px;border-radius:50%;border:0;background:rgba(10,16,32,.75);color:#fff;font-size:14px;padding:0;display:grid;place-items:center}
 .k .ob .szyb button:hover{background:var(--akc)}
+/* 🔀 porównanie */
+#por{position:fixed;inset:0;z-index:2100;background:#05070d;color:#e7ecf7;display:flex;flex-direction:column}
+#por .por-gora{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #1c2742}
+#por .por-gora button{background:#141c33;color:#e7ecf7;border:1px solid #2a3760}
+#por .por-gora button.akt{background:linear-gradient(135deg,#2563eb,#7c3aed);border:0}
+#por-panele{flex:1;min-height:0;display:grid;gap:6px;padding:6px}
+#por .pan{position:relative;overflow:hidden;background:#000;border-radius:10px;border:2px solid transparent;cursor:grab}
+#por .pan.zost{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.35)}
+#por .pan img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;transform-origin:0 0;user-select:none;-webkit-user-drag:none}
+#por .pan .et{position:absolute;left:8px;top:8px;right:8px;display:flex;gap:6px;align-items:center;font-size:12.5px;pointer-events:none}
+#por .pan .et span{background:rgba(5,7,13,.75);padding:3px 8px;border-radius:999px}
+#por .pan .et .ok{margin-left:auto;pointer-events:auto;cursor:pointer;background:rgba(5,7,13,.8);border:1px solid #2a3760}
+#por .pan.zost .et .ok{background:#16a34a;border-color:#16a34a}
+#por .pan .et .ostr{padding:0!important;height:5px;border-radius:3px;background:#1c2742;width:70px;display:inline-block;vertical-align:middle;overflow:hidden}
+#por .pan .ostr i{display:block;height:100%;background:linear-gradient(90deg,#f59e0b,#22c55e)}
+#por-pasek{display:flex;gap:6px;overflow-x:auto;padding:6px 10px;border-top:1px solid #1c2742;flex:none}
+#por-pasek img{height:58px;border-radius:6px;opacity:.55;cursor:pointer;border:2px solid transparent}
+#por-pasek img.wid{opacity:1;border-color:#5b8cff} #por-pasek img.zost{box-shadow:0 0 0 2px #22c55e}
+/* okna eksportu i nazw */
+.dlg{position:fixed;inset:0;z-index:2200;background:rgba(0,0,0,.5);display:grid;place-items:center}
+.dlg .okno{background:var(--bg);color:var(--fg);border:1px solid var(--lin);border-radius:14px;padding:16px 18px;width:min(460px,calc(100vw - 24px));display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 40px);overflow:auto}
+.dlg .okno.szerokie{width:min(760px,calc(100vw - 24px))}
+.dlg h2{margin:0;font-size:18px} .dlg label{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.dlg label.cb{flex-direction:row;align-items:center;gap:8px}
+.dlg input,.dlg select{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--lin);border-radius:8px;padding:6px 10px}
+.dlg .wiersz{display:flex;gap:6px} .dlg .wiersz input{flex:1}
+.dlg .przyc{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.dlg .znaczniki{display:flex;flex-wrap:wrap;gap:5px}.dlg .znaczniki button{font-size:12px;padding:3px 8px;border-radius:999px}
+#nzw-podglad{max-height:300px;overflow:auto;border:1px solid var(--lin);border-radius:8px;font-size:12.5px}
+#nzw-podglad table{width:100%;border-collapse:collapse} #nzw-podglad td{padding:4px 8px;border-bottom:1px solid var(--lin);word-break:break-all}
+#nzw-podglad td.zle{color:var(--blad)} #nzw-podglad td:first-child{color:var(--mut)}
+/* 🔀 serie: kafel jak stos zdjęć */
+.k.seria .ob{box-shadow:4px -4px 0 -1px var(--panel),4px -4px 0 0 var(--lin),8px -8px 0 -1px var(--panel),8px -8px 0 0 var(--lin);margin:8px 8px 0 0}
+.k.seria .ob .ile{position:absolute;right:6px;bottom:6px;background:rgba(10,16,32,.78);color:#fff;border-radius:999px;font-size:12px;padding:2px 8px}
+/* ℹ histogram */
+#wl .hist{width:100%;height:70px;background:rgba(255,255,255,.04);border-radius:6px;margin-top:4px}
 .ik3d-pusto{width:112px;height:112px;border-radius:26px;margin-bottom:14px;box-shadow:0 14px 40px rgba(37,99,235,.3)}
 /* --- wygląd paska: grupy (widoki | szukaj | rodzaje | narzędzia), równa wysokość, jedna linia --- */
 header{background:var(--panel);row-gap:8px}
@@ -373,6 +413,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   <button id="w-kolekcje" title="Ulubione i albumy"><img class="ikn" alt="" src="/ui/ikony_neon/kolekcje.webp"><span class="t"> Kolekcje</span></button>
   <button id="w-foldery" title="Foldery — drzewo katalogów, w których leżą zdjęcia i filmy"><i class="ikl" data-ik="folder"></i><span class="t"> Foldery</span></button>
   <button id="w-osoby" title="Osoby — twarze na zdjęciach, grupowane w osoby (imiona nadajesz Ty)"><i class="ikl" data-ik="osoby"></i><span class="t"> Osoby</span></button>
+  <button id="w-serie" title="Serie — kilka ujęć tej samej sceny w ciągu paru sekund; porównaj obok siebie i zostaw najlepsze"><i class="ikl" data-ik="serie"></i><span class="t"> Serie</span></button>
   <button id="w-dzien" title="Zdjęcia z tego samego dnia w poprzednich latach"><img class="ikn" alt="" src="/ui/ikony_neon/tegodnia.webp"><span class="t"> Tego dnia</span><b class="znaczek" id="dzien-ile" hidden></b></button>
   </span>
   <button id="szukaj-btn" title="Szukaj"><img class="ikn" alt="" src="/ui/ikony_neon/szukaj.webp"></button>
@@ -385,6 +426,17 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   <span class="narz" role="group" aria-label="Narzędzia">
   <span class="rozm" id="rozm" title="Wielkość miniatur (także Ctrl + kółko myszy nad zdjęciami)">
     <i class="ikl" data-ik="zdjecie" style="width:13px;height:13px"></i><input type="range" id="kafel2" min="80" max="380" step="10" aria-label="Wielkość miniatur"><i class="ikl" data-ik="zdjecie"></i></span>
+  <span class="menu-w">
+  <button id="filtry-btn" title="Filtry: aparat / telefon, pora dnia"><i class="ikl" data-ik="filtr"></i><b class="znaczek" id="filtry-ile" hidden></b></button>
+  <div class="menu" id="filtry-menu" hidden>
+    <div class="info">📷 Aparat / telefon</div>
+    <select id="filtr-aparat"><option value="">wszystkie</option></select>
+    <div class="info">🕐 Pora dnia</div>
+    <select id="filtr-pora"><option value="">każda</option><option value="rano">🌅 rano (5–11)</option><option value="dzien">☀ dzień (11–17)</option>
+      <option value="wieczor">🌆 wieczór (17–22)</option><option value="noc">🌙 noc (22–5)</option></select>
+    <button id="filtry-wyczysc">Wyczyść filtry</button>
+  </div>
+  </span>
   <button id="zaznacz-btn" title="Zaznaczanie: klik zaznacza zdjęcia, „Wszystkie” / „Odznacz”; myszą można też zaznaczyć oknem (przeciągnij)">☑<span class="t"> Zaznacz</span></button>
   <button id="edycja-btn" hidden title="Tryb edycji: narzędzia edycji obrazu (✏ Edytuj, obrót ↺ ↻ na miniaturach, edycja hurtem)">✏<span class="t"> Edycja</span></button>
   <label id="edycja-zast" hidden title="Zmienione zdjęcie zastępuje oryginał (oryginał → kosz programu, można cofnąć). Bez zaznaczenia powstaje kopia „(edytowane)”."><input type="checkbox" id="edycja-zast-cb"> zastępuj oryginały</label>
@@ -461,6 +513,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
     <button id="p-album" hidden title="Dodaj do albumu">＋ Album</button>
     <button id="p-z-albumu" hidden title="Usuń z tego albumu (zdjęcie zostaje na dysku)">− Z albumu</button>
     <button id="p-pokaz" title="Pokaz slajdów (P)">▶ Pokaz</button>
+    <button id="p-seria" hidden title="Porównaj ujęcia z tej serii obok siebie i zostaw najlepsze">🔀 Seria</button>
     <button id="p-info" title="Właściwości: folder, w którym leży plik, rozmiar, wymiary, aparat, skąd data (I)">ℹ Właściwości</button>
     <button id="p-miejsce" hidden title="Dodaj, zmień albo usuń miejsce zrobienia zdjęcia (L)">📍 Miejsce</button>
     <button id="p-edytuj" hidden title="Przytnij, obróć, rozjaśnij, popraw kolory (E) — zapis jako kopia albo zamiast oryginału">✏ Edytuj</button>
@@ -495,7 +548,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 <div id="w-tip" hidden></div>
 <div id="wybierz" hidden>
   <div class="okno">
-    <h2 style="margin:0">Dodaj dysk lub folder</h2>
+    <h2 style="margin:0" id="wyb-tytul">Dodaj dysk lub folder</h2>
     <div id="wyb-sciezka">Dyski</div>
     <div id="wyb-lista"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -527,6 +580,9 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   <button id="zz-dok" title="Oznacz zaznaczone jako dokumenty albo zwykłe zdjęcia">📄 Dokument</button>
   <button id="zz-album" title="Dodaj zaznaczone do albumu">＋ Album</button>
   <button id="zz-z-albumu" hidden title="Usuń zaznaczone z tego albumu (pliki zostają)">− Z albumu</button>
+  <button id="zz-por" title="Porównaj obok siebie (2–8 zdjęć) — wybierz najlepsze">🔀 Porównaj</button>
+  <button id="zz-eksport" hidden title="Zapisz kopie w wybranym folderze: mniejsze, bez GPS, ze znakiem wodnym — np. do wysłania">📦 Eksport</button>
+  <button id="zz-nazwy" hidden title="Zmień nazwy plików według wzorca (np. 2019-07-14_Hel_001.jpg) — z podglądem i „Cofnij”">✎ Nazwy</button>
   <button id="zz-zip" title="Pobierz zaznaczone jako ZIP (oryginały)">⬇ ZIP</button>
   <button id="zz-usun" title="Usuń zaznaczone (Delete) — do kosza programu, można cofnąć">🗑 Usuń</button>
   <button id="zz-koniec" title="Zakończ zaznaczanie (Esc)">✕</button>
@@ -541,6 +597,40 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 Bez zaznaczenia: obok powstaje kopia „(edytowane)”."><input type="checkbox" id="zz-zastap"> zastąp oryginały</label>
   </span>
 </div>
+<!-- 🔀 porównanie obok siebie -->
+<div id="por" hidden>
+  <div class="por-gora">
+    <b>🔀 Porównanie</b><span class="info" id="por-info"></span><span class="odstep"></span>
+    <button id="por-wstecz" title="Poprzednie (←)">‹</button><button id="por-dalej" title="Następne (→)">›</button>
+    <button id="por-zostaw" class="akt" title="Zostaw zaznaczone ✓, pozostałe zdjęcia tej serii → kosz programu (można cofnąć) (Enter)">✓ Zostaw zaznaczone, resztę do kosza</button>
+    <button id="por-zamknij" title="Zamknij (Esc)">✕</button>
+  </div>
+  <div id="por-panele"></div>
+  <div id="por-pasek"></div>
+</div>
+<!-- 📦 eksport -->
+<div id="eks" class="dlg" hidden><div class="okno">
+  <h2>📦 Eksport kopii</h2>
+  <div class="info" id="eks-ile"></div>
+  <label>Folder docelowy<div class="wiersz"><input id="eks-cel" readonly placeholder="— wybierz —"><button id="eks-wybierz">Wybierz…</button></div></label>
+  <label>Rozmiar (dłuższy bok)<select id="eks-bok"><option value="0">oryginalny</option><option value="3840">3840 px (4K)</option>
+    <option value="2560">2560 px</option><option value="2048" selected>2048 px — e-mail, Facebook</option><option value="1600">1600 px</option>
+    <option value="1280">1280 px</option><option value="1024">1024 px — komunikator</option></select></label>
+  <label>Jakość<select id="eks-jak"><option value="95">bardzo wysoka</option><option value="88" selected>wysoka</option><option value="78">średnia (mniejsze pliki)</option></select></label>
+  <label class="cb"><input type="checkbox" id="eks-gps" checked> usuń współrzędne GPS (prywatność)</label>
+  <label>Znak wodny (opcjonalnie)<input id="eks-znak" placeholder="np. © Kowalscy 2024"></label>
+  <div class="info">Filmy są kopiowane bez zmian. Oryginały zostają nietknięte.</div>
+  <div class="przyc"><button id="eks-anuluj">Anuluj</button><button id="eks-ok" class="akt">Eksportuj</button></div>
+</div></div>
+<!-- ✎ zmiana nazw -->
+<div id="nzw" class="dlg" hidden><div class="okno szerokie">
+  <h2>✎ Zmiana nazw</h2>
+  <label>Wzór nazwy<input id="nzw-wzor" value="{data}_{miejsce}_{nr}"></label>
+  <div class="znaczniki" id="nzw-znaczniki"></div>
+  <label>Numer od<input id="nzw-start" type="number" value="1" min="0" style="width:100px"></label>
+  <div id="nzw-podglad"></div>
+  <div class="przyc"><button id="nzw-anuluj">Anuluj</button><button id="nzw-ok" class="akt">Zmień nazwy</button></div>
+</div></div>
 <div id="udo" hidden>
   <div class="okno">
     <b>🔗 Udostępnij album</b>
@@ -611,5 +701,6 @@ Bez zaznaczenia: obok powstaje kopia „(edytowane)”."><input type="checkbox" 
 <script src="/ui/aktywnosc.js"></script>
 <script src="/ui/galeria.js"></script>
 <script src="/ui/edytor.js"></script>
+<script src="/ui/porownanie.js"></script>
 </body>
 </html>

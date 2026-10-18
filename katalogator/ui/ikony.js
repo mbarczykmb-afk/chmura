@@ -28,6 +28,8 @@ const IKONY_LINII = {
   wiecej: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   zamknij: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   schowaj: '<path d="m18 15-6-6-6 6"/>',
+  serie: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path class="akcent" d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/>',
+  filtr: '<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>',
   osoby: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path class="akcent" d="M22 21v-2a4 4 0 0 0-3-3.87"/><path class="akcent" d="M16 3.13a4 4 0 0 1 0 7.75"/>',
 };
 
@@ -43,6 +45,7 @@ const IKONY_LINII = {
 .ikl[data-ik=porzadek],.ikl[data-ik=przegladarka],.ikl[data-ik=wyslij]{--ik:var(--ik-cyan)}
 .ikl[data-ik=sprzatanie]{--ik:var(--ik-blue);--ik-akc:var(--ik-amber)}
 .ikl[data-ik=biblioteka]{--ik:var(--ik-violet)}
+.ikl[data-ik=serie]{--ik:var(--ik-blue);--ik-akc:var(--ik-cyan)}
 .ikl[data-ik=osoby]{--ik:var(--ik-cyan);--ik-akc:var(--ik-violet)}
 .ikl[data-ik=statystyki]{--ik:var(--ik-cyan);--ik-akc:var(--ik-violet)}
 .ikl[data-ik=kosz]{--ik:var(--ik-gray)}

@@ -29,6 +29,8 @@ function url(sciezka, param = {}) {
 async function api(sciezka, param) {
   if (g.rodzaj) param = {...(param || {}), r: g.rodzaj};  // filtr: zdjęcia / filmy / dokumenty
   param = {...(param || {}), kol: g.kol};                  // ⇅ od najnowszych / od najstarszych
+  if (g.aparat !== undefined && g.aparat !== null) param.ap = g.aparat === "" ? "~" : g.aparat;  // 📷 filtr aparatu
+  if (g.pora) param.pora = g.pora;                                                              // 🕐 pora dnia
   const r = await fetch(url(sciezka, param));
   if (r.status === 401 || r.status === 403) { pokazLogin(); throw new Error("Podaj PIN"); }
   const j = await r.json();
@@ -286,6 +288,9 @@ function odswiezZazn() {
   $("zz-ile").textContent = `${n.toLocaleString("pl-PL")} ${n === 1 || kilka ? "zaznaczone" : "zaznaczonych"}`;
   $("zz-data").hidden = $("zz-miejsce").hidden = $("zz-usun").hidden = !MOZE_USUWAC;
   $("zz-ed").hidden = !MOZE_USUWAC || !trybEdycji();
+  $("zz-eksport").hidden = $("zz-nazwy").hidden = !W_PROGRAMIE;
+  const zdj = wyb.filter(p => p.rodzaj === "zdjecie").length;
+  $("zz-por").hidden = zdj < 2;
   $("zz-dok").hidden = !W_PROGRAMIE || !wyb.some(p => p.rodzaj === "zdjecie");
   $("zz-album").hidden = !W_PROGRAMIE;
   $("zz-z-albumu").hidden = !(W_PROGRAMIE && g.zrodlo.typ === "kolekcja" && g.zrodlo.kol === "album");
@@ -458,6 +463,11 @@ async function pokazPelny(lista, poz) {
   $("pelny-opis").title = "Kółko myszy / szczypanie = powiększenie · dwuklik = 250% · przeciągnij, żeby przesunąć · 0 = całe";
   narzedziaPelnego(p); miniMapa(p);
   if (!$("wl").hidden) wlasciwosci(p);
+  $("p-seria").hidden = true;
+  if (p.rodzaj === "zdjecie") {  // 🔀 czy to zdjęcie jest częścią serii (kilka ujęć w parę sekund)?
+    api("/api/g/seria", {id: p.id}).then(r => { if (biezacy() === p && r.ids.length > 1) { $("p-seria").hidden = false;
+      $("p-seria").textContent = `🔀 Seria (${r.ids.length})`; p.seria = r.ids; } }).catch(() => {});
+  }
   if (p.miejsce === undefined) {
     try {
       const d = await api("/api/g/plik", {id: p.id}); p.miejsce = d.miejsce; p.ulubione = d.ulubione; p.dokument = d.dokument;
@@ -798,6 +808,7 @@ function uklad() {  // co widać: oś czasu (wykres, miesiące), wyniki/kolekcja
   $("w-dzien").classList.toggle("akt", w === "os" && g.zrodlo.typ === "dzien");
   $("w-osoby").classList.toggle("akt", w === "osoby" || (w === "os" && g.zrodlo.typ === "osoba"));
   $("w-foldery").classList.toggle("akt", w === "foldery");
+  $("w-serie").classList.toggle("akt", w === "serie");
   $("drzewo").hidden = w !== "foldery"; document.body.classList.toggle("foldery", w === "foldery");
   $("os").hidden = w === "mapa"; $("lata").hidden = !os; $("miesiace").hidden = !os; tip(null);
   $("wykres").hidden = !os || !$("wykres").childElementCount || !naglowek.wykres;
@@ -814,6 +825,7 @@ function widok(w) {
   if (w === "kolekcje") rysujKolekcje();
   if (w === "osoby") rysujOsoby();
   if (w === "foldery") rysujDrzewo();
+  if (w === "serie") rysujSerie();
 }
 function pokazWyniki(zrodlo) {  // wyniki szukania, ulubione, album, tego dnia — w tej samej siatce
   g.zrodlo = zrodlo; g.widok = "os"; g.pliki = []; g.razem = 0;
@@ -825,6 +837,7 @@ $("w-mapa").onclick = () => widok("mapa");
 $("w-kolekcje").onclick = () => widok("kolekcje");
 $("w-osoby").onclick = () => widok("osoby");
 $("w-foldery").onclick = () => widok("foldery");
+$("w-serie").onclick = () => widok("serie");
 $("w-dzien").onclick = () => { g.widok = "os"; pokazWyniki({typ: "dzien", md: mdDzis(), dni: 0}); };
 
 // ---------- w oknie programu: zakres, zamykanie, udostępnianie na telefon ----------
@@ -936,6 +949,9 @@ function rysujFiltr() {
                                                    : "Teraz widać wszystko — kliknij, żeby znów ukryć albumy 🙈", k.ukrywanie ? "akt" : ""));
   } else if (g.widok === "osoby") {
     filtrOsob(f, inf);
+  } else if (g.widok === "serie") {
+    const t = document.createElement("span"); t.className = "tyt"; t.textContent = "🔀 Serie"; f.append(t);
+    if (g.serie) f.append(inf(`${g.serie.razem.toLocaleString("pl-PL")} ${g.serie.razem === 1 ? "seria" : [2, 3, 4].includes(g.serie.razem % 10) && ![12, 13, 14].includes(g.serie.razem % 100) ? "serie" : "serii"} · ${liczbaZdjec(g.serie.zdjec)} — kliknij serię, porównaj i zostaw najlepsze`));
   } else if (g.widok === "foldery") {
     const t = document.createElement("span"); t.className = "tyt"; t.textContent = "📁 " + (z.typ === "folder" ? z.nazwa || z.f : "Foldery");
     t.title = z.f || ""; f.append(t);
@@ -1091,6 +1107,25 @@ function liczbaOsob(n) {
   const k = n % 10, d = n % 100;
   return `${n} ${n === 1 ? "osoba" : k >= 2 && k <= 4 && !(d >= 12 && d <= 14) ? "osoby" : "osób"}`;
 }
+function edytujImie(o, el) {
+  const pole = document.createElement("input"); pole.className = "imie-pole"; pole.value = o.nazwa || "";
+  pole.placeholder = "Imię…"; pole.maxLength = 60;
+  el.replaceWith(pole); pole.focus(); pole.select();
+  let koniec = false;
+  const zapisz = async ok => {
+    if (koniec) return; koniec = true;
+    const n = pole.value.trim();
+    if (!ok || n === (o.nazwa || "")) { pole.replaceWith(el); return; }
+    try {
+      const w = await post("/api/g/osoba/nazwa", {id: o.id, nazwa: n});
+      toastG(w.polaczono ? `👤 „${n}” — to ta sama osoba, połączyłem obie grupy zdjęć.` : n ? `👤 Zapisano: ${n}` : "👤 Usunięto imię");
+    } catch (e) { toastG(e.message); }
+    rysujOsoby();
+  };
+  pole.onclick = e => e.stopPropagation();
+  pole.onkeydown = e => { e.stopPropagation(); if (e.key === "Enter") zapisz(true); if (e.key === "Escape") zapisz(false); };
+  pole.onblur = () => zapisz(true);
+}
 async function startTwarzy() {
   try { await post("/api/g/twarze/start", {}); } catch (e) { toastG(e.message); return; }
   toastG("👤 Szukam twarzy w tle — możesz dalej oglądać zdjęcia.");
@@ -1103,7 +1138,11 @@ async function rysujOsoby() {
   if (g.widok !== "osoby") return;
   osoby.dane = d; osoby.uzywane = d.przejrzane > 0;
   clearTimeout(osoby.zegar);
-  if (d.stan && d.stan.trwa) osoby.zegar = setTimeout(() => { if (g.widok === "osoby") rysujOsoby(); }, 2500);
+  const odswiez = () => {  // w trakcie szukania twarzy lista się odświeża — ale nie wtedy, gdy wpisujesz imię
+    if (g.widok !== "osoby") return;
+    if (document.querySelector(".imie-pole")) osoby.zegar = setTimeout(odswiez, 1500); else rysujOsoby();
+  };
+  if (d.stan && d.stan.trwa) osoby.zegar = setTimeout(odswiez, 2500);
   rysujFiltr();
   s.replaceChildren();
   if (!d.osoby.length) {
@@ -1123,7 +1162,11 @@ async function rysujOsoby() {
     if (o.twarz) { const im = new Image(); im.src = url("/api/g/twarz", {id: o.twarz}); im.alt = ""; im.loading = "lazy"; ob.append(im); } else ob.textContent = "👤";
     const zn = document.createElement("span"); zn.className = "zn-wyb"; zn.textContent = "✓";
     const op = document.createElement("div"); op.className = "op"; op.innerHTML = "<div></div><div class='m'></div>";
-    op.children[0].textContent = o.nazwa || "Bez imienia"; if (!o.nazwa) op.children[0].className = "bez";
+    op.children[0].textContent = o.nazwa || "Bez imienia"; op.children[0].className = "imie" + (o.nazwa ? "" : " bez");
+    if (W_PROGRAMIE) {  // ✎ imię wpisujesz od razu pod twarzą; to samo imię co inna osoba = łączymy w jedną
+      op.children[0].title = "Kliknij, żeby wpisać imię. Takie samo imię przy dwóch twarzach = połączę je w jedną osobę.";
+      op.children[0].onclick = e => { e.stopPropagation(); edytujImie(o, op.children[0]); };
+    }
     op.children[1].textContent = liczbaZdjec(o.n) + (o.ukryta ? " · ukryta" : "");
     k.title = (o.nazwa || "Bez imienia") + " — kliknij: zdjęcia" + (W_PROGRAMIE ? " · Ctrl+klik: zaznacz (do łączenia)" : "");
     k.append(zn, ob, op);
@@ -1516,6 +1559,24 @@ async function wlasciwosci(p) {
   wiersz("Zrobione", d.data ? dataTxt(d.data) + (d.data.length > 10 ? ", " + d.data.slice(11, 16) : "") : "brak daty");
   wiersz("Skąd data", ZRODLA_DATY[d.zrodlo_daty] || d.zrodlo_daty);
   wiersz("Aparat", d.aparat);
+  const ex = d.exif || {};
+  if (ex.przyslona || ex.czas || ex.iso) wiersz("Ekspozycja", [ex.przyslona, ex.czas, ex.iso ? "ISO " + ex.iso : "", ex.korekta].filter(Boolean).join(" · "));
+  wiersz("Ogniskowa", ex.ogniskowa); wiersz("Obiektyw", ex.obiektyw); wiersz("Lampa", ex.lampa);
+  if (ex.balans) wiersz("Balans bieli", ex.balans);
+  if (ex.program) wiersz("Program", ex.program);
+  if (d.histogram) {
+    const h = d.histogram, m = Math.max(1, ...h.l, ...h.r, ...h.g, ...h.b), W = 256, H = 70;
+    const linia = (a, kol, wyp) => `<path d="M0 ${H} ${a.map((v, i) => `L${(i + 0.5) * W / a.length} ${H - v / m * (H - 4)}`).join(" ")} L${W} ${H} Z" fill="${wyp}" stroke="${kol}" stroke-width="1"/>`;
+    const sv = document.createElementNS("http://www.w3.org/2000/svg", "svg"); sv.setAttribute("viewBox", `0 0 ${W} ${H}`); sv.setAttribute("preserveAspectRatio", "none");
+    sv.classList.add("hist");
+    sv.innerHTML = linia(h.l, "rgba(255,255,255,.7)", "rgba(255,255,255,.18)") + linia(h.r, "rgba(248,113,113,.8)", "none") +
+                   linia(h.g, "rgba(74,222,128,.8)", "none") + linia(h.b, "rgba(96,165,250,.9)", "none");
+    const box = document.createElement("div"); box.append(sv);
+    const opis = document.createElement("div"); opis.className = "info";
+    opis.textContent = (h.jasne > 2 ? `⚠ prześwietlone: ${h.jasne}%` : "") + (h.ciemne > 4 ? `${h.jasne > 2 ? " · " : ""}⚠ bardzo ciemne: ${h.ciemne}%` : "") ||
+                       "jasność bez przepaleń";
+    box.append(opis); wiersz("Histogram", box);
+  }
   if (d.lat != null) wiersz("Miejsce", (d.miejsce ? d.miejsce + " · " : "") + `${d.lat.toFixed(5)}, ${d.lon.toFixed(5)}`);
   if (d.osoby && d.osoby.length) wiersz("Osoby", "👤 " + d.osoby.join(", "));
   wiersz("Zmieniony", d.zmieniony ? new Date(d.zmieniony * 1000).toLocaleString("pl-PL") : "");
@@ -1837,7 +1898,11 @@ async function pokazWybor(sciezka) {
     }
   } catch (e) { l.textContent = e.message; }
 }
-$("prz-dodaj").onclick = () => { $("wybierz").hidden = false; pokazWybor(null); };
+$("prz-dodaj").onclick = () => { wyb.cb = null; $("wyb-tytul").textContent = "Dodaj dysk lub folder"; $("wybierz").hidden = false; pokazWybor(null); };
+function wybierzFolder(tytul, cb) {  // to samo okno wyboru — np. folder dla 📦 eksportu
+  wyb.cb = cb; $("wyb-tytul").textContent = tytul; $("wybierz").hidden = false; pokazWybor(null);
+}
+$("wyb-anuluj").addEventListener("click", () => { wyb.cb = null; });
 $("wyb-anuluj").onclick = () => { $("wybierz").hidden = true; };
 $("wyb-gora").onclick = () => {  // folder wyżej; z katalogu głównego dysku — lista dysków
   const s = (wyb.sciezka || "").replace(/[\\/]+$/, "");
@@ -1850,6 +1915,7 @@ $("wyb-gora").onclick = () => {  // folder wyżej; z katalogu głównego dysku �
 };
 $("wyb-ok").onclick = async () => {
   $("wybierz").hidden = true;
+  if (wyb.cb) { const cb = wyb.cb; wyb.cb = null; $("wyb-tytul").textContent = "Dodaj dysk lub folder"; cb(wyb.sciezka); return; }
   try {
     rysujPrz(await post("/api/przegladarka/foldery", {foldery: [...prz.foldery, wyb.sciezka]}));
     $("prz-skanuj").click();  // od razu wczytaj

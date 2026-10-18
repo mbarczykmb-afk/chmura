@@ -174,6 +174,14 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.37.0:** Przeglądarka:
+- **🔀 Serie i porównywanie.** Nowy widok „Serie” zbiera ujęcia tej samej sceny zrobione w ciągu paru sekund. Okno porównania pokazuje 2–4 zdjęcia obok siebie i powiększa wszystkie naraz (kółko myszy, przeciąganie). Pasek ostrości podpowiada najlepsze ujęcie, a najostrzejsze jest od razu oznaczone ✓. „Zostaw zaznaczone, resztę do kosza” można cofnąć. Porównać można też zaznaczone zdjęcia i serię otwartą w podglądzie.
+- **📦 Eksport kopii** do wybranego folderu: rozmiar, jakość, usunięcie GPS i znak wodny.
+- **✎ Zmiana nazw hurtem** według wzoru ({data}, {czas}, {miejsce}, {aparat}, {folder}, {nazwa}, {nr}) z podglądem i „Cofnij”. Albumy, ulubione, osoby i pliki .xmp trafiają za zdjęciem.
+- **📷 Dane aparatu i histogram** we ℹ Właściwościach: przysłona, czas, ISO, ogniskowa, obiektyw i lampa oraz ostrzeżenie o prześwietleniu.
+- **Filtry** (lejek na pasku): aparat albo telefon i pora dnia (rano, dzień, wieczór, noc).
+- **👤 Imię wpisujesz wprost pod twarzą** na liście Osób. To samo imię przy dwóch twarzach łączy je w jedną osobę.
+
 **1.36.0:** Przeglądarka: **☑ Zaznacz** na pasku włącza tryb zaznaczania (klik zaznacza, „☑ Wszystkie” i „☐ Odznacz” zostają pod ręką); **zaznaczanie oknem**: wystarczy przeciągnąć myszą po zdjęciach (z Ctrl albo Shift dochodzi do zaznaczonych); **suwak wielkości miniatur** na pasku (także Ctrl + kółko); nowy widok **📁 Foldery** z drzewem katalogów, w którym widać, ile zdjęć jest w każdym folderze, a po kliknięciu pokazują się jego zdjęcia (opcjonalnie z podfolderami); **🗂 znaczek albumu** na miniaturze i w podglądzie mówi, że zdjęcie jest już w albumie; **✏ tryb Edycji**: narzędzia edycji obrazu (✏ Edytuj, edycja hurtem, szybkie ↺ ↻ ✏ na miniaturach po najechaniu myszą, pole „zastępuj oryginały”) są widoczne tylko w nim. Poza nim Przeglądarka służy do spokojnego oglądania.
 
 **1.35.0:** **🙈 Ukryte albumy**, np. „Praca”. W widoku albumu przycisk „🙈 Ukryj w Przeglądarce” sprawia, że zdjęcia z tego albumu znikają z osi czasu, mapy, wyszukiwania, „Tego dnia” i „Osób”. Na telefonie i w serwerze 24/7 nie widać ani tego albumu, ani jego zdjęć. Sam album zostaje w ⭐ Kolekcjach i w programie na komputerze można go otworzyć, a pliki zostają na dysku. Główny przełącznik w ⭐ Kolekcjach albo w menu ⋯ („🙈 Ukrywaj wybrane albumy”) jednym kliknięciem włącza i wyłącza ukrywanie wszystkich takich albumów. Zmienić to można tylko na komputerze.

@@ -57,6 +57,7 @@ _NAZWY_MIES = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "li
 _KOLUMNY = ("rowid id, wzgledna, rodzaj, data, lat, lon, rozmiar, "  # + 🗂 albumy, w których jest zdjęcie (znaczek na miniaturze)
             "(SELECT group_concat(n.nazwa, ' · ') FROM g_album_pliki a JOIN g_albumy n ON n.id = a.album "
             "WHERE a.sciezka = pliki.sciezka) albumy")
+_PORY = {"rano": (5, 11), "dzien": (11, 17), "wieczor": (17, 22), "noc": (22, 5)}  # 🕐 godziny [od, do)
 _UKR: dict = {}  # baza → (ukrywanie włączone, id ukrytych albumów) — wspólne dla wszystkich galerii tej bazy
 
 
@@ -191,11 +192,46 @@ class Galeria:
         _UKR.pop(str(self.baza), None)
         return {"ok": True, "ukrywanie": bool(wlacz)}
 
+    @staticmethod
+    def _filtry(bez_aparatu: bool = False) -> tuple[str, list]:
+        """📷 aparat i 🕐 pora dnia z bieżącego zapytania (parametry ap, pora)."""
+        sql, arg = "", []
+        ap = getattr(_FILTR, "aparat", None)
+        if ap is not None and not bez_aparatu:
+            if ap:
+                sql += " AND aparat = ?"; arg.append(ap)
+            else:
+                sql += " AND coalesce(aparat, '') = ''"
+        p = getattr(_FILTR, "pora", "")
+        if p in _PORY:
+            od, do = _PORY[p]
+            godz = "CAST(substr(data, 12, 2) AS INTEGER)"
+            sql += f" AND length(data) >= 13 AND " + (f"({godz} >= {od} OR {godz} < {do})" if od > do
+                                                      else f"{godz} >= {od} AND {godz} < {do}")
+        return sql, arg
+
+    def aparaty(self) -> dict:
+        """Aparaty i telefony w bieżącym widoku (z liczbą zdjęć) — do filtra 📷."""
+        _FILTR.bez_aparatu = True
+        try:
+            w, arg = self._warunek()
+        finally:
+            _FILTR.bez_aparatu = False
+        db = self._db()
+        try:
+            r = db.execute(f"SELECT coalesce(aparat, '') a, COUNT(*) n FROM pliki WHERE rodzaj IN ('zdjecie','film') {w} "
+                           "GROUP BY a ORDER BY n DESC", arg).fetchall()
+        finally:
+            db.close()
+        return {"aparaty": [[x["a"], x["n"]] for x in r]}
+
     def _zakres(self, ukryte: bool = True) -> tuple[str, list]:
         u = self._bez_ukrytych() if ukryte else ""
+        fs, fa = self._filtry(getattr(_FILTR, "bez_aparatu", False))
+        u += fs
         k = self.korzenie()
         if k is None:  # wszystko w bazie
-            return self.filtr + self._rodzaj() + u, []
+            return self.filtr + self._rodzaj() + u, fa
         if not k:  # zakres pusty (np. biblioteka, gdy nie wybrano miejsca docelowego)
             return " AND 0", []
         czesci, arg = [], []
@@ -204,7 +240,7 @@ class Galeria:
             pref = r.rstrip("\\/") + os.sep
             czesci.append("(korzen = ? OR substr(sciezka, 1, ?) = ?)")
             arg += [r, len(pref), pref]
-        return " AND (" + " OR ".join(czesci) + ")" + self.filtr + self._rodzaj() + u, arg
+        return " AND (" + " OR ".join(czesci) + ")" + self.filtr + self._rodzaj() + u, arg + fa
 
     def lata(self, obszar: tuple | None = None) -> dict:
         w, arg = self._warunek(obszar)
@@ -809,6 +845,189 @@ class Galeria:
             db.close()
         return {"razem": razem, "pliki": [_nazwa(r) for r in wiersze], "nazwa": nazwa}
 
+    # --- 📦 eksport (zmniejszone kopie do wysłania) i ✎ zmiana nazw hurtem ---------------------------------
+    def eksportuj(self, id_: int, cel: str, bok: int = 2048, jakosc: int = 88, bez_gps: bool = True,
+                  znak: str = "") -> dict:
+        import shutil
+
+        from PIL import Image, ImageOps
+
+        from . import edycja
+        r = self._wiersz(id_)
+        if not r or r["rodzaj"] not in ("zdjecie", "film") or not os.path.isfile(r["sciezka"]):
+            return {"blad": "Nie ma pliku (odłączony dysk?)."}
+        if not cel or not os.path.isdir(cel):
+            return {"blad": "Folder docelowy nie istnieje."}
+        sc = r["sciezka"]
+        rdzen, rozsz = os.path.splitext(os.path.basename(sc))
+        try:
+            if r["rodzaj"] == "film":  # filmy — kopia bez zmian
+                docel = edycja.wolna_nazwa(cel, rdzen, rozsz.lower())
+                shutil.copy2(sc, docel)
+                return {"ok": True, "plik": docel}
+            with Image.open(sc) as org:
+                ex = org.getexif()
+                im = ImageOps.exif_transpose(org).convert("RGB")
+            if bok and max(im.size) > bok:
+                im.thumbnail((int(bok), int(bok)), Image.LANCZOS)
+            if znak.strip():
+                im = _znak_wodny(im, znak.strip()[:80])
+            ex[0x0112] = 1
+            for t in (0x0201, 0x0202):
+                ex.pop(t, None)
+            if bez_gps:
+                ex.pop(0x8825, None)  # 📍 współrzędne zostają u Ciebie
+            if r["data"] and len(r["data"]) >= 19:  # data także w kopii z HEIC/PNG (gdy była tylko w .xmp)
+                sz = ex.get_ifd(0x8769)
+                if 0x9003 not in sz:
+                    sz[0x9003] = r["data"][:19].replace("-", ":", 2).replace("T", " ")
+            docel = edycja.wolna_nazwa(cel, rdzen, ".jpg")
+            im.save(docel, "JPEG", quality=max(40, min(100, int(jakosc))), optimize=True, exif=ex.tobytes())
+        except Exception as e:  # noqa: BLE001
+            return {"blad": f"{os.path.basename(sc)}: {e}"}
+        return {"ok": True, "plik": docel}
+
+    def nazwy_podglad(self, ids: list[int], wzor: str, start: int = 1) -> dict:
+        """✎ Nowe nazwy według wzorca: {data} {czas} {rok} {mies} {dzien} {miejsce} {aparat} {folder} {nazwa} {nr}."""
+        wynik, szer = [], max(3, len(str(start + len(ids) - 1)))
+        zajete: set = set()
+        for n, i in enumerate(ids):
+            r = self._wiersz(i)
+            if not r:
+                continue
+            stara = os.path.basename(r["sciezka"])
+            rdzen, rozsz = os.path.splitext(stara)
+            d = r["data"] or ""
+            miejsce = ""
+            if r["lat"] is not None:
+                try:
+                    e = miejsca.etykieta(r["lat"], r["lon"])
+                    miejsce = e[1:] if e.startswith("@") else e
+                except Exception:  # noqa: BLE001
+                    pass
+            pola = {"data": d[:10], "czas": d[11:19].replace(":", "-"), "rok": d[:4], "mies": d[5:7], "dzien": d[8:10],
+                    "miejsce": miejsce, "aparat": r["aparat"] or "", "nazwa": rdzen, "nr": str(start + n).zfill(szer),
+                    "folder": os.path.basename(os.path.dirname(r["sciezka"]))}
+            nowa = re.sub(r"\{(\w+)\}", lambda m: pola.get(m.group(1), m.group(0)), wzor or "{nazwa}")
+            nowa = re.sub(r'[\\/:*?"<>|]+', "-", nowa).strip(" .-_") or rdzen
+            nowa = re.sub(r"[-_ ]{2,}", lambda m: m.group(0)[0], nowa) + rozsz
+            docel = os.path.join(os.path.dirname(r["sciezka"]), nowa)
+            konflikt = (nowa.lower() != stara.lower() and os.path.exists(docel)) or docel.lower() in zajete
+            zajete.add(docel.lower())
+            wynik.append({"id": r["id"], "stara": stara, "nowa": nowa, "konflikt": konflikt})
+        return {"nazwy": wynik}
+
+    def zmien_nazwe(self, id_: int, nowa: str) -> dict:
+        r = self._wiersz(id_)
+        if not r or not os.path.isfile(r["sciezka"]):
+            return {"blad": "Nie ma pliku (odłączony dysk?)."}
+        sc, stara = r["sciezka"], os.path.basename(r["sciezka"])
+        nowa = str(nowa or "").strip()
+        if not nowa or re.search(r'[\\/:*?"<>|]', nowa) or len(nowa) > 200 or nowa in (".", ".."):
+            return {"blad": f"Niedozwolona nazwa: „{nowa}”"}
+        if os.path.splitext(nowa)[1].lower() != os.path.splitext(stara)[1].lower():
+            nowa += os.path.splitext(stara)[1]
+        docel = os.path.join(os.path.dirname(sc), nowa)
+        if docel == sc:
+            return {"ok": True, "id": r["id"], "nazwa": nowa, "stara": stara}
+        if os.path.exists(docel) and nowa.lower() != stara.lower():
+            return {"blad": f"Plik „{nowa}” już jest w tym folderze."}
+        try:
+            os.rename(sc, docel)
+            if os.path.isfile(sc + ".xmp"):  # data / miejsce zapisane obok — razem z plikiem
+                os.replace(sc + ".xmp", docel + ".xmp")
+        except OSError as e:
+            return {"blad": f"Nie udało się zmienić nazwy: {e.strerror or e}"}
+        db = self._db()
+        try:
+            wz = r["wzgledna"][:len(r["wzgledna"]) - len(stara)] + nowa
+            db.execute("UPDATE pliki SET sciezka=?, wzgledna=? WHERE rowid=?", (docel, wz, r["id"]))
+            for (t,) in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name != 'pliki'").fetchall():
+                if "sciezka" in {c[1] for c in db.execute(f'PRAGMA table_info("{t}")')}:  # ulubione, albumy, twarze…
+                    db.execute(f'UPDATE OR IGNORE "{t}" SET sciezka=? WHERE sciezka=?', (docel, sc))
+            db.commit()
+        finally:
+            db.close()
+        self._zapomnij_miniatury(r["id"])
+        return {"ok": True, "id": r["id"], "nazwa": nowa, "stara": stara}
+
+    # --- 🔀 serie: kilka ujęć tej samej sceny zrobionych w ciągu paru sekund (ten sam folder) ----------------
+    PRZERWA_SERII = 6  # s — dłuższa przerwa między zdjęciami = nowa seria
+
+    @staticmethod
+    def _sekundy(d: str | None) -> float | None:
+        from datetime import datetime
+        try:
+            return datetime.fromisoformat(d[:19]).timestamp() if d and len(d) >= 19 else None
+        except ValueError:
+            return None
+
+    def _lancuchy(self, wiersze) -> list[list]:
+        """Kolejne zdjęcia z tego samego folderu, każde najwyżej PRZERWA_SERII s po poprzednim → seria (≥ 2)."""
+        grupy, biez, poprz = [], [], None
+        for r in wiersze:
+            t, fol = self._sekundy(r["data"]), os.path.dirname(r["sciezka"])
+            if biez and poprz and t is not None and poprz[0] is not None and fol == poprz[1] and 0 <= t - poprz[0] <= self.PRZERWA_SERII:
+                biez.append(r)
+            else:
+                if len(biez) >= 2:
+                    grupy.append(biez)
+                biez = [r]
+            poprz = (t, fol)
+        if len(biez) >= 2:
+            grupy.append(biez)
+        return grupy
+
+    def serie(self, od: int = 0, ile: int = 120) -> dict:
+        w, arg = self._warunek()
+        db = self._db()
+        try:
+            wiersze = db.execute(f"SELECT rowid id, sciezka, data FROM pliki WHERE rodzaj='zdjecie' AND length(data) >= 19 {w} "
+                                 "ORDER BY data, sciezka", arg).fetchall()
+        finally:
+            db.close()
+        grupy = self._lancuchy(wiersze)
+        if self._kier("nowe") == "DESC":
+            grupy.reverse()
+        return {"razem": len(grupy), "zdjec": sum(len(x) for x in grupy),
+                "serie": [{"ids": [r["id"] for r in x], "n": len(x), "data": x[0]["data"],
+                           "folder": os.path.basename(os.path.dirname(x[0]["sciezka"]))} for x in grupy[od:od + ile]]}
+
+    def seria(self, id_: int) -> dict:
+        """Seria, do której należy zdjęcie (albo samo zdjęcie) — do porównania obok siebie."""
+        r = self._wiersz(id_)
+        t = self._sekundy(r["data"]) if r else None
+        if not r or t is None:
+            return {"ids": [int(id_)] if r else []}
+        from datetime import datetime, timedelta
+        d0 = datetime.fromtimestamp(t)
+        w, arg = self._warunek()
+        db = self._db()
+        try:
+            wiersze = db.execute(f"SELECT rowid id, sciezka, data FROM pliki WHERE rodzaj='zdjecie' AND data BETWEEN ? AND ? {w} "
+                                 "ORDER BY data, sciezka", [(d0 - timedelta(minutes=10)).isoformat(),
+                                                            (d0 + timedelta(minutes=10)).isoformat()] + arg).fetchall()
+        finally:
+            db.close()
+        for x in self._lancuchy(wiersze):
+            if any(y["id"] == int(id_) for y in x):
+                return {"ids": [y["id"] for y in x]}
+        return {"ids": [int(id_)]}
+
+    def ostrosc(self, ids: list[int]) -> dict:
+        """Ostrość (krawędzie na zmniejszonym zdjęciu) — podpowiedź przy wyborze najlepszego ujęcia."""
+        out = {}
+        for i in ids[:12]:
+            sc = self.sciezka(i, "zdjecie")
+            if not sc:
+                continue
+            try:
+                im, _ = analiza.miniatura(sc, min_bok=600)
+                out[str(i)] = round(analiza.ostrosc(im), 1)
+            except Exception:  # noqa: BLE001
+                pass
+        return {"ostrosc": out}
+
     # --- 🌳 drzewo folderów: gdzie leżą zdjęcia i filmy ----------------------------------------------------
     def foldery(self) -> dict:
         """Każdy folder ze zdjęciami/filmami i ich liczba (bez podfolderów) — drzewo składa przeglądarka."""
@@ -921,6 +1140,8 @@ class Galeria:
             elif r["rodzaj"] == "film":
                 from . import filmy
                 d.update(filmy.informacje(sc))
+        if d["istnieje"] and r["rodzaj"] == "zdjecie":
+            d.update(exif_szczegoly(sc))
         try:
             from . import twarze
             d["osoby"] = sorted({t["nazwa"] for t in twarze.twarze_pliku(self, id_)["twarze"] if t["nazwa"]})
@@ -1070,7 +1291,82 @@ def wyslij_zip(h: BaseHTTPRequestHandler, sciezki: list[str], nazwa: str) -> Non
 
 _FILTR = threading.local()
 _LISTY = ("/api/g/lata", "/api/g/pliki", "/api/g/szukaj", "/api/g/tego-dnia", "/api/g/kolekcja", "/api/g/mapa",
-          "/api/g/osoba", "/api/g/foldery", "/api/g/folder")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
+          "/api/g/osoba", "/api/g/foldery", "/api/g/folder", "/api/g/serie")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
+
+
+def _znak_wodny(im, tekst: str):
+    """Podpis w prawym dolnym rogu (półprzezroczysty, z cieniem) — np. „© Kowalscy 2024”."""
+    from PIL import Image, ImageDraw, ImageFont
+    rozm = max(14, im.width // 38)
+    czcionka = None
+    for n in ("arial.ttf", "segoeui.ttf", "DejaVuSans.ttf"):
+        try:
+            czcionka = ImageFont.truetype(n, rozm)
+            break
+        except OSError:
+            continue
+    if czcionka is None:
+        try:
+            czcionka = ImageFont.load_default(size=rozm)
+        except TypeError:  # starszy Pillow
+            czcionka = ImageFont.load_default()
+    warstwa = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    r = ImageDraw.Draw(warstwa)
+    l, t, p, d = r.textbbox((0, 0), tekst, font=czcionka)
+    m = rozm
+    x, y = im.width - (p - l) - m, im.height - (d - t) - m
+    r.text((x + 2, y + 2), tekst, font=czcionka, fill=(0, 0, 0, 120))
+    r.text((x, y), tekst, font=czcionka, fill=(255, 255, 255, 190))
+    return Image.alpha_composite(im.convert("RGBA"), warstwa).convert("RGB")
+
+
+def _ulamek(v) -> float | None:
+    try:
+        return float(v[0]) / float(v[1]) if isinstance(v, tuple) else float(v)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def exif_szczegoly(sciezka: str) -> dict:
+    """📷 Dane z aparatu (przysłona, czas, ISO, ogniskowa, obiektyw, lampa…) i histogram jasności / RGB."""
+    from PIL import Image, ImageOps
+    out: dict = {}
+    try:
+        with Image.open(sciezka) as im:
+            ex = im.getexif()
+            sz = ex.get_ifd(0x8769) if ex else {}
+            f = _ulamek(sz.get(0x829D))
+            t = _ulamek(sz.get(0x829A))
+            iso = sz.get(0x8827)
+            ogn = _ulamek(sz.get(0x920A))
+            out["exif"] = {k: v for k, v in {
+                "przyslona": f"f/{f:.1f}".replace(".0", "") if f else None,
+                "czas": (f"1/{round(1 / t)} s" if t < 0.5 else f"{t:.1f} s".replace(".0 ", " ")) if t else None,
+                "iso": int(iso[0] if isinstance(iso, tuple) else iso) if iso else None,
+                "ogniskowa": (f"{ogn:.0f} mm" + (f" (≈ {sz.get(0xA405)} mm pełnej klatki)" if sz.get(0xA405) else "")) if ogn else None,
+                "obiektyw": str(sz.get(0xA434) or "").strip("\x00 ") or None,
+                "lampa": ("błysnęła" if int(sz.get(0x9209)) & 1 else "bez lampy") if sz.get(0x9209) is not None else None,
+                "korekta": f"{_ulamek(sz.get(0x9204)):+.1f} EV" if _ulamek(sz.get(0x9204)) else None,
+                "balans": {0: "automatyczny", 1: "ręczny"}.get(sz.get(0xA403)),
+                "producent": str(ex.get(0x010F) or "").strip("\x00 ") or None,
+                "model": str(ex.get(0x0110) or "").strip("\x00 ") or None,
+                "program": str(ex.get(0x0131) or "").strip("\x00 ") or None,
+            }.items() if v}
+            try:
+                im.draft("RGB", (256, 256))
+            except Exception:  # noqa: BLE001
+                pass
+            m = ImageOps.exif_transpose(im).convert("RGB")
+        m.thumbnail((256, 256))
+        hist = m.histogram()  # 3 × 256
+        jas = m.convert("L").histogram()
+        do64 = lambda h: [sum(h[i:i + 4]) for i in range(0, 256, 4)]  # noqa: E731
+        n = sum(jas) or 1
+        out["histogram"] = {"r": do64(hist[:256]), "g": do64(hist[256:512]), "b": do64(hist[512:]), "l": do64(jas),
+                            "ciemne": round(100 * sum(jas[:3]) / n, 1), "jasne": round(100 * sum(jas[253:]) / n, 1)}
+    except Exception:  # noqa: BLE001 — uszkodzony / nieobsługiwany plik: bez szczegółów
+        pass
+    return out
 
 
 def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
@@ -1082,6 +1378,9 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
     _FILTR.rodzaj = r if r in ("zdjecie", "film", "dokument") and sciezka in _LISTY else ""
     kol = q.get("kol", [""])[0]
     _FILTR.kolejnosc = kol if kol in ("nowe", "stare") and sciezka in _LISTY else ""
+    ap = q["ap"][0][:120] if "ap" in q and (sciezka in _LISTY or sciezka == "/api/g/aparaty") else None
+    _FILTR.aparat = "" if ap == "~" else ap  # „~” = zdjęcia bez nazwy aparatu (puste parametry giną po drodze)
+    _FILTR.pora = q.get("pora", [""])[0] if sciezka in _LISTY or sciezka == "/api/g/aparaty" else ""
     def i(k, d=0):
         try:
             return int(q.get(k, [d])[0])
@@ -1111,6 +1410,14 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
         return g.kolekcja(q.get("typ", [""])[0], i("album"), i("od"), min(i("ile", 200), 500)), None
     if sciezka == "/api/g/mapa":
         return g.mapa(), None
+    if sciezka == "/api/g/serie":
+        return g.serie(i("od"), min(i("ile", 120), 500)), None
+    if sciezka == "/api/g/seria":
+        return g.seria(i("id")), None
+    if sciezka == "/api/g/ostrosc":
+        return g.ostrosc([int(x) for x in q.get("ids", [""])[0].split(",") if x.isdigit()]), None
+    if sciezka == "/api/g/aparaty":
+        return g.aparaty(), None
     if sciezka == "/api/g/foldery":
         return g.foldery(), None
     if sciezka == "/api/g/folder":
@@ -1147,6 +1454,7 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
 def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
     """Zmiany kolekcji (ulubione, albumy) i miniatury filmów — tylko z okna programu (telefon jest tylko do odczytu)."""
     _FILTR.rodzaj = ""
+    _FILTR.aparat, _FILTR.pora = None, ""
     _FILTR.okno = True
     ids = [int(x) for x in (dane.get("ids") or []) if str(x).lstrip("-").isdigit()]
     if sciezka == "/api/g/ulubione":
@@ -1176,6 +1484,13 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
         return zip_klucz(ids)
     if sciezka == "/api/g/album/udostepnij":
         return g.udostepnij(int(dane.get("album") or 0), bool(dane.get("wlacz", True)))
+    if sciezka == "/api/g/eksport":
+        return g.eksportuj(int(dane.get("id") or 0), str(dane.get("cel") or ""), int(dane.get("bok") or 0),
+                           int(dane.get("jakosc") or 88), bool(dane.get("bez_gps", True)), str(dane.get("znak") or ""))
+    if sciezka == "/api/g/nazwy-podglad":
+        return g.nazwy_podglad(ids[:5000], str(dane.get("wzor") or ""), int(dane.get("start") or 1))
+    if sciezka == "/api/g/zmien-nazwe":
+        return g.zmien_nazwe(int(dane.get("id") or 0), str(dane.get("nazwa") or ""))
     if sciezka == "/api/g/album/ukryj":
         return g.album_ukryj(int(dane.get("album") or 0), bool(dane.get("tak", True)))
     if sciezka == "/api/g/ukrywanie":
@@ -1209,6 +1524,7 @@ ZMIANY_PLIKOW = ("/api/g/usun", "/api/g/usun/cofnij", "/api/g/lokalizacja", "/ap
 def obsluz_usuwanie(g: Galeria, sciezka: str, dane: dict, okno: bool = True) -> dict | None:
     """🗑 Usuń / Cofnij, 📍 lokalizacja — w oknie programu i na telefonie (gdy pozwolono sterować z telefonu)."""
     _FILTR.rodzaj = ""  # zmiany dotyczą wskazanych plików — bez filtra widoku
+    _FILTR.aparat, _FILTR.pora = None, ""
     _FILTR.okno = okno
     if sciezka == "/api/g/usun":
         return g.usun([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()])
