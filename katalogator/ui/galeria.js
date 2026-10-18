@@ -295,7 +295,7 @@ function odswiezZazn() {
   $("zz-album").hidden = !W_PROGRAMIE;
   $("zz-z-albumu").hidden = !(W_PROGRAMIE && g.zrodlo.typ === "kolekcja" && g.zrodlo.kol === "album");
   const dok = wyb.filter(p => p.rodzaj === "zdjecie"), wszDok = dok.length && dok.every(p => p.dokument);
-  $("zz-dok").textContent = wszDok ? "📷 Nie dokument" : "📄 Dokument";
+  $("zz-dok").textContent = wszDok ? "📷 Zmień na zdjęcia" : "📄 Zmień na dokumenty";
   $("zz-wszystkie").textContent = g.pliki.length && g.pliki.every(p => g.zazn.has(p.id)) ? "☐ Odznacz" : "☑ Wszystkie";
 }
 const zaznaczone = () => g.pliki.filter(p => g.zazn.has(p.id));
@@ -363,12 +363,8 @@ $("zz-usun").onclick = async () => {
 $("zz-dok").onclick = async () => {
   const w = zaznaczone().filter(p => p.rodzaj === "zdjecie"); if (!w.length) return;
   const tak = !w.every(p => p.dokument);
-  try {
-    const r = await post("/api/g/dokument", {ids: w.map(p => p.id), tak});
-    for (const p of w) p.dokument = tak;
-    toastG(tak ? `📄 ${liczbaZdjec(r.zmienione)} — dokumenty` : `📷 ${liczbaZdjec(r.zmienione)} — zwykłe zdjęcia`);
-    if (g.rodzaj) { koniecZazn(); wczytajLata(true).catch(() => {}); wczytajPliki().catch(() => {}); } else odswiezZazn();
-  } catch (e) { toastG(e.message); }
+  const r = await zmienTyp(w, tak); if (!r) return;
+  if (g.rodzaj || g.zrodlo.typ === "folder") { koniecZazn(); wczytajLata(true).catch(() => {}); wczytajPliki().catch(() => {}); } else odswiezZazn();
 };
 $("zz-album").onclick = e => {
   e.stopPropagation();
@@ -1520,11 +1516,8 @@ function narzedziaPelnego(p) {
   if (p) $("p-miejsce").textContent = p.lat != null ? "📍 Zmień miejsce" : "📍 Dodaj miejsce";
   $("p-data").hidden = !MOZE_USUWAC;
   $("p-edytuj").hidden = !MOZE_USUWAC || !trybEdycji() || !p || p.rodzaj !== "zdjecie";
-  const dk = $("p-dok"); dk.hidden = !W_PROGRAMIE || (p && p.rodzaj === "film");
-  dk.classList.toggle("akt", !!(p && p.dokument));
-  dk.textContent = p && p.dokument ? "📄 Dokument ✓" : "📄 To dokument";
-  dk.title = p && p.dokument ? "Oznaczone jako dokument — kliknij, żeby wrócić do zwykłych zdjęć (D)"
-                             : "Oznacz jako dokument — trafi do filtra 📄 Dokumenty (D)";
+  $("p-typ").hidden = !W_PROGRAMIE || !p || p.rodzaj === "film";  // Typ: 📷 Zdjęcie | 📄 Dokument
+  for (const b of $("p-typ").querySelectorAll("button[data-t]")) b.classList.toggle("akt", (b.dataset.t === "d") === !!(p && p.dokument));
   $("p-pokaz").textContent = g.pokaz ? "⏸ Pauza" : "▶ Pokaz";
 }
 const biezacy = () => g.lista[g.poz];
@@ -1605,15 +1598,35 @@ $("wl").addEventListener("click", e => e.stopPropagation());
 $("wl").addEventListener("wheel", e => e.stopPropagation(), {passive: true});
 try { if (localStorage.getItem("kat_wl") === "1") { $("wl").hidden = false; $("p-info").classList.add("akt"); } } catch (e) { /* bez pamięci */ }
 // 📄 zdjęcie ↔ dokument
-$("p-dok").onclick = async e => {
-  e && e.stopPropagation && e.stopPropagation();
-  const p = biezacy(); if (!p) return;
-  try {
-    const w = await post("/api/g/dokument", {ids: [p.id], tak: !p.dokument});
-    p.dokument = w.dokument; narzedziaPelnego(p);
-    toastG(p.dokument ? `📄 „${p.nazwa}” — dokument` : `📷 „${p.nazwa}” — zwykłe zdjęcie`);
-  } catch (err) { toastG(err.message); }
-};
+// 📄 ⇄ 📷 zmiana typu: decyzja + (w uporządkowanej bibliotece) przeniesienie do właściwego folderu, z „Cofnij”
+async function zmienTyp(lista, tak) {
+  lista = lista.filter(p => p.rodzaj === "zdjecie" && !!p.dokument !== tak);
+  if (!lista.length) return;
+  let w;
+  try { w = await post("/api/g/dokument", {ids: lista.map(p => p.id), tak}); } catch (e) { toastG(e.message); return; }
+  for (const p of lista) p.dokument = tak;
+  const co = lista.length === 1 ? `„${lista[0].nazwa}”` : liczbaZdjec(lista.length);
+  const gdzie = (w.foldery || []).length ? ` → przeniesione do ${w.foldery.slice(0, 2).join(", ")}${w.foldery.length > 2 ? "…" : ""}` : "";
+  toastG((tak ? `📄 ${co} — dokument` : `📷 ${co} — zdjęcie`) + gdzie + (w.bledy && w.bledy.length ? ` · nie przeniesiono: ${w.bledy.length} (${w.bledy[0]})` : ""),
+    async () => {
+      try {
+        await post("/api/g/dokument", {ids: lista.map(p => p.id), tak: !tak, przenies: false});
+        if ((w.ruchy || []).length) await post("/api/g/przenies-z-powrotem", {ruchy: w.ruchy});
+        for (const p of lista) p.dokument = !tak;
+        toastG("↶ Przywrócono typ" + ((w.ruchy || []).length ? " i miejsce pliku" : ""));
+        if (!$("pelny").hidden && biezacy()) narzedziaPelnego(biezacy());
+        if (g.rodzaj || g.zrodlo.typ === "folder") wczytajPliki().catch(() => {});
+      } catch (e) { toastG(e.message); }
+    });
+  if (!$("pelny").hidden && biezacy()) narzedziaPelnego(biezacy());
+  if (w.ruchy && w.ruchy.length && !$("wl").hidden && biezacy()) wlasciwosci(biezacy());
+  return w;
+}
+$("p-dok").onclick = e => { e && e.stopPropagation && e.stopPropagation(); const p = biezacy(); if (p) zmienTyp([p], !p.dokument); };
+$("p-typ").addEventListener("click", e => {
+  const b = e.target.closest("button[data-t]"); if (!b) return; e.stopPropagation();
+  const p = biezacy(); if (p) zmienTyp([p], b.dataset.t === "d");
+});
 // 📅 zmiana daty zrobienia (w pliku: EXIF w JPEG, .xmp obok w innych formatach)
 function oknoDaty(p, zbior = null) {
   stopPokaz();

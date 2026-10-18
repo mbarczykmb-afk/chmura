@@ -403,6 +403,10 @@ body.galeria-otwarta #projekt-btn{flex:0 1 auto;min-width:0;max-width:220px;over
 @media (max-width:1500px){body.galeria-otwarta #odzysk-btn .t,body.galeria-otwarta #biblioteka-btn .t{display:none}
   body.galeria-otwarta header h1 .logo-tekst{display:none}}
 .ik3d-tyt{width:34px;height:34px;border-radius:9px;vertical-align:middle;margin-right:10px;margin-top:-4px}
+/* komunikaty programu (np. „Masz najnowszą wersję”, pasek nowej wersji) — także nad otwartą Przeglądarką */
+.toast{z-index:2600}
+body.galeria-otwarta .baner:not([hidden]){position:fixed;top:var(--nag,0px);left:50%;transform:translateX(-50%);z-index:1650;
+  width:min(920px,calc(100vw - 24px));border:1px solid var(--akc);border-radius:0 0 14px 14px;box-shadow:0 12px 40px rgba(0,0,0,.35);background:var(--panel)}
 #biblioteka-btn.akt{background:var(--akc-miekki,var(--panel));border-color:var(--akc);color:var(--fg)}
 #galeria-nakladka iframe{border:0;width:100%;height:100%;display:block}
 #biblioteka-btn{font-weight:600}

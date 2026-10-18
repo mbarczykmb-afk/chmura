@@ -582,23 +582,91 @@ class Galeria:
         finally:
             db.close()
 
-    def dokument(self, ids: list[int], tak: bool) -> dict:
-        """📄 To zdjęcie to dokument (albo jednak zwykłe zdjęcie) — filtr „Dokumenty” i projekt widzą decyzję."""
-        w, arg = self._warunek()
+    def dokument(self, ids: list[int], tak: bool, przenies: bool = True) -> dict:
+        """📄 To zdjęcie to dokument (albo jednak zwykłe zdjęcie) — filtr „Dokumenty” i projekt widzą decyzję.
+        W uporządkowanej bibliotece plik od razu trafia do właściwego folderu (Dokumenty/Dokumenty z RRRR ⇄
+        Zdjęcia/Zdjęcia z RRRR/<Miesiąc…>) — `ruchy` pozwalają to cofnąć."""
+        w, arg = self._warunek(ukryte=False)
         db = self._db()
+        sciezki = []
         try:
             db.execute("CREATE TABLE IF NOT EXISTS decyzje_dok (sciezka TEXT PRIMARY KEY, dokument INTEGER NOT NULL)")
-            n = 0
             for i in ids[:5000]:
-                r = db.execute(f"SELECT sciezka FROM pliki WHERE rowid=? {w}", [int(i)] + arg).fetchone()
+                r = db.execute(f"SELECT rowid id, sciezka, rodzaj, data, lat, lon FROM pliki WHERE rowid=? {w}",
+                               [int(i)] + arg).fetchone()
                 if r:
-                    db.execute("INSERT OR REPLACE INTO decyzje_dok VALUES (?, ?)", (r[0], 1 if tak else 0))
-                    n += 1
+                    db.execute("INSERT OR REPLACE INTO decyzje_dok VALUES (?, ?)", (r["sciezka"], 1 if tak else 0))
+                    sciezki.append(dict(r))
             db.commit()
             self._ma_dok = True
-            return {"zmienione": n, "dokument": bool(tak)}
         finally:
             db.close()
+        ruchy, bledy, foldery = [], [], set()
+        if przenies:
+            for r in sciezki:
+                if r["rodzaj"] != "zdjecie":
+                    continue
+                cel = folder_w_bibliotece(r, tak)
+                if not cel:
+                    continue
+                w2 = self.przenies_plik(r["id"], cel)
+                if w2.get("blad"):
+                    bledy.append(w2["blad"])
+                elif w2.get("sciezka") != r["sciezka"]:
+                    ruchy.append({"id": r["id"], "z": r["sciezka"], "do": w2["sciezka"]})
+                    foldery.add(os.path.relpath(cel, biblioteka_pliku(r["sciezka"]) or cel))
+        return {"zmienione": len(sciezki), "dokument": bool(tak), "ruchy": ruchy, "bledy": bledy, "foldery": sorted(foldery)}
+
+    def przenies_plik(self, id_: int, folder: str = "", sciezka: str = "") -> dict:
+        """Przenosi plik (do folderu albo dokładnie pod `sciezka` — „Cofnij”) i poprawia bazę: ulubione, albumy, osoby…"""
+        import shutil
+        from . import edycja
+        r = self._wiersz(id_)
+        if not r or not os.path.isfile(r["sciezka"]):
+            return {"blad": "Nie ma pliku (odłączony dysk?)."}
+        sc = r["sciezka"]
+        if sciezka:
+            docel = sciezka
+            if os.path.exists(docel):
+                return {"blad": f"W tym miejscu jest już plik: {os.path.basename(docel)}"}
+        else:
+            if os.path.normcase(os.path.dirname(sc)) == os.path.normcase(os.path.abspath(folder)):
+                return {"ok": True, "sciezka": sc}
+            rdzen, rozsz = os.path.splitext(os.path.basename(sc))
+            docel = edycja.wolna_nazwa(folder, rdzen, rozsz)
+        try:
+            os.makedirs(os.path.dirname(docel), exist_ok=True)
+            shutil.move(sc, docel)
+            if os.path.isfile(sc + ".xmp"):
+                shutil.move(sc + ".xmp", docel + ".xmp")
+        except OSError as e:
+            return {"blad": f"{os.path.basename(sc)}: {e.strerror or e}"}
+        self._w_bazie(r, docel)
+        stary = os.path.dirname(sc)  # pusty folder po przeniesieniu (np. stary miesiąc) — sprzątamy
+        try:
+            if not os.listdir(stary):
+                os.rmdir(stary)
+        except OSError:
+            pass
+        return {"ok": True, "sciezka": docel}
+
+    def _w_bazie(self, r, docel: str) -> None:
+        """Nowa ścieżka pliku w bazie — w `pliki` i we wszystkich tabelach z kolumną `sciezka`."""
+        sc = r["sciezka"]
+        db = self._db()
+        try:
+            try:
+                wz = os.path.relpath(docel, r["korzen"])
+            except ValueError:  # inny dysk niż korzeń skanu
+                wz = docel
+            db.execute("UPDATE pliki SET sciezka=?, wzgledna=? WHERE rowid=?", (docel, wz, r["id"]))
+            for (t,) in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name != 'pliki'").fetchall():
+                if "sciezka" in {c[1] for c in db.execute(f'PRAGMA table_info("{t}")')}:  # ulubione, albumy, twarze…
+                    db.execute(f'UPDATE OR IGNORE "{t}" SET sciezka=? WHERE sciezka=?', (docel, sc))
+            db.commit()
+        finally:
+            db.close()
+        self._zapomnij_miniatury(r["id"])
 
     # --- ✏ edycja zdjęcia: kopia obok albo w miejsce oryginału (oryginał do kosza programu) ---------------------
     def _zapomnij_miniatury(self, *ids) -> None:
@@ -938,17 +1006,7 @@ class Galeria:
                 os.replace(sc + ".xmp", docel + ".xmp")
         except OSError as e:
             return {"blad": f"Nie udało się zmienić nazwy: {e.strerror or e}"}
-        db = self._db()
-        try:
-            wz = r["wzgledna"][:len(r["wzgledna"]) - len(stara)] + nowa
-            db.execute("UPDATE pliki SET sciezka=?, wzgledna=? WHERE rowid=?", (docel, wz, r["id"]))
-            for (t,) in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name != 'pliki'").fetchall():
-                if "sciezka" in {c[1] for c in db.execute(f'PRAGMA table_info("{t}")')}:  # ulubione, albumy, twarze…
-                    db.execute(f'UPDATE OR IGNORE "{t}" SET sciezka=? WHERE sciezka=?', (docel, sc))
-            db.commit()
-        finally:
-            db.close()
-        self._zapomnij_miniatury(r["id"])
+        self._w_bazie(r, docel)
         return {"ok": True, "id": r["id"], "nazwa": nowa, "stara": stara}
 
     # --- 🔀 serie: kilka ujęć tej samej sceny zrobionych w ciągu paru sekund (ten sam folder) ----------------
@@ -1294,6 +1352,55 @@ _LISTY = ("/api/g/lata", "/api/g/pliki", "/api/g/szukaj", "/api/g/tego-dnia", "/
           "/api/g/osoba", "/api/g/foldery", "/api/g/folder", "/api/g/serie")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
 
 
+def biblioteka_pliku(sciezka: str) -> str | None:
+    """Korzeń uporządkowanej biblioteki, w której leży plik (folder z „Zdjęcia/Zdjęcia z RRRR” albo
+    „Dokumenty/Dokumenty z RRRR”) — albo None, gdy plik leży gdzie indziej."""
+    czesci = re.split(r"[\\/]", os.path.abspath(sciezka))
+    for i in range(len(czesci) - 2, 0, -1):
+        a, b = czesci[i], czesci[i + 1] if i + 1 < len(czesci) else ""
+        if (a in ("Zdjęcia", "Filmy") and re.fullmatch(rf"{a} z \d{{4}}", b)) or \
+           (a == "Dokumenty" and (re.fullmatch(r"Dokumenty z \d{4}(?: \(.*\))?", b) or b == "Bez daty")):
+            return os.sep.join(czesci[:i]) or os.sep
+    return None
+
+
+def folder_w_bibliotece(r: dict, dokument: bool) -> str | None:
+    """Gdzie w uporządkowanej bibliotece powinien leżeć plik po zmianie typu (zdjęcie ⇄ dokument)."""
+    from datetime import datetime
+
+    from . import planista
+    korzen = biblioteka_pliku(r["sciezka"])
+    if not korzen:
+        return None
+    wzgl = os.path.relpath(r["sciezka"], korzen).replace("\\", "/")
+    try:
+        d = datetime.fromisoformat(r["data"][:19]) if r.get("data") else None
+    except ValueError:
+        d = None
+    if dokument:
+        if wzgl.startswith("Dokumenty/"):
+            return None  # już w dokumentach
+        return os.path.join(korzen, *planista.folder_dokumentow(r.get("data")).split("/"))
+    if not wzgl.startswith("Dokumenty/"):
+        return None  # już wśród zdjęć
+    rok_dir = os.path.join(korzen, "Zdjęcia", f"Zdjęcia z {d.year}") if d else os.path.join(korzen, "Zdjęcia", "Bez daty")
+    if not d:
+        return rok_dir
+    mies = planista.MIESIACE[d.month - 1]
+    fraza = ""
+    if r.get("lat") is not None:
+        try:
+            fraza = miejsca.fraza(miejsca.etykieta(r["lat"], r["lon"]))
+        except Exception:  # noqa: BLE001
+            fraza = ""
+    try:  # istniejący folder tego miesiąca (np. „Kwiecień w domu”) — tam, gdzie reszta zdjęć z tego czasu
+        juz = sorted(n for n in os.listdir(rok_dir) if (n == mies or n.startswith(mies + " ")) and os.path.isdir(os.path.join(rok_dir, n)))
+    except OSError:
+        juz = []
+    wybor = next((n for n in juz if fraza and n == f"{mies} {fraza}"), None) or (juz[0] if len(juz) == 1 else None)
+    return os.path.join(rok_dir, wybor or planista.czysta_nazwa(f"{mies} {fraza}".strip()))
+
+
 def _znak_wodny(im, tekst: str):
     """Podpis w prawym dolnym rogu (półprzezroczysty, z cieniem) — np. „© Kowalscy 2024”."""
     from PIL import Image, ImageDraw, ImageFont
@@ -1484,6 +1591,10 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
         return zip_klucz(ids)
     if sciezka == "/api/g/album/udostepnij":
         return g.udostepnij(int(dane.get("album") or 0), bool(dane.get("wlacz", True)))
+    if sciezka == "/api/g/przenies-z-powrotem":  # „Cofnij” po zmianie typu — dokładnie pod starą ścieżkę
+        wyn = [g.przenies_plik(int(r.get("id") or 0), sciezka=str(r.get("z") or "")) for r in (dane.get("ruchy") or [])[:5000]
+               if isinstance(r, dict)]
+        return {"przeniesione": sum(1 for w in wyn if w.get("ok")), "bledy": [w["blad"] for w in wyn if w.get("blad")]}
     if sciezka == "/api/g/eksport":
         return g.eksportuj(int(dane.get("id") or 0), str(dane.get("cel") or ""), int(dane.get("bok") or 0),
                            int(dane.get("jakosc") or 88), bool(dane.get("bez_gps", True)), str(dane.get("znak") or ""))
@@ -1518,7 +1629,7 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
 
 
 ZMIANY_PLIKOW = ("/api/g/usun", "/api/g/usun/cofnij", "/api/g/lokalizacja", "/api/g/data", "/api/g/edytuj",
-                 "/api/g/edytuj/cofnij")
+                 "/api/g/edytuj/cofnij", "/api/g/dokument", "/api/g/przenies-z-powrotem", "/api/g/zmien-nazwe")
 
 
 def obsluz_usuwanie(g: Galeria, sciezka: str, dane: dict, okno: bool = True) -> dict | None:
@@ -1533,7 +1644,8 @@ def obsluz_usuwanie(g: Galeria, sciezka: str, dane: dict, okno: bool = True) -> 
     if sciezka == "/api/g/data":
         return g.data([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()], str(dane.get("data") or ""))
     if sciezka == "/api/g/dokument":
-        return g.dokument([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()], bool(dane.get("tak", True)))
+        return g.dokument([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()], bool(dane.get("tak", True)),
+                          bool(dane.get("przenies", True)))
     if sciezka == "/api/g/edytuj":
         op = dane.get("op") if isinstance(dane.get("op"), dict) else {}
         return g.edytuj(int(dane.get("id") or 0), op, bool(dane.get("zastap")))

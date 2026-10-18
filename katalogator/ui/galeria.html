@@ -52,7 +52,7 @@ body.zwiniete #wykres,body.zwiniete #lata,body.zwiniete #prz,body.zwiniete #filt
 .popup button{margin-top:6px;width:100%;padding:4px}
 .leaflet-popup-content{margin:10px}
 /* podgląd na cały ekran */
-#pelny{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:2000;display:flex;align-items:center;justify-content:center;color:#fff}
+#pelny{position:fixed;inset:0;background:#04060c;z-index:2000;display:flex;align-items:center;justify-content:center;color:#fff}
 #pelny img,#pelny video{max-width:96vw;max-height:88vh;object-fit:contain}
 #pelny-tresc{touch-action:none}
 #pelny img{transform-origin:0 0;will-change:transform;user-select:none;-webkit-user-drag:none}
@@ -60,7 +60,7 @@ body.zwiniete #wykres,body.zwiniete #lata,body.zwiniete #prz,body.zwiniete #filt
 #pelny .skala{position:absolute;top:16px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);border-radius:999px;padding:4px 12px;font-size:13px;pointer-events:none;transition:opacity .4s}
 #pelny .opis{position:absolute;left:0;right:0;bottom:0;padding:10px 14px;background:linear-gradient(transparent,rgba(0,0,0,.7));font-size:13px;text-align:center}
 #pelny .zam,#pelny .pop,#pelny .nast{position:absolute;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:22px;border-radius:999px;width:44px;height:44px;padding:0}
-#pelny .zam{top:12px;right:12px}
+#pelny .zam{top:12px;right:12px;z-index:4}
 #pelny .pop{left:12px;top:50%}
 #pelny .nast{right:12px;top:50%}
 /* logowanie PIN-em (telefon) */
@@ -182,10 +182,18 @@ body.zwiniete #wykres,body.zwiniete #lata,body.zwiniete #prz,body.zwiniete #filt
 .k .znak-f{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.65);color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;z-index:1}
 .k .gw{position:absolute;left:6px;top:6px;z-index:1;font-size:15px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
 #mapa-os{position:absolute;right:12px;top:10px;z-index:600;box-shadow:0 2px 8px rgba(0,0,0,.2)}
-#pelny .narz{position:absolute;top:12px;left:12px;display:flex;gap:8px;z-index:2}
-#pelny .narz button{background:rgba(255,255,255,.12);border:none;color:#fff;border-radius:999px;height:40px;padding:0 14px;font-size:14px}
-#pelny .narz button.akt{background:#f5b800;color:#111}
-#pelny .narz button:hover{background:rgba(255,255,255,.24)}
+#pelny .narz{position:absolute;top:0;left:0;right:68px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;z-index:3;padding:10px 12px;
+  background:linear-gradient(180deg,rgba(4,6,12,.95),rgba(4,6,12,.72) 75%,rgba(4,6,12,0));pointer-events:none}
+#pelny .narz>*{pointer-events:auto}
+#pelny .narz .grp{display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}
+#pelny .narz .grp:not(:has(button:not([hidden]))){display:none}
+#pelny .narz .typ .et{font-size:12px;color:#93a3c4;padding:0 6px 0 8px;align-self:center}
+#pelny .narz button{background:none;border:none;color:#e7ecf7;border-radius:9px;height:34px;padding:0 12px;font-size:13.5px;white-space:nowrap}
+#pelny .narz button.akt{background:color-mix(in srgb,#5b8cff 30%,transparent);color:#fff;box-shadow:inset 0 0 0 1px rgba(91,140,255,.7)}
+#pelny .narz #p-ulub.akt{background:rgba(245,184,0,.18);color:#fcd34d;box-shadow:inset 0 0 0 1px rgba(245,184,0,.6)}
+#pelny .narz .typ button.akt{background:linear-gradient(135deg,#2563eb,#7c3aed);box-shadow:none}
+#pelny .narz button.zly:hover{background:rgba(248,113,113,.22);color:#fecaca}
+#pelny .narz button:hover{background:rgba(255,255,255,.12)}
 #pelny .film-blad{max-width:520px;text-align:center;line-height:1.6}
 #pelny .film-blad button,#pelny .film-blad a{margin-top:10px;display:inline-block;background:#fff;color:#111;border-radius:999px;padding:8px 16px;text-decoration:none;border:0}
 .menu-alb{position:absolute;top:58px;left:12px;background:var(--bg);color:var(--fg);border-radius:12px;padding:6px;min-width:220px;max-height:60vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.4);z-index:3}
@@ -509,18 +517,27 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 <div id="pelny" hidden>
   <button class="zam" title="Zamknij (Esc)">✕</button>
   <div class="narz">
-    <button id="p-ulub" hidden title="Ulubione (F)">☆ Ulubione</button>
-    <button id="p-album" hidden title="Dodaj do albumu">＋ Album</button>
-    <button id="p-z-albumu" hidden title="Usuń z tego albumu (zdjęcie zostaje na dysku)">− Z albumu</button>
-    <button id="p-pokaz" title="Pokaz slajdów (P)">▶ Pokaz</button>
-    <button id="p-seria" hidden title="Porównaj ujęcia z tej serii obok siebie i zostaw najlepsze">🔀 Seria</button>
-    <button id="p-info" title="Właściwości: folder, w którym leży plik, rozmiar, wymiary, aparat, skąd data (I)">ℹ Właściwości</button>
-    <button id="p-miejsce" hidden title="Dodaj, zmień albo usuń miejsce zrobienia zdjęcia (L)">📍 Miejsce</button>
-    <button id="p-edytuj" hidden title="Przytnij, obróć, rozjaśnij, popraw kolory (E) — zapis jako kopia albo zamiast oryginału">✏ Edytuj</button>
-    <button id="p-data" hidden title="Zmień datę zrobienia (zapis w pliku: JPEG — EXIF, inne — plik .xmp obok)">📅 Data</button>
-    <button id="p-dok" hidden title="Oznacz jako dokument (D)">📄 To dokument</button>
-    <button id="p-usun" hidden title="Usuń (Delete) — do kosza programu: Odłożone/Usunięte, można cofnąć">🗑 Usuń</button>
-    <button id="p-otworz" hidden title="Otwórz w programie Windows (np. Filmy i TV, VLC)">⤢ Otwórz w programie</button>
+    <span class="grp">
+      <button id="p-ulub" hidden title="Ulubione (F)">☆ Ulubione</button>
+      <button id="p-album" hidden title="Dodaj do albumu">＋ Album</button>
+      <button id="p-z-albumu" hidden title="Usuń z tego albumu (zdjęcie zostaje na dysku)">− Z albumu</button>
+      <button id="p-pokaz" title="Pokaz slajdów (P)">▶ Pokaz</button>
+    </span>
+    <span class="grp typ" id="p-typ" hidden title="Typ pliku — w uporządkowanej bibliotece plik od razu trafia do właściwego folderu (Zdjęcia… / Dokumenty…), z „Cofnij” (D)">
+      <span class="et">Typ</span><button data-t="z">📷 Zdjęcie</button><button data-t="d">📄 Dokument</button>
+      <button id="p-dok" hidden></button>
+    </span>
+    <span class="grp">
+      <button id="p-miejsce" hidden title="Dodaj, zmień albo usuń miejsce zrobienia zdjęcia (L)">📍 Miejsce</button>
+      <button id="p-data" hidden title="Zmień datę zrobienia (zapis w pliku: JPEG — EXIF, inne — plik .xmp obok)">📅 Data</button>
+      <button id="p-edytuj" hidden title="Przytnij, obróć, rozjaśnij, popraw kolory (E) — zapis jako kopia albo zamiast oryginału">✏ Edytuj</button>
+      <button id="p-seria" hidden title="Porównaj ujęcia z tej serii obok siebie i zostaw najlepsze">🔀 Seria</button>
+    </span>
+    <span class="grp">
+      <button id="p-info" title="Właściwości: folder, w którym leży plik, rozmiar, wymiary, aparat, skąd data (I)">ℹ Właściwości</button>
+      <button id="p-otworz" hidden title="Otwórz w programie Windows (np. Filmy i TV, VLC)">⤢ Otwórz</button>
+      <button id="p-usun" hidden class="zly" title="Usuń (Delete) — do kosza programu: Odłożone/Usunięte, można cofnąć">🗑 Usuń</button>
+    </span>
   </div>
   <button class="pop" title="Poprzednie (←)">‹</button>
   <button class="nast" title="Następne (→)">›</button>
