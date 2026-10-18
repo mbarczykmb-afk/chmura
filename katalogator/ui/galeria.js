@@ -173,6 +173,7 @@ async function wczytajPliki(wiecej = false) {
   const r = z.typ === "szukaj" ? await api("/api/g/szukaj", {q: z.q, od, ile: 200})
     : z.typ === "kolekcja" ? await api("/api/g/kolekcja", {typ: z.kol, album: z.album || 0, od, ile: 200})
     : z.typ === "osoba" ? await api("/api/g/osoba", {id: z.osoba, od, ile: 200})
+    : z.typ === "folder" ? await api("/api/g/folder", {f: z.f, pod: z.pod ? 1 : 0, od, ile: 200})
     : z.typ === "dzien" ? await api("/api/g/tego-dnia", {md: z.md || mdDzis(), dni: z.dni || 0})
     : await api("/api/g/pliki", {rok: g.rok, miesiac: g.mies || 0, od, ile: 200, ...obszarParam()});
   if (z !== g.zrodlo) return;  // w międzyczasie wybrano coś innego
@@ -210,9 +211,23 @@ function rysujSiatke(odIndeksu = 0) {  // odIndeksu > 0: dopisujemy tylko nowe (
     k.dataset.i = i;
     const ob = document.createElement("div"); ob.className = "ob";
     if (p.rodzaj === "zdjecie") {
-      const im = new Image(); im.loading = "lazy"; im.alt = ""; im.src = miniatura(p.id, false);  // mała: szybka, zapamiętywana na dysku
+      const im = new Image(); im.loading = "lazy"; im.alt = ""; im.draggable = false; im.src = miniatura(p.id, false);  // mała: szybka, zapamiętywana na dysku
       im.onerror = () => { ob.textContent = "🖼️"; }; ob.append(im);
     } else miniaturaFilmu(p, ob);
+    if (p.albumy) {  // 🗂 już jest w albumie
+      const a = document.createElement("span"); a.className = "alb"; a.textContent = "🗂 " + p.albumy;
+      a.title = "Jest w albumie: " + p.albumy; ob.append(a);
+    }
+    if (MOZE_USUWAC && p.rodzaj === "zdjecie") {  // ✏ tryb edycji: szybki obrót / edytor na miniaturze
+      const sz = document.createElement("span"); sz.className = "szyb";
+      for (const [t, op, tyt] of [["↺", {obrot: 270}, "Obróć w lewo"], ["↻", {obrot: 90}, "Obróć w prawo"], ["✏", null, "Edytuj (przytnij, kolory…)"]]) {
+        const b = document.createElement("button"); b.textContent = t; b.title = tyt;
+        b.onclick = e => { e.stopPropagation(); if (op) edycjaPlikow([p], op, (t === "↺" ? "↺ Obrót w lewo" : "↻ Obrót w prawo"), false);
+                           else { pokazPelny(g.pliki, i); otworzEdytor(p); } };
+        sz.append(b);
+      }
+      ob.append(sz);
+    }
     if (MOZE_USUWAC) {
       const x = document.createElement("button"); x.className = "kosz"; x.textContent = "🗑"; x.title = "Usuń (do kosza programu, można cofnąć)";
       x.onclick = e => { e.stopPropagation(); usunPliki([p]); }; ob.append(x);
@@ -226,7 +241,8 @@ function rysujSiatke(odIndeksu = 0) {  // odIndeksu > 0: dopisujemy tylko nowe (
     k.append(ob, op);
     k.onclick = e => {
       if (g.dlugie) { g.dlugie = false; return; }  // po przytrzymaniu palcem (zaznaczenie) — bez otwierania
-      if (g.zazn.size || e.ctrlKey || e.metaKey || e.shiftKey) { zaznacz(i, e.shiftKey); return; }
+      if (g.poRamce) { g.poRamce = false; return; }  // koniec zaznaczania oknem — bez otwierania
+      if (g.zazn.size || g.trybZazn || e.ctrlKey || e.metaKey || e.shiftKey) { zaznacz(i, e.shiftKey); return; }
       pokazPelny(g.pliki, i);
     };
     s.append(k);
@@ -263,12 +279,13 @@ function odswiezZazn() {
     const p = g.pliki[+k.dataset.i]; k.classList.toggle("zazn", !!p && g.zazn.has(p.id));
   });
   const n = g.zazn.size, wyb = zaznaczone();
-  document.body.classList.toggle("zaznaczanie", n > 0);
-  $("zz").hidden = !n;
+  document.body.classList.toggle("zaznaczanie", n > 0 || !!g.trybZazn);
+  $("zz").hidden = !n && !g.trybZazn;
+  $("zaznacz-btn").classList.toggle("akt", n > 0 || !!g.trybZazn);
   const kilka = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20);
   $("zz-ile").textContent = `${n.toLocaleString("pl-PL")} ${n === 1 || kilka ? "zaznaczone" : "zaznaczonych"}`;
   $("zz-data").hidden = $("zz-miejsce").hidden = $("zz-usun").hidden = !MOZE_USUWAC;
-  $("zz-ed").hidden = !MOZE_USUWAC;
+  $("zz-ed").hidden = !MOZE_USUWAC || !trybEdycji();
   $("zz-dok").hidden = !W_PROGRAMIE || !wyb.some(p => p.rodzaj === "zdjecie");
   $("zz-album").hidden = !W_PROGRAMIE;
   $("zz-z-albumu").hidden = !(W_PROGRAMIE && g.zrodlo.typ === "kolekcja" && g.zrodlo.kol === "album");
@@ -277,10 +294,55 @@ function odswiezZazn() {
   $("zz-wszystkie").textContent = g.pliki.length && g.pliki.every(p => g.zazn.has(p.id)) ? "☐ Odznacz" : "☑ Wszystkie";
 }
 const zaznaczone = () => g.pliki.filter(p => g.zazn.has(p.id));
-function koniecZazn() { g.zazn.clear(); g.ostatnioZazn = -1; zamknijMenuAlb(); odswiezZazn(); }
+function koniecZazn() { g.zazn.clear(); g.ostatnioZazn = -1; g.trybZazn = false; zamknijMenuAlb(); odswiezZazn(); }
+// ☑ tryb zaznaczania (przycisk w pasku): klik zaznacza, pasek z „Wszystkie / Odznacz” widać od razu
+$("zaznacz-btn").onclick = () => {
+  if (g.trybZazn || g.zazn.size) { koniecZazn(); return; }
+  g.trybZazn = true; odswiezZazn();
+  toastG("☑ Klikaj zdjęcia, żeby je zaznaczyć — albo przeciągnij myszą, żeby zaznaczyć oknem. „☑ Wszystkie” zaznacza cały widok.");
+};
+// ⬚ zaznaczanie oknem: przeciągnij myszą po siatce (z Ctrl / Shift — dodaje do zaznaczonych)
+const ramka = {start: null, akt: false, baza: null, el: null, klatka: 0};
+$("siatka").addEventListener("pointerdown", e => {
+  if (e.pointerType !== "mouse" || e.button !== 0 || e.target.closest("button, .wiecej, input, a")) return;
+  ramka.start = {x: e.clientX, y: e.clientY + $("siatka").scrollTop}; ramka.akt = false;
+  ramka.baza = e.ctrlKey || e.metaKey || e.shiftKey ? new Set(g.zazn) : new Set();
+});
+addEventListener("pointermove", e => {
+  if (!ramka.start) return;
+  const s = $("siatka"), y0 = ramka.start.y - s.scrollTop;
+  if (!ramka.akt) {
+    if (Math.hypot(e.clientX - ramka.start.x, e.clientY - y0) < 8) return;
+    ramka.akt = true; document.body.classList.add("ciagnie");
+    ramka.el = document.createElement("div"); ramka.el.id = "ramka-zazn"; document.body.append(ramka.el);
+  }
+  const r = s.getBoundingClientRect();  // przewijanie przy krawędzi
+  if (e.clientY > r.bottom - 30) s.scrollTop += 18; else if (e.clientY < r.top + 30) s.scrollTop -= 18;
+  const x1 = Math.min(ramka.start.x, e.clientX), x2 = Math.max(ramka.start.x, e.clientX);
+  const ya = ramka.start.y - s.scrollTop, y1 = Math.min(ya, e.clientY), y2 = Math.max(ya, e.clientY);
+  Object.assign(ramka.el.style, {left: x1 + "px", top: Math.max(r.top, y1) + "px", width: (x2 - x1) + "px",
+                                 height: (Math.min(r.bottom, y2) - Math.max(r.top, y1)) + "px"});
+  cancelAnimationFrame(ramka.klatka);
+  ramka.klatka = requestAnimationFrame(() => {
+    const z = new Set(ramka.baza);
+    s.querySelectorAll(".k").forEach(k => {
+      const b = k.getBoundingClientRect(), p = g.pliki[+k.dataset.i];
+      if (p && b.right > x1 && b.left < x2 && b.bottom > y1 && b.top < y2) z.add(p.id);
+    });
+    g.zazn = z; odswiezZazn();
+  });
+});
+addEventListener("pointerup", () => {
+  if (!ramka.start) return;
+  if (ramka.akt) { g.poRamce = true; setTimeout(() => { g.poRamce = false; }, 50); ramka.el.remove(); document.body.classList.remove("ciagnie"); }
+  ramka.start = null; ramka.akt = false;
+});
 $("zz-koniec").onclick = koniecZazn;
 $("zz-wszystkie").onclick = async () => {
-  if (g.pliki.length && g.pliki.every(p => g.zazn.has(p.id))) { koniecZazn(); return; }
+  if (g.pliki.length && g.pliki.every(p => g.zazn.has(p.id))) {  // ☐ Odznacz — w trybie zaznaczania pasek zostaje
+    if (g.trybZazn) { g.zazn.clear(); g.ostatnioZazn = -1; odswiezZazn(); } else koniecZazn();
+    return;
+  }
   // wszystkie z widoku — także jeszcze niewczytane (do 5000)
   while (g.pliki.length < g.razem && g.pliki.length < 5000) { const n = g.pliki.length; await wczytajPliki(true); if (g.pliki.length === n) break; }
   for (const p of g.pliki) g.zazn.add(p.id);
@@ -405,6 +467,7 @@ async function pokazPelny(lista, poz) {
   }
   if (g.lista[g.poz] === p) { narzedziaPelnego(p); miniMapa(p); }
   if (g.lista[g.poz] === p && p.miejsce) $("pelny-opis").textContent += " · " + p.miejsce;
+  if (g.lista[g.poz] === p && p.albumy) $("pelny-opis").textContent += " · 🗂 " + p.albumy;
   if (p.rodzaj === "zdjecie") {  // 👤 kto jest na zdjęciu (imiona nadane w „Osoby”)
     if (p.osoby === undefined) {
       try { p.osoby = [...new Set((await api("/api/g/twarze-pliku", {id: p.id})).twarze.map(t => t.nazwa).filter(Boolean))]; }
@@ -644,11 +707,12 @@ function ustawRobocza(zmiany = {}) {
   document.documentElement.style.setProperty("--kafel", robocza.kafel + "px");
   document.body.classList.toggle("bez-podpisow", !robocza.podpisy);
   if (!robocza.chowaj) document.body.classList.remove("zwiniete");
-  $("kafel").value = robocza.kafel; $("podpisy").checked = robocza.podpisy; $("chowaj").checked = robocza.chowaj;
+  $("kafel").value = $("kafel2").value = robocza.kafel; $("podpisy").checked = robocza.podpisy; $("chowaj").checked = robocza.chowaj;
   try { localStorage.setItem("kat_g_robocza", JSON.stringify(robocza)); } catch (e) { /* bez pamięci */ }
 }
 ustawRobocza();
 $("kafel").oninput = () => ustawRobocza({kafel: +$("kafel").value});
+$("kafel2").oninput = () => ustawRobocza({kafel: +$("kafel2").value});
 $("kafel-mn").onclick = () => { ustawRobocza({kafel: robocza.kafel - 30}); };
 $("kafel-wi").onclick = () => { ustawRobocza({kafel: robocza.kafel + 30}); };
 $("podpisy").onchange = () => ustawRobocza({podpisy: $("podpisy").checked});
@@ -733,6 +797,8 @@ function uklad() {  // co widać: oś czasu (wykres, miesiące), wyniki/kolekcja
   $("w-kolekcje").classList.toggle("akt", w === "kolekcje" || (w === "os" && g.zrodlo.typ === "kolekcja"));
   $("w-dzien").classList.toggle("akt", w === "os" && g.zrodlo.typ === "dzien");
   $("w-osoby").classList.toggle("akt", w === "osoby" || (w === "os" && g.zrodlo.typ === "osoba"));
+  $("w-foldery").classList.toggle("akt", w === "foldery");
+  $("drzewo").hidden = w !== "foldery"; document.body.classList.toggle("foldery", w === "foldery");
   $("os").hidden = w === "mapa"; $("lata").hidden = !os; $("miesiace").hidden = !os; tip(null);
   $("wykres").hidden = !os || !$("wykres").childElementCount || !naglowek.wykres;
   $("wykres-btn").hidden = !os; $("wykres-btn").classList.toggle("akt", naglowek.wykres);
@@ -747,6 +813,7 @@ function widok(w) {
   if (w === "mapa") pokazMape().catch(e => info(e.message));
   if (w === "kolekcje") rysujKolekcje();
   if (w === "osoby") rysujOsoby();
+  if (w === "foldery") rysujDrzewo();
 }
 function pokazWyniki(zrodlo) {  // wyniki szukania, ulubione, album, tego dnia — w tej samej siatce
   g.zrodlo = zrodlo; g.widok = "os"; g.pliki = []; g.razem = 0;
@@ -757,6 +824,7 @@ $("w-os").onclick = () => widok("os");
 $("w-mapa").onclick = () => widok("mapa");
 $("w-kolekcje").onclick = () => widok("kolekcje");
 $("w-osoby").onclick = () => widok("osoby");
+$("w-foldery").onclick = () => widok("foldery");
 $("w-dzien").onclick = () => { g.widok = "os"; pokazWyniki({typ: "dzien", md: mdDzis(), dni: 0}); };
 
 // ---------- w oknie programu: zakres, zamykanie, udostępnianie na telefon ----------
@@ -868,6 +936,16 @@ function rysujFiltr() {
                                                    : "Teraz widać wszystko — kliknij, żeby znów ukryć albumy 🙈", k.ukrywanie ? "akt" : ""));
   } else if (g.widok === "osoby") {
     filtrOsob(f, inf);
+  } else if (g.widok === "foldery") {
+    const t = document.createElement("span"); t.className = "tyt"; t.textContent = "📁 " + (z.typ === "folder" ? z.nazwa || z.f : "Foldery");
+    t.title = z.f || ""; f.append(t);
+    if (z.typ === "folder") {
+      f.append(inf(ile(g.razem)));
+      const l = document.createElement("label"); l.className = "menu-cb"; l.title = "Pokaż też zdjęcia z folderów wewnątrz";
+      const c = document.createElement("input"); c.type = "checkbox"; c.checked = !!z.pod;
+      c.onchange = () => pokazFolder(z.f, c.checked); l.append(c, " z podfolderami"); f.append(l);
+      const p = pokaz(); if (p) f.append(p);
+    } else f.append(inf("wybierz folder z drzewa po lewej"));
   } else if (g.widok === "os" && z.typ === "osoba") {
     f.append(przycisk("← Osoby", () => widok("osoby")));
     const t = document.createElement("span"); t.className = "tyt"; t.textContent = "👤 " + (z.nazwa || "Bez imienia"); f.append(t, inf(ile(g.razem)));
@@ -1060,6 +1138,79 @@ async function rysujOsoby() {
     s.append(k);
   }
 }
+
+// ---------- 🌳 foldery: drzewo katalogów (po lewej), zdjęcia wybranego folderu (po prawej) ----------
+const drzewo = {dane: null, otwarte: new Set(), wybrany: null};
+async function rysujDrzewo() {
+  const d = $("drzewo");
+  if (g.zrodlo.typ !== "folder") { $("siatka").innerHTML = '<div class="pusto">📁 Wybierz folder z drzewa po lewej.</div>'; rysujFiltr(); }
+  d.textContent = "Wczytuję…";
+  let r; try { r = await api("/api/g/foldery"); } catch (e) { d.textContent = e.message; return; }
+  if (g.widok !== "foldery") return;
+  // drzewo: każdy folder rozbity na części ścieżki; liczby z podfolderami
+  const korzen = {dz: new Map(), n: 0, razem: 0, sc: ""};
+  for (const [sc, n] of r.foldery) {
+    const sep = sc.includes("\\") ? "\\" : "/", czesci = sc.split(/[\\/]/).filter(Boolean);
+    let w = korzen, droga = sc.startsWith("/") ? "" : null;
+    for (const c of czesci) {
+      droga = droga === null ? c : droga + sep + c;
+      if (!w.dz.has(c)) w.dz.set(c, {dz: new Map(), n: 0, razem: 0, sc: sc.startsWith("/") && !droga.startsWith("/") ? "/" + droga : droga, nazwa: c});
+      w = w.dz.get(c); w.razem += n;
+    }
+    w.n += n; korzen.razem += n;
+  }
+  // wspólny początek (np. C:\Users\Ja\Zdjęcia) — zwijamy w jeden węzeł
+  let start = korzen, prefiks = [];
+  while (start.dz.size === 1 && !start.n) { const [c, w] = [...start.dz][0]; prefiks.push(c); start = w; }
+  if (prefiks.length) { start = {...start, nazwa: (prefiks.length > 2 ? "…" + (prefiks[0].endsWith(":") ? "" : "") : "") + prefiks.slice(-2).join(" › ")}; }
+  d.replaceChildren();
+  if (!r.foldery.length) { d.textContent = "Brak folderów ze zdjęciami."; return; }
+  const wezel = (w, poziom) => {
+    const box = document.createElement("div");
+    const wiersz = document.createElement("div"); wiersz.className = "w" + (drzewo.wybrany === w.sc ? " akt" : ""); wiersz.title = w.sc;
+    const ma = w.dz.size > 0, otw = drzewo.otwarte.has(w.sc) || poziom < 1;
+    const str = document.createElement("span"); str.className = "str"; str.textContent = ma ? (otw ? "▾" : "▸") : "";
+    const nz = document.createElement("span"); nz.className = "nz"; nz.textContent = (otw && ma ? "📂 " : "📁 ") + (w.nazwa || w.sc);
+    const n = document.createElement("span"); n.className = "n"; n.textContent = w.razem.toLocaleString("pl-PL");
+    wiersz.append(str, nz, n); box.append(wiersz);
+    const dz = document.createElement("div"); dz.className = "dz"; box.append(dz);
+    const rozwin = () => { dz.replaceChildren(...[...w.dz.values()].sort((a, b) => a.nazwa.localeCompare(b.nazwa, "pl", {numeric: true})).map(x => wezel(x, poziom + 1))); };
+    if (ma && otw) rozwin();
+    str.onclick = e => {
+      e.stopPropagation(); if (!ma) return;
+      if (drzewo.otwarte.has(w.sc) || (poziom < 1 && dz.childElementCount)) { drzewo.otwarte.delete(w.sc); dz.replaceChildren(); str.textContent = "▸"; }
+      else { drzewo.otwarte.add(w.sc); rozwin(); str.textContent = "▾"; }
+    };
+    wiersz.onclick = () => {
+      d.querySelectorAll(".w.akt").forEach(x => x.classList.remove("akt")); wiersz.classList.add("akt");
+      if (ma && !drzewo.otwarte.has(w.sc)) str.onclick({stopPropagation() {}});
+      pokazFolder(w.sc, !w.n);  // folder bez własnych zdjęć — od razu z podfolderami
+    };
+    return box;
+  };
+  d.append(wezel(start, 0));
+}
+function pokazFolder(sc, pod = false) {
+  drzewo.wybrany = sc;
+  g.zrodlo = {typ: "folder", f: sc, pod, nazwa: sc.split(/[\\/]/).filter(Boolean).pop()}; g.pliki = []; g.razem = 0;
+  $("siatka").innerHTML = '<div class="pusto">Wczytuję…</div>'; rysujFiltr();
+  wczytajPliki().then(rysujFiltr).catch(e => { $("siatka").innerHTML = `<div class="pusto">${e.message}</div>`; });
+}
+
+// ---------- ✏ tryb edycji: narzędzia edycji obrazu widać tylko w nim ----------
+function trybEdycji() { try { return localStorage.getItem("kat_edycja") === "1"; } catch (e) { return false; } }
+function ustawTrybEdycji(on) {
+  try { localStorage.setItem("kat_edycja", on ? "1" : "0"); } catch (e) { /* bez pamięci */ }
+  document.body.classList.toggle("tryb-edycji", on && MOZE_USUWAC);
+  $("edycja-btn").classList.toggle("akt", on); $("edycja-zast").hidden = !on || !MOZE_USUWAC;
+  odswiezZazn(); if (!$("pelny").hidden && biezacy()) narzedziaPelnego(biezacy());
+}
+$("edycja-btn").onclick = () => {
+  const on = !trybEdycji(); ustawTrybEdycji(on);
+  toastG(on ? "✏ Tryb edycji: ↺ ↻ ✏ na miniaturach (najedź myszą), ✏ Edytuj w podglądzie, edycja hurtem po zaznaczeniu."
+            : "👁 Tryb przeglądania — narzędzia edycji schowane.");
+};
+$("edycja-zast-cb").onchange = () => { $("zz-zastap").checked = $("edycja-zast-cb").checked; $("zz-zastap").onchange && $("zz-zastap").onchange(); };
 
 // 🔗 udostępnianie albumu: link przez serwer telefonu (sieć domowa / Tailscale), bez PIN-u, tylko ten album
 async function udostepnij(z, wlacz = true) {
@@ -1325,7 +1476,7 @@ function narzedziaPelnego(p) {
   $("p-miejsce").hidden = !MOZE_USUWAC;
   if (p) $("p-miejsce").textContent = p.lat != null ? "📍 Zmień miejsce" : "📍 Dodaj miejsce";
   $("p-data").hidden = !MOZE_USUWAC;
-  $("p-edytuj").hidden = !MOZE_USUWAC || !p || p.rodzaj !== "zdjecie";
+  $("p-edytuj").hidden = !MOZE_USUWAC || !trybEdycji() || !p || p.rodzaj !== "zdjecie";
   const dk = $("p-dok"); dk.hidden = !W_PROGRAMIE || (p && p.rodzaj === "film");
   dk.classList.toggle("akt", !!(p && p.dokument));
   dk.textContent = p && p.dokument ? "📄 Dokument ✓" : "📄 To dokument";

@@ -238,6 +238,37 @@ body.pasek-schowany #pasek-pokaz{display:block;position:fixed;top:0;right:14px;z
 #wl .wl-akcje button{background:rgba(91,140,255,.16);border:1px solid rgba(91,140,255,.45);color:#fff;border-radius:999px;padding:6px 12px;font-size:12.5px}
 #wl .wl-akcje button:hover{background:rgba(91,140,255,.3)}
 #wl .zle{color:#f87171}
+/* 🌳 drzewo folderów (po lewej), siatka obok */
+#drzewo{position:absolute;left:0;top:0;bottom:0;width:min(330px,42vw);overflow:auto;border-right:1px solid var(--lin);background:var(--panel);padding:8px 6px;font-size:13.5px}
+body.foldery #os{left:min(330px,42vw)}
+#drzewo .w{display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:7px;cursor:pointer;white-space:nowrap}
+#drzewo .w:hover{background:var(--akc-miekki)}
+#drzewo .w.akt{background:color-mix(in srgb,var(--akc) 22%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--akc) 60%,transparent);font-weight:600}
+#drzewo .str{width:18px;flex:none;text-align:center;color:var(--mut);font-size:11px}
+#drzewo .nz{overflow:hidden;text-overflow:ellipsis}
+#drzewo .n{margin-left:auto;color:var(--mut);font-size:11.5px;padding-left:8px}
+#drzewo .dz{padding-left:14px}
+/* 🗂 znaczek albumu na miniaturze */
+.k .ob .alb{position:absolute;left:6px;bottom:6px;background:rgba(10,16,32,.72);color:#fff;border-radius:999px;font-size:11px;padding:2px 7px;
+  max-width:calc(100% - 12px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:auto;backdrop-filter:blur(4px)}
+/* zaznaczanie oknem */
+#ramka-zazn{position:fixed;z-index:1400;border:1.5px solid #38bdf8;background:rgba(56,189,248,.14);border-radius:3px;pointer-events:none}
+body.ciagnie,body.ciagnie *{user-select:none!important}
+.k .ob img{-webkit-user-drag:none}
+/* pasek: wielkość miniatur, tryb zaznaczania i edycji */
+.rozm{display:inline-flex;align-items:center;gap:5px;padding:0 8px;height:34px;border:1px solid var(--lin);border-radius:8px;background:var(--bg)}
+.rozm input{width:90px;accent-color:var(--akc)}
+#zaznacz-btn.akt,#edycja-btn.akt{background:color-mix(in srgb,var(--akc) 22%,transparent);color:var(--fg);border-color:var(--akc)}
+#edycja-zast{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;padding:0 9px;height:34px;border:1px solid var(--lin);border-radius:8px;white-space:nowrap;cursor:pointer}
+#edycja-zast:has(input:checked){border-color:#f59e0b;background:color-mix(in srgb,#f59e0b 14%,transparent)}
+@media (max-width:1760px){.rozm input{width:64px}.rodzaje .t{display:none}}
+@media (max-width:1560px){.seg.widoki .t{display:none}.seg.widoki button.akt .t{display:inline}}
+@media (max-width:1250px){.rozm{display:none}}
+/* ✏ tryb edycji: szybkie narzędzia na miniaturach */
+.k .ob .szyb{position:absolute;z-index:2;top:8px;right:44px;display:none;gap:4px}
+body.tryb-edycji .k:hover .ob .szyb{display:flex}
+.k .ob .szyb button{width:28px;height:28px;border-radius:50%;border:0;background:rgba(10,16,32,.75);color:#fff;font-size:14px;padding:0;display:grid;place-items:center}
+.k .ob .szyb button:hover{background:var(--akc)}
 .ik3d-pusto{width:112px;height:112px;border-radius:26px;margin-bottom:14px;box-shadow:0 14px 40px rgba(37,99,235,.3)}
 /* --- wygląd paska: grupy (widoki | szukaj | rodzaje | narzędzia), równa wysokość, jedna linia --- */
 header{background:var(--panel);row-gap:8px}
@@ -340,6 +371,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   <button id="w-os" class="akt" title="Oś czasu"><img class="ikn" alt="" src="/ui/ikony_neon/os.webp"><span class="t"> Oś czasu</span></button>
   <button id="w-mapa" title="Mapa miejsc"><img class="ikn" alt="" src="/ui/ikony_neon/mapa.webp"><span class="t"> Mapa</span></button>
   <button id="w-kolekcje" title="Ulubione i albumy"><img class="ikn" alt="" src="/ui/ikony_neon/kolekcje.webp"><span class="t"> Kolekcje</span></button>
+  <button id="w-foldery" title="Foldery — drzewo katalogów, w których leżą zdjęcia i filmy"><i class="ikl" data-ik="folder"></i><span class="t"> Foldery</span></button>
   <button id="w-osoby" title="Osoby — twarze na zdjęciach, grupowane w osoby (imiona nadajesz Ty)"><i class="ikl" data-ik="osoby"></i><span class="t"> Osoby</span></button>
   <button id="w-dzien" title="Zdjęcia z tego samego dnia w poprzednich latach"><img class="ikn" alt="" src="/ui/ikony_neon/tegodnia.webp"><span class="t"> Tego dnia</span><b class="znaczek" id="dzien-ile" hidden></b></button>
   </span>
@@ -351,6 +383,11 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   </span>
   <span class="odstep"></span>
   <span class="narz" role="group" aria-label="Narzędzia">
+  <span class="rozm" id="rozm" title="Wielkość miniatur (także Ctrl + kółko myszy nad zdjęciami)">
+    <i class="ikl" data-ik="zdjecie" style="width:13px;height:13px"></i><input type="range" id="kafel2" min="80" max="380" step="10" aria-label="Wielkość miniatur"><i class="ikl" data-ik="zdjecie"></i></span>
+  <button id="zaznacz-btn" title="Zaznaczanie: klik zaznacza zdjęcia, „Wszystkie” / „Odznacz”; myszą można też zaznaczyć oknem (przeciągnij)">☑<span class="t"> Zaznacz</span></button>
+  <button id="edycja-btn" hidden title="Tryb edycji: narzędzia edycji obrazu (✏ Edytuj, obrót ↺ ↻ na miniaturach, edycja hurtem)">✏<span class="t"> Edycja</span></button>
+  <label id="edycja-zast" hidden title="Zmienione zdjęcie zastępuje oryginał (oryginał → kosz programu, można cofnąć). Bez zaznaczenia powstaje kopia „(edytowane)”."><input type="checkbox" id="edycja-zast-cb"> zastępuj oryginały</label>
   <button id="kolejnosc" title="Kolejność zdjęć">⇅<span class="t" id="kolejnosc-t"> Od najnowszych</span></button>
   <button id="dyski-btn" hidden title="Dyski i foldery Przeglądarki, skanowanie"><i class="ikl" data-ik="dyski"></i><span class="t"> Dyski</span><b class="znaczek" id="dyski-stan" hidden></b></button>
   <button id="wyslij-btn" hidden title="Wyślij zdjęcia i filmy do biblioteki (z telefonu: prosto z galerii)"><i class="ikl" data-ik="wyslij"></i><span class="t"> Wyślij</span></button>
@@ -410,6 +447,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 <div class="chipy" id="lata"></div>
 <div class="chipy" id="miesiace"></div>
 <main>
+  <aside id="drzewo" hidden aria-label="Drzewo folderów"></aside>
   <div id="os"><div id="siatka"></div></div>
   <div id="mapa" hidden></div>
   <div id="mapa-info" hidden></div>

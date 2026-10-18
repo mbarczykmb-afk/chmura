@@ -48,12 +48,15 @@ CREATE TABLE IF NOT EXISTS g_udostepnione (token TEXT PRIMARY KEY, album INTEGER
 CREATE TABLE IF NOT EXISTS g_album_pliki (album INTEGER NOT NULL, sciezka TEXT NOT NULL, czas REAL NOT NULL,
                                           PRIMARY KEY (album, sciezka));
 CREATE TABLE IF NOT EXISTS g_min_filmow (sciezka TEXT PRIMARY KEY, mtime REAL NOT NULL, dane BLOB NOT NULL);
+CREATE INDEX IF NOT EXISTS g_album_pliki_sciezka ON g_album_pliki(sciezka);
 """
 _MIESIACE_SZUKANIA = [("stycz", 1), ("lut", 2), ("mar", 3), ("kwie", 4), ("maj", 5), ("czerw", 6), ("lip", 7),
                       ("sierp", 8), ("wrze", 9), ("paźdz", 10), ("pazdz", 10), ("listop", 11), ("grud", 12)]
 _NAZWY_MIES = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień",
                "październik", "listopad", "grudzień"]
-_KOLUMNY = "rowid id, wzgledna, rodzaj, data, lat, lon, rozmiar"
+_KOLUMNY = ("rowid id, wzgledna, rodzaj, data, lat, lon, rozmiar, "  # + 🗂 albumy, w których jest zdjęcie (znaczek na miniaturze)
+            "(SELECT group_concat(n.nazwa, ' · ') FROM g_album_pliki a JOIN g_albumy n ON n.id = a.album "
+            "WHERE a.sciezka = pliki.sciezka) albumy")
 _UKR: dict = {}  # baza → (ukrywanie włączone, id ukrytych albumów) — wspólne dla wszystkich galerii tej bazy
 
 
@@ -235,7 +238,7 @@ class Galeria:
             razem = db.execute(f"SELECT COUNT(*) FROM pliki WHERE rodzaj IN ('zdjecie','film') AND {filtr} {w}",
                                a + arg).fetchone()[0]
             wiersze = [dict(r) for r in db.execute(
-                f"""SELECT rowid id, wzgledna, rodzaj, data, lat, lon, rozmiar FROM pliki
+                f"""SELECT {_KOLUMNY} FROM pliki
                     WHERE rodzaj IN ('zdjecie','film') AND {filtr} {w} ORDER BY data {k}, wzgledna {k} LIMIT ? OFFSET ?""",
                 a + arg + [int(ile), int(od)])]
         finally:
@@ -279,6 +282,8 @@ class Galeria:
         try:
             ulub = db.execute("SELECT 1 FROM g_ulubione WHERE sciezka=?", (r["sciezka"],)).fetchone() is not None
             albumy = [x[0] for x in db.execute("SELECT album FROM g_album_pliki WHERE sciezka=?", (r["sciezka"],))]
+            nazwy_alb = [x[0] for x in db.execute("SELECT n.nazwa FROM g_album_pliki a JOIN g_albumy n ON n.id=a.album "
+                                                   "WHERE a.sciezka=?", (r["sciezka"],))]
             try:
                 d = db.execute("SELECT dokument FROM decyzje_dok WHERE sciezka=?", (r["sciezka"],)).fetchone()
             except sqlite3.OperationalError:
@@ -288,7 +293,8 @@ class Galeria:
             db.close()
         return {"id": r["id"], "nazwa": re.split(r"[\\/]", r["wzgledna"])[-1], "folder": os.path.dirname(r["wzgledna"]),
                 "data": r["data"], "rodzaj": r["rodzaj"], "aparat": r["aparat"], "lat": r["lat"], "lon": r["lon"],
-                "miejsce": miejsce, "rozmiar": r["rozmiar"], "ulubione": ulub, "albumy": albumy, "dokument": dokument}
+                "miejsce": miejsce, "rozmiar": r["rozmiar"], "ulubione": ulub, "albumy": albumy, "dokument": dokument,
+                "nazwy_albumow": nazwy_alb}
 
     def sciezka(self, id_: int, rodzaj: str | None = None) -> str | None:
         r = self._wiersz(id_)
@@ -803,6 +809,39 @@ class Galeria:
             db.close()
         return {"razem": razem, "pliki": [_nazwa(r) for r in wiersze], "nazwa": nazwa}
 
+    # --- 🌳 drzewo folderów: gdzie leżą zdjęcia i filmy ----------------------------------------------------
+    def foldery(self) -> dict:
+        """Każdy folder ze zdjęciami/filmami i ich liczba (bez podfolderów) — drzewo składa przeglądarka."""
+        from collections import Counter
+        w, arg = self._warunek()
+        db = self._db()
+        try:
+            ile = Counter(os.path.dirname(r[0]) for r in db.execute(
+                f"SELECT sciezka FROM pliki WHERE rodzaj IN ('zdjecie','film') {w}", arg))
+        finally:
+            db.close()
+        return {"foldery": sorted([f, n] for f, n in ile.items())}
+
+    def folder(self, sciezka: str, podfoldery: bool = False, od: int = 0, ile: int = 200) -> dict:
+        sep = "\\" if "\\" in sciezka else "/"
+        pref = sciezka.rstrip("\\/") + sep
+        w, arg = self._warunek()
+        war, a = "substr(sciezka, 1, ?) = ?", [len(pref), pref]
+        if not podfoldery:  # tylko ten folder: w reszcie ścieżki nie ma już separatora
+            war += " AND instr(substr(sciezka, ?), ?) = 0"
+            a += [len(pref) + 1, sep]
+        sql = f"FROM pliki WHERE rodzaj IN ('zdjecie','film') AND {war} {w}"
+        k = self._kier("nowe")
+        db = self._db()
+        try:
+            razem = db.execute(f"SELECT COUNT(*) {sql}", a + arg).fetchone()[0]
+            wiersze = [dict(x) for x in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data {k}, wzgledna {k} "
+                                                   f"LIMIT ? OFFSET ?", a + arg + [int(ile), int(od)])]
+        finally:
+            db.close()
+        return {"razem": razem, "pliki": [_nazwa(x) for x in wiersze],
+                "nazwa": os.path.basename(sciezka.rstrip("\\/")) or sciezka}
+
     # --- 👤 osoby (twarze) ----------------------------------------------------------------------------------
     def osoba(self, osoba: int, od: int = 0, ile: int = 200) -> dict:
         from . import twarze
@@ -1031,7 +1070,7 @@ def wyslij_zip(h: BaseHTTPRequestHandler, sciezki: list[str], nazwa: str) -> Non
 
 _FILTR = threading.local()
 _LISTY = ("/api/g/lata", "/api/g/pliki", "/api/g/szukaj", "/api/g/tego-dnia", "/api/g/kolekcja", "/api/g/mapa",
-          "/api/g/osoba")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
+          "/api/g/osoba", "/api/g/foldery", "/api/g/folder")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
 
 
 def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
@@ -1072,6 +1111,10 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
         return g.kolekcja(q.get("typ", [""])[0], i("album"), i("od"), min(i("ile", 200), 500)), None
     if sciezka == "/api/g/mapa":
         return g.mapa(), None
+    if sciezka == "/api/g/foldery":
+        return g.foldery(), None
+    if sciezka == "/api/g/folder":
+        return g.folder(q.get("f", [""])[0], bool(i("pod")), i("od"), min(i("ile", 200), 500)), None
     if sciezka in ("/api/g/osoby", "/api/g/twarz", "/api/g/twarze-pliku", "/api/g/osoba"):
         from . import twarze
         if sciezka == "/api/g/osoby":

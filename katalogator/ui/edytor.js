@@ -246,14 +246,22 @@ $("p-edytuj").onclick = e => { e.stopPropagation(); otworzEdytor(biezacy()); };
 
 // ---------- ✏ hurtem: obrót / odbicie / ✨ Auto dla zaznaczonych — w tle, z paskiem postępu i „Cofnij” ----------
 try { $("zz-zastap").checked = localStorage.getItem("kat_zz_zastap") === "1"; } catch (e) { /* bez pamięci */ }
-$("zz-zastap").onchange = () => { try { localStorage.setItem("kat_zz_zastap", $("zz-zastap").checked ? "1" : "0"); } catch (e) { /* bez pamięci */ } };
+$("zz-zastap").onchange = () => { try { localStorage.setItem("kat_zz_zastap", $("zz-zastap").checked ? "1" : "0"); } catch (e) { /* bez pamięci */ }
+                                   $("edycja-zast-cb").checked = $("zz-zastap").checked; };
+$("edycja-zast-cb").checked = $("zz-zastap").checked;
+$("edycja-btn").hidden = !MOZE_USUWAC;  // tryb edycji — w oknie programu i na telefonie z pilotem
+ustawTrybEdycji(trybEdycji());
 async function edycjaHurtem(op, nazwa) {
   const lista = zaznaczone().filter(p => p.rodzaj === "zdjecie");
   if (!lista.length) { toastG("Wśród zaznaczonych nie ma zdjęć — filmów nie zmieniam."); return; }
+  edycjaPlikow(lista, op, nazwa, true, koniecZazn);
+}
+// wspólne dla edycji hurtem i szybkiego obrotu na miniaturze (tryb edycji)
+function edycjaPlikow(lista, op, nazwa, pytaj = true, poZgodzie = () => {}) {
   const zastap = $("zz-zastap").checked;
-  if (zastap && !confirm(`${nazwa}: zastąpić oryginały (${liczbaZdjec(lista.length)})?\n\n` +
+  if (zastap && pytaj && !confirm(`${nazwa}: zastąpić oryginały (${liczbaZdjec(lista.length)})?\n\n` +
                          "Oryginały trafią do kosza programu (Odłożone/Usunięte) — można cofnąć.")) return;
-  koniecZazn();
+  poZgodzie();
   const zrobione = [];
   zadanieTla(nazwa, lista.length, async postep => {
     const bl = [];
