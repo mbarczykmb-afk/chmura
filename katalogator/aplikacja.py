@@ -46,6 +46,7 @@ class Stan:
         self.przerwij = threading.Event()
         self.ostatni_ping = time.time()
         self.wersja_danych = 0          # rośnie po każdej zmianie danych
+        self._raport_blok = threading.Lock()  # raport HTML — liczony raz na wersję danych
         self._podsumowania = (-1, {})   # (wersja, dane) — okno pyta o stan co sekundę
         self._licze_podsumowania = threading.Lock()
         self.tempa: dict[str, stabilnosc.Tempo] = {}
@@ -1126,8 +1127,8 @@ class Stan:
                   f"przeglądarka: {'skanuje' if self.przegladarka.stan.get('trwa') else 'spokój'}", ""]
             st = self.stan()
             w.append("=== Stan ===")
-            for k in ("skan", "dup"):
-                w.append(f"{k}: {st[k].get('komunikat')} {st[k].get('blad')}")
+            for k in ("skan", "dup"):  # „trwa” — żeby „Folder 2 z 2” nie wyglądał na zawieszony stan
+                w.append(f"{k}: {'TRWA · ' if st[k].get('trwa') else ''}{st[k].get('komunikat') or ''} {st[k].get('blad') or ''}".rstrip())
             for k, z in st["zad"].items():
                 if z.get("komunikat") or z.get("blad"):
                     w.append(f"{k}: {z.get('komunikat')} {z.get('blad')}")
@@ -1197,11 +1198,19 @@ class Stan:
             db.close()
 
     def raport_html(self) -> str:
-        db = skaner.otworz_baze(self.baza)
-        try:
-            return raport.html_raport(raport.zbierz(db))
-        finally:
-            db.close()
+        # duża biblioteka (~90 tys. plików): zbieranie trwa kilkanaście sekund, a okno pyta o raport kilka razy
+        # naraz przy starcie — liczymy raz i pamiętamy do następnej zmiany danych (albo zmiany projektu)
+        with self._raport_blok:
+            klucz = (self.pid, self.wersja_danych)
+            if getattr(self, "_raport", (None,))[0] == klucz:
+                return self._raport[1]
+            db = skaner.otworz_baze(self.baza)
+            try:
+                html = raport.html_raport(raport.zbierz(db))
+            finally:
+                db.close()
+            self._raport = (klucz, html)
+            return html
 
 
 def _handler(stan: Stan, token: str, zamknij):
@@ -1586,6 +1595,9 @@ def _handler(stan: Stan, token: str, zamknij):
                                             pomin=(stan.odzysk_zadanie() or {}).get("cel", ""))
                 else:
                     w = naprawa.napraw(sc, Path(stan.katalog), wz)
+                LOG.info("Naprawa filmu %s: %s", os.path.basename(sc),  # wynik w dzienniku (raport do zgłoszenia)
+                         "naprawiony" + (f" (wzorzec {os.path.basename(w['wzorzec'])})" if w.get("wzorzec") else "")
+                         if w.get("ok") else "nie udało się — " + str(w.get("blad") or "")[:160])
                 return self._wyslij(w)
             if u.path == "/api/odzysk/filmy":  # wybór wzorca: filmy w folderze
                 return self._wyslij({"filmy": naprawa.filmy_w(str(dane.get("folder") or ""))})

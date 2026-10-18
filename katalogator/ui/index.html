@@ -625,8 +625,9 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
   <button id="odzysk-btn" title="Odzyskiwanie usuniętych plików — także po opróżnieniu kosza i dawno temu"><i class="ikl" data-ik="odzysk"></i><span class="t"> Odzyskaj</span></button>
   <button id="ust-btn" title="Ustawienia: wygląd, start z Windows, telefon, kopia zapasowa, aktualizacje"><i class="ikl" data-ik="ustawienia"></i></button>
   <div style="position:relative">
-    <button id="pomoc-btn" title="Pomoc, zgłaszanie problemów, aktualizacje"><i class="ikl" data-ik="pomoc"></i></button>
+    <button id="pomoc-btn" title="Pomoc (F1), zgłaszanie problemów, aktualizacje"><i class="ikl" data-ik="pomoc"></i></button>
     <div class="menu" id="pomoc-menu" hidden>
+      <button id="m-pomoc" title="Instrukcja każdej zakładki z przykładami, skróty klawiszy, pytania (F1)">📖 Pomoc</button>
       <button id="m-powitanie">👋 Jak zacząć</button>
       <button id="m-zglos">🐞 Zgłoś problem / wyślij raport…</button>
       <button id="m-aktualizacje">⟳ Sprawdź aktualizacje</button>
@@ -1759,6 +1760,7 @@ function rysujDup() {
   setInterval(odswiez, 1000);
 })();
 </script>
+<script src="/ui/podpowiedzi.js"></script>
 <script src="/ui/ikony.js"></script>
 <script src="/ui/aktywnosc.js"></script>
 <script src="/ui/motyw.js"></script>
@@ -1783,6 +1785,7 @@ function rysujDup() {
 </div>
 <script src="/ui/sprzatanie.js"></script>
 <script src="/ui/pomoc.js"></script>
+<script src="/ui/pomocnik.js"></script>
 <script src="/ui/ustawienia.js"></script>
 <script src="/ui/odzysk.js"></script>
 </body>

@@ -144,3 +144,12 @@ def test_heic(tmp_path):
     from katalogator import analiza
     mini, rozm = analiza.miniatura(str(p))
     assert rozm == (64, 48)
+
+
+def test_nierozpoznane_zdjecie_ma_zrozumialy_powod(tmp_path):
+    from katalogator import metadane, typy
+    (tmp_path / "zera.jpg").write_bytes(b"\0" * 5000)
+    (tmp_path / "uciety.jpg").write_bytes(b"\xff\xd8\xff\xe0" + b"\x13" * 50)
+    m = metadane.odczytaj(str(tmp_path / "zera.jpg"), typy.ZDJECIE, 0)
+    assert m.blad.startswith("Uszkodzony plik: same zera") and "UnidentifiedImageError" in m.blad
+    assert "Uszkodzony JPEG" in metadane.odczytaj(str(tmp_path / "uciety.jpg"), typy.ZDJECIE, 0).blad

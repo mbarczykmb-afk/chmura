@@ -18,6 +18,7 @@ import os
 import struct
 import subprocess
 import sys
+import time
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -81,6 +82,35 @@ def ftyp(sciezka: str) -> tuple[str, list[str]] | None:
     return d[8:12].decode("latin-1"), [m for m in marki if m.strip("\0")]
 
 
+# profil filmu-wzorca (marka ftyp, czy sam działa, rozmiar) — liczony raz na plik: przy naprawie wielu odzyskanych
+# filmów każde wywołanie czytało od nowa nagłówki tysięcy filmów z dysku sieciowego (ok. 4 min na każdy plik)
+_PROFILE: dict[str, tuple] = {}
+
+
+def _profil(p: str):
+    z = _PROFILE.get(p)
+    if z and time.time() - z[2] < 900:  # świeży — bez pytania dysku sieciowego o każdy plik
+        return z[1]
+    try:
+        st = os.stat(p)
+    except OSError:
+        return None
+    if z and z[0] == (st.st_size, st.st_mtime):
+        _PROFILE[p] = (z[0], z[1], time.time())
+        return z[1]
+    f = ftyp(p)
+    dziala = False
+    if f:
+        try:
+            a, uciety = atomy(p, 20)
+            dziala = not uciety and "moov" in [t for t, _, _ in a]
+        except OSError:
+            pass
+    w = (f, dziala, st.st_size) if f and dziala else None
+    _PROFILE[p] = ((st.st_size, st.st_mtime), w, time.time())
+    return w
+
+
 def kandydaci(uszkodzony: str, filmy: list[str], limit: int = 5, pomin: str = "") -> list[str]:
     """Działające filmy najbardziej podobne do uszkodzonego (ta sama marka ftyp, podobny rozmiar) — wzorce dla
     untrunc. `filmy` — ścieżki filmów znanych programowi (biblioteka, Przeglądarka, foldery użytkownika)."""
@@ -92,16 +122,10 @@ def kandydaci(uszkodzony: str, filmy: list[str], limit: int = 5, pomin: str = ""
             continue
         if os.path.splitext(p)[1].lower() not in MP4:
             continue
-        f = ftyp(p)
-        if not f:
-            continue
-        try:
-            a, uciety = atomy(p, 20)
-            r = os.path.getsize(p)
-        except OSError:
-            continue
-        if uciety or "moov" not in [t for t, _, _ in a]:
+        pr = _profil(p)
+        if not pr:
             continue  # wzorzec musi sam działać
+        f, _, r = pr
         ocena = 0
         if cel:
             ocena += 4 * (f[0] == cel[0]) + len(set(f[1]) & set(cel[1]))

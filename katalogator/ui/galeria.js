@@ -856,6 +856,10 @@ if (W_PROGRAMIE) {
   g.zakres = P.get("z") || "biblioteka"; $("zakres").value = g.zakres;
   $("zakres").onchange = () => { g.zakres = $("zakres").value; g.punkty = null; g.rok = null; ustawZakres(); start(); };
   $("zamknij").onclick = () => window.parent.postMessage("zamknij-galerie", "*");
+  // 📖 pomoc programu (okno nadrzędne) — z menu ⋯ i klawiszem F1
+  $("menu-pomoc").hidden = false;
+  $("menu-pomoc").onclick = () => window.parent.postMessage("pomoc:przegladarka", "*");
+  document.addEventListener("keydown", e => { if (e.key === "F1") { e.preventDefault(); window.parent.postMessage("pomoc:przegladarka", "*"); } });
   $("na-telefon").onclick = () => telefon(true);
   $("tel-zamknij").onclick = () => { $("telefon").hidden = true; };
   $("tel-wylacz").onclick = () => telefon(false);

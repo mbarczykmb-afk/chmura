@@ -86,6 +86,7 @@ def metadane(sciezka: str) -> dict:
     except (OSError, subprocess.TimeoutExpired):
         return wynik
     tekst = w.stderr.decode("utf-8", errors="replace")
+    wynik["czytelny"] = "Duration:" in tekst and "Invalid data found" not in tekst  # ffmpeg rozumie plik
     c = _CZAS.search(tekst)
     if c:
         try:

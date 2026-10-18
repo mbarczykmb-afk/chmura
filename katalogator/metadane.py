@@ -524,6 +524,25 @@ def z_muzyki(sciezka: str, m: Metadane) -> None:
 _MP4_PODOBNE = {".mp4", ".mov", ".m4v", ".3gp"}
 
 
+def _czemu_nie_obraz(sciezka: str) -> str:
+    """Zrozumiały powód dla raportu, gdy Pillow nie rozpoznaje zdjęcia."""
+    try:
+        with open(sciezka, "rb") as f:
+            d = f.read(4096)
+    except OSError as e:
+        return f"Nie da się odczytać pliku ({e.strerror or e})"
+    if not d:
+        return "Pusty plik (0 bajtów)"
+    if not d.strip(b"\0"):
+        return "Uszkodzony plik: same zera (np. po przerwanym kopiowaniu albo odzyskiwaniu)"
+    if d[4:8] == b"ftyp":
+        return "To film albo zdjęcie HEIC z rozszerzeniem .jpg" if d[8:12] not in (b"heic", b"heix", b"mif1") \
+            else "Zdjęcie HEIC z rozszerzeniem .jpg"
+    if d[:2] == b"\xff\xd8":
+        return "Uszkodzony JPEG (początek jest, reszty nie da się odczytać)"
+    return "Nieznany albo uszkodzony format obrazu"
+
+
 def odczytaj(sciezka: str, rodzaj: str, mtime: float, boczne: list[str] | None = None) -> Metadane:
     m = Metadane()
     ext = PurePath(sciezka).suffix.lower()
@@ -544,18 +563,23 @@ def odczytaj(sciezka: str, rodzaj: str, mtime: float, boczne: list[str] | None =
             z_muzyki(sciezka, m)
     except Exception as e:  # uszkodzony / nietypowy plik — nie przerywa skanu
         m.blad = f"{type(e).__name__}: {e}"[:200]
-    if rodzaj == typy.FILM and (m.blad or m.data is None) and ext not in (".mkv", ".webm") \
-            and not data_z_nazwy(sciezka):
+    if rodzaj == typy.FILM and ext not in (".mkv", ".webm") and (m.blad or (m.data is None and not data_z_nazwy(sciezka))):
         # nagłówka nie umiemy przeczytać (np. „Invalid argument” przy starych 3GP/MP4) — pyta ffmpeg
         try:
             from . import filmy
             f = filmy.metadane(sciezka)
             if f["data"]:
-                m.data, m.zrodlo_daty, m.blad = f["data"], "film", None
+                m.data, m.zrodlo_daty = f["data"], "film"
             if f["lat"] is not None and m.lat is None:
                 m.lat, m.lon = f["lat"], f["lon"]
+            if m.blad and (f["data"] or f.get("czytelny")):
+                m.blad = None  # nietypowy nagłówek, ale film jest w porządku (ffmpeg go czyta)
+            elif m.blad and filmy.ffmpeg():
+                m.blad = "Film nie daje się odczytać (także ffmpeg) — prawdopodobnie uszkodzony · " + m.blad
         except Exception:
             pass
+    if rodzaj == typy.ZDJECIE and m.blad and m.blad.startswith(("UnidentifiedImageError", "OSError: Truncated", "SyntaxError")):
+        m.blad = _czemu_nie_obraz(sciezka) + " · " + m.blad
     if boczne and rodzaj in (typy.ZDJECIE, typy.FILM):
         try:
             z_bocznych(boczne, m)

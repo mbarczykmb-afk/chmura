@@ -78,3 +78,21 @@ def test_wzorzec_dobierany_sam(tmp_path, monkeypatch):
     w = naprawa.napraw_auto(str(zepsuty), tmp_path, filmy_, pamiec, str(zepsuty.parent))
     assert w["ok"] and w["wzorzec"].endswith("podobny.mp4") and pamiec["mp42"][0].endswith("podobny.mp4")
     assert proby == ["podobny.mp4"]
+
+
+def test_kandydaci_czytaja_naglowki_raz(tmp_path, monkeypatch):
+    """Naprawa wielu odzyskanych filmów: nagłówki filmów-wzorców czytane raz, nie przy każdym pliku (dysk sieciowy)."""
+    naprawa._PROFILE.clear()
+    zepsuty = tmp_path / "odzysk" / "1.mp4"
+    zepsuty.parent.mkdir()
+    _mp4(zepsuty, b"mp42", moov=False, rozmiar=5000)
+    filmy_ = []
+    for i in range(5):
+        _mp4(tmp_path / f"w{i}.mp4", b"mp42", rozmiar=6000)
+        filmy_.append(str(tmp_path / f"w{i}.mp4"))
+    czytane = []
+    prawdziwe = naprawa.atomy
+    monkeypatch.setattr(naprawa, "atomy", lambda p, *a: (czytane.append(p), prawdziwe(p, *a))[1])
+    for _ in range(3):
+        assert len(naprawa.kandydaci(str(zepsuty), filmy_, pomin=str(zepsuty.parent))) == 5
+    assert sorted(czytane) == sorted(filmy_)
