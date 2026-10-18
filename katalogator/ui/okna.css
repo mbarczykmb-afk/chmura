@@ -1,0 +1,33 @@
+/* 🪟 Okna nakładane (Pomoc, Ustawienia, Raport, wybór folderu, miejsce, data…): wyraźnie inne od tła programu —
+   przyciemnione i rozmyte otoczenie, okno w kolorze akcentu z paskiem u góry i poświatą, krótka animacja otwarcia.
+   Wspólne dla okna programu (index.html) i Przeglądarki (galeria.html); kolory z motywu (jasny / ciemny). */
+:root{
+  --okno-bg:color-mix(in srgb,var(--akc,#2563eb) 11%,var(--panel,#fff));
+  --okno-ramka:color-mix(in srgb,var(--akc,#2563eb) 55%,transparent);
+  --okno-pasek:linear-gradient(90deg,#2563eb,#7c3aed 55%,#db2777);
+  --okno-tlo:rgba(4,8,22,.62);
+}
+
+/* otoczenie */
+.nakladka,.powitanie,.pm-tlo,#telefon,#wybierz,.dlg,#lok,#udo,#dt{
+  background:var(--okno-tlo)!important;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+  animation:okno-tlo .16s ease-out}
+
+/* samo okno */
+.nakladka>.okno,.powitanie>.pw-okno,.pm-tlo>.pm-okno,#telefon .okno,#wybierz .okno,.dlg .okno,#lok .okno,#udo .okno,#dt .okno{
+  background:var(--okno-pasek) top/100% 5px no-repeat,var(--okno-bg);
+  border:1px solid var(--okno-ramka);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--akc,#2563eb) 18%,transparent),0 24px 70px rgba(0,0,0,.45);
+  padding-top:max(18px,1em);
+  animation:okno-wej .2s cubic-bezier(.2,.8,.3,1.15)}
+.pm-tlo>.pm-okno{padding-top:5px}  /* pomoc ma własny nagłówek — pasek tuż nad nim */
+
+/* pola i listy w środku zostają na jaśniejszym / ciemniejszym tle, żeby było widać, gdzie się pisze */
+.nakladka>.okno :is(input:not([type=checkbox]):not([type=radio]),select,textarea),
+.dlg .okno :is(input:not([type=checkbox]):not([type=radio]),select,textarea){background:var(--panel,#fff)}
+
+@keyframes okno-tlo{from{opacity:0}to{opacity:1}}
+@keyframes okno-wej{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .nakladka,.powitanie,.pm-tlo,#telefon,#wybierz,.dlg,#lok,#udo,#dt{animation:none}
+  .nakladka>.okno,.powitanie>.pw-okno,.pm-tlo>.pm-okno,#telefon .okno,#wybierz .okno,.dlg .okno,#lok .okno,#udo .okno,#dt .okno{animation:none}}
