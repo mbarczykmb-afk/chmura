@@ -174,6 +174,8 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.41.3:** Przeglądarka: obraz nie drga już przy przewinięciu do samego dołu. Wykres lat i miesięcy chowa się raz przy przewijaniu w dół i wraca przy przewinięciu w górę — wcześniej przy samym dole przeskok wywołany jego schowaniem był brany za ruch w górę i wykres chował się i pojawiał w kółko.
+
 **1.41.2:** Pytania i komunikaty („Usunąć 3 zdjęcia?”, nazwa albumu, PIN…) we własnym oknie programu w kolorze okien — zamiast białego okienka systemowego z nagłówkiem „Komunikat z witryny 127.0.0.1…”: pytanie na górze, wyjaśnienie pod spodem, Enter = OK, Esc = Anuluj, operacje „NA STAŁE” z czerwonym przyciskiem. Pasek zaznaczenia na dole Przeglądarki w tym samym kolorze (z kolorowym paskiem u góry i obwódką), więc nie ginie na tle zdjęć.
 
 **1.41.1:** Okna otwierane nad programem (Pomoc, Ustawienia, Raport, wybór folderu, miejsce, data, telefon…) są teraz wyraźnie widoczne: mocniej przyciemnione i rozmyte tło, okno w innym kolorze (odcień akcentu) z kolorowym paskiem u góry, obwódką i krótką animacją otwarcia — w motywie jasnym i ciemnym.

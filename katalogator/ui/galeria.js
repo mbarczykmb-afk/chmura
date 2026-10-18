@@ -740,12 +740,22 @@ $("siatka").addEventListener("wheel", e => {  // Ctrl + kółko = większe / mni
   if (!e.ctrlKey) return;
   e.preventDefault(); ustawRobocza({kafel: robocza.kafel + (e.deltaY < 0 ? 20 : -20)});
 }, {passive: false});
-let ostatniScroll = 0;
+let ostatniScroll = 0, chowanieDo = 0;
+// Schowanie / pokazanie wykresu zmienia wysokość siatki. Przy samym dole przeglądarka sama cofa wtedy przewinięcie
+// (o wysokość wykresu) — to nie jest ruch użytkownika: bez tej blokady wykres chował się i wracał w kółko (drganie).
+function zwin(tak) {
+  if (document.body.classList.contains("zwiniete") === tak) return;
+  document.body.classList.toggle("zwiniete", tak);
+  chowanieDo = performance.now() + 450;
+  requestAnimationFrame(() => requestAnimationFrame(() => { ostatniScroll = $("siatka").scrollTop; }));
+}
 $("siatka").addEventListener("scroll", () => {
-  const y = $("siatka").scrollTop;
+  const s = $("siatka"), y = s.scrollTop;
+  if (performance.now() < chowanieDo) { ostatniScroll = y; return; }  // przeskok po zmianie układu
   if (robocza.chowaj) {
-    if (y > 160 && y > ostatniScroll + 30) document.body.classList.add("zwiniete");
-    else if (y < ostatniScroll - 30 || y < 40) document.body.classList.remove("zwiniete");
+    const naDole = y + s.clientHeight >= s.scrollHeight - 4;
+    if (y > 160 && y > ostatniScroll + 30) zwin(true);
+    else if (y < 40 || (y < ostatniScroll - 30 && !naDole)) zwin(false);
   }
   if (Math.abs(y - ostatniScroll) > 30 || y < 40) ostatniScroll = y;
 }, {passive: true});
