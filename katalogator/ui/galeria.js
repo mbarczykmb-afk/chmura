@@ -177,6 +177,14 @@ async function wczytajPliki(wiecej = false) {
     : z.typ === "osoba" ? await api("/api/g/osoba", {id: z.osoba, od, ile: 200})
     : z.typ === "folder" ? await api("/api/g/folder", {f: z.f, pod: z.pod ? 1 : 0, od, ile: 200})
     : z.typ === "dzien" ? await api("/api/g/tego-dnia", {md: z.md || mdDzis(), dni: z.dni || 0})
+    : z.typ === "miejsce" ? await (async () => {
+        if (z.lat == null) {  // bez wskazanego miejsca: to, z którego są zdjęcia z największej liczby lat
+          const m = await znaneMiejsca(), naj = [...m].sort((a, b) => b.lat_n - a.lat_n || b.n - a.n)[0];
+          if (!naj) return {pliki: [], razem: 0, lata: []};
+          Object.assign(z, {lat: naj.lat, lon: naj.lon});
+        }
+        return api("/api/g/to-samo-miejsce", {lat: z.lat, lon: z.lon, pr: z.pr || 300});
+      })()
     : await api("/api/g/pliki", {rok: g.rok, miesiac: g.mies || 0, od, ile: 200, ...obszarParam()});
   if (z !== g.zrodlo) return;  // w międzyczasie wybrano coś innego
   const bylo = wiecej ? g.pliki.length : 0;
@@ -185,6 +193,7 @@ async function wczytajPliki(wiecej = false) {
   if (r.opis !== undefined) z.opis = r.opis;
   if (r.nazwa) z.nazwa = r.nazwa;
   if (z.typ === "dzien") { z.md = r.md; z.lata = r.lata; z.najblizszy = r.najblizszy; }
+  if (z.typ === "miejsce") z.lata = r.lata;
   rysujSiatke(bylo); rysujFiltr(); odswiezZazn();
 }
 // Przewijanie do końca siatki doczytuje kolejne zdjęcia (bez klikania „Pokaż kolejne”)
@@ -198,7 +207,7 @@ function rysujSiatke(odIndeksu = 0) {  // odIndeksu > 0: dopisujemy tylko nowe (
   const s = $("siatka");
   if (odIndeksu) s.querySelectorAll(":scope > .wiecej").forEach(b => { if (doczytaj) doczytaj.unobserve(b); b.remove(); });
   else s.replaceChildren();
-  const dzien = g.zrodlo.typ === "dzien";
+  const dzien = g.zrodlo.typ === "dzien" || g.zrodlo.typ === "miejsce";  // nagłówki lat
   let rok = odIndeksu && g.pliki[odIndeksu - 1] && g.pliki[odIndeksu - 1].data ? g.pliki[odIndeksu - 1].data.slice(0, 4) : null;
   g.pliki.forEach((p, i) => {
     if (i < odIndeksu) return;
@@ -257,6 +266,7 @@ function rysujSiatke(odIndeksu = 0) {  // odIndeksu > 0: dopisujemy tylko nowe (
   }
   if (!g.pliki.length) s.innerHTML = `<div class="pusto">${g.zrodlo.typ === "szukaj" ? "Nic nie znaleziono. Spróbuj: miejscowość, kraj, rok, miesiąc albo fragment nazwy."
     : g.zrodlo.typ === "kolekcja" ? (g.zrodlo.kol === "ulubione" ? "Brak ulubionych — otwórz zdjęcie i kliknij ☆ Ulubione (albo F)." : "Album jest pusty — otwórz zdjęcie i kliknij ＋ Album.")
+    : g.zrodlo.typ === "miejsce" ? (g.zrodlo.lat == null ? "Żadne zdjęcie nie ma jeszcze miejsca — dodaj je w podglądzie (📍)." : "Brak innych zdjęć z tego miejsca — zwiększ promień.")
     : g.zrodlo.typ === "dzien" ? `Brak zdjęć z ${mdTxt(g.zrodlo.md || mdDzis())}${g.zrodlo.dni ? " (± " + g.zrodlo.dni + " dni)" : ""} z poprzednich lat.`
     : "Brak zdjęć w tym okresie."}</div>`;
   if (!g.pliki.length && g.zrodlo.typ === "dzien" && g.zrodlo.najblizszy) {
@@ -804,7 +814,7 @@ function uklad() {  // co widać: oś czasu (wykres, miesiące), wyniki/kolekcja
   const w = g.widok, os = w === "os" && g.zrodlo.typ === "os";
   $("w-os").classList.toggle("akt", os); $("w-mapa").classList.toggle("akt", w === "mapa");
   $("w-kolekcje").classList.toggle("akt", w === "kolekcje" || (w === "os" && g.zrodlo.typ === "kolekcja"));
-  $("w-dzien").classList.toggle("akt", w === "os" && g.zrodlo.typ === "dzien");
+  $("w-dzien").classList.toggle("akt", w === "os" && (g.zrodlo.typ === "dzien" || g.zrodlo.typ === "miejsce"));
   $("w-osoby").classList.toggle("akt", w === "osoby" || (w === "os" && g.zrodlo.typ === "osoba"));
   $("w-foldery").classList.toggle("akt", w === "foldery");
   $("w-serie").classList.toggle("akt", w === "serie");
@@ -935,6 +945,20 @@ function znacznik(tekst, zamknij, tytul) {
   const z = document.createElement("span"); z.className = "zn"; z.append(tekst);
   const x = przycisk("✕", zamknij, tytul); z.append(x); return z;
 }
+// 🕰 „Tego dnia”: ta sama data w różnych latach  |  to samo miejsce w różnym czasie
+function trybDnia(akt) {
+  const s = document.createElement("span"); s.className = "seg-dnia";
+  s.append(przycisk("📅 Ta sama data", () => akt !== "dzien" && pokazWyniki({typ: "dzien", md: mdDzis(), dni: 0}),
+                    "Zdjęcia z tego samego dnia w poprzednich latach", akt === "dzien" ? "akt" : ""),
+           przycisk("📍 To samo miejsce", () => akt !== "miejsce" && pokazWyniki({typ: "miejsce", pr: 300}),
+                    "Zdjęcia z tego samego miejsca w różnych latach", akt === "miejsce" ? "akt" : ""));
+  const x = przycisk("✕", () => widok("os"), "Wróć do osi czasu"); x.className = "zamk"; s.append(x);
+  return s;
+}
+async function znaneMiejsca() {
+  if (!g.znane) try { g.znane = (await api("/api/g/znane-miejsca", {ile: 300})).miejsca || []; } catch (e) { g.znane = []; }
+  return g.znane;
+}
 function rysujFiltr() {
   const f = $("filtr"); f.replaceChildren();
   const z = g.zrodlo, ile = liczbaZdjec;
@@ -1001,13 +1025,36 @@ function rysujFiltr() {
         await post("/api/g/album/usun", {album: z.album}); widok("kolekcje");
       }));
     }
+  } else if (g.widok === "os" && z.typ === "miejsce") {
+    f.append(trybDnia("miejsce"));
+    const sel = document.createElement("select"); sel.title = "Miejsce — z biblioteki (od miejsc z największej liczby lat)";
+    const znane = [...(g.znane || [])].sort((a, b) => b.lat_n - a.lat_n || b.n - a.n);
+    const tu = znane.find(m => Math.abs(m.lat - z.lat) < 1e-6 && Math.abs(m.lon - z.lon) < 1e-6);
+    if (!tu && z.lat != null) {
+      const o = document.createElement("option"); o.value = ""; o.textContent = "📍 " + (z.nazwa || "to miejsce"); sel.append(o);
+    }
+    znane.forEach((m, i) => {
+      const o = document.createElement("option"); o.value = i;
+      o.textContent = `📍 ${m.nazwa} · ${m.lat_n === 1 ? "1 rok" : m.lat_n + (m.lat_n < 5 ? " lata" : " lat")} · ${m.n}`;
+      if (m === tu) o.selected = true; sel.append(o);
+    });
+    sel.onchange = () => { const m = znane[+sel.value]; if (m) pokazWyniki({...z, lat: m.lat, lon: m.lon, nazwa: m.nazwa}); };
+    const pr = document.createElement("select"); pr.title = "Jak blisko tego miejsca";
+    for (const [v, t] of [[100, "± 100 m"], [300, "± 300 m"], [1000, "± 1 km"], [5000, "± 5 km"]]) {
+      const o = document.createElement("option"); o.value = v; o.textContent = t; pr.append(o);
+    }
+    pr.value = z.pr || 300; pr.onchange = () => pokazWyniki({...z, pr: +pr.value});
+    f.append(sel, pr);
+    if (g.razem) f.append(inf(ile(g.razem) + " · z " + (z.lata || []).length + ((z.lata || []).length === 1 ? " roku" : " lat")));
+    const p = pokaz(); if (p) f.append(p);
   } else if (g.widok === "os" && z.typ === "dzien") {
+    f.append(trybDnia("dzien"));
     const md = z.md || mdDzis();
     const nav = document.createElement("span"); nav.className = "dzien-nav";
     const b = document.createElement("b"); b.textContent = mdTxt(md) + (md === mdDzis() ? " (dziś)" : "");
     nav.append(przycisk("‹", () => pokazWyniki({...z, md: mdPrzesun(md, -1)}), "Dzień wcześniej"), b,
                przycisk("›", () => pokazWyniki({...z, md: mdPrzesun(md, 1)}), "Dzień później"));
-    f.append(znacznik("🕰 Tego dnia w poprzednich latach", () => widok("os")), nav);
+    f.append(nav);
     if (md !== mdDzis()) f.append(przycisk("Dziś", () => pokazWyniki({...z, md: mdDzis()})));
     const sel = document.createElement("select"); sel.title = "Ile dni wokół tej daty";
     for (const [v, t] of [[0, "tylko ten dzień"], [3, "± 3 dni"], [7, "± tydzień"]]) {
@@ -1335,6 +1382,7 @@ async function ustawLokalizacje(ids, lat, lon, poprzednie, cicho = false, postep
   }
   if (!w.zmienione) { toastG("Nie zapisano lokalizacji: " + (w.bledy[0] || "")); return false; }
   if (g.widok !== "mapa") g.punkty = null;  // mapa wczyta się na nowo
+  g.znane = null; lok.znane = null;  // 📍 znane miejsca — na nowo
   wczytajLata(true).catch(() => {});
   if (!$("pelny").hidden) { narzedziaPelnego(biezacy()); miniMapa(biezacy()); }
   if (cicho) return true;
@@ -1492,6 +1540,10 @@ $("lok-szukaj").oninput = () => {
     }));
   }, 300);
 };
+$("p-tsm").onclick = e => {  // 🕰 to samo miejsce w innych latach
+  e.stopPropagation(); const p = biezacy(); if (!p || p.lat == null) return;
+  zamknijPelny(); znaneMiejsca().then(() => pokazWyniki({typ: "miejsce", lat: p.lat, lon: p.lon, pr: 300}));
+};
 $("p-miejsce").onclick = e => { e.stopPropagation(); const p = biezacy(); if (p) oknoLokalizacji(p); };
 
 // ---------- 🗑 usuwanie: do kosza programu (Odłożone/Usunięte), z cofaniem ----------
@@ -1538,6 +1590,7 @@ function narzedziaPelnego(p) {
   $("p-usun").hidden = !MOZE_USUWAC;
   $("p-miejsce").hidden = !MOZE_USUWAC;
   if (p) $("p-miejsce").textContent = p.lat != null ? "📍 Zmień miejsce" : "📍 Dodaj miejsce";
+  $("p-tsm").hidden = !p || p.lat == null;
   $("p-data").hidden = !MOZE_USUWAC;
   $("p-edytuj").hidden = !MOZE_USUWAC || !trybEdycji() || !p || p.rodzaj !== "zdjecie";
   $("p-typ").hidden = !W_PROGRAMIE || !p || p.rodzaj === "film";  // Typ: 📷 Zdjęcie | 📄 Dokument

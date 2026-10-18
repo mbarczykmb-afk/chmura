@@ -362,6 +362,10 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
 .rok-nagl{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;margin:14px 2px 2px;font-weight:700;font-size:17px}
 .rok-nagl:first-child{margin-top:2px}
 .rok-nagl small{color:var(--mut);font-weight:500;font-size:13px}
+.seg-dnia{display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:var(--pole,rgba(127,127,127,.08));border:1px solid var(--lin)}
+.seg-dnia button{border:0;border-radius:9px;background:none}
+.seg-dnia button.akt{background:var(--akc);color:#fff}
+.seg-dnia .zamk{opacity:.6;padding:0 8px}
 .dzien-nav{display:inline-flex;align-items:center;gap:4px}
 .dzien-nav b{min-width:120px;text-align:center}
 .k .ob .kosz{position:absolute;top:6px;right:6px;z-index:2;width:32px;height:32px;padding:0;border-radius:999px;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:15px;opacity:0;transition:opacity .15s;display:grid;place-items:center}
@@ -428,7 +432,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   <button id="w-foldery" title="Foldery — drzewo katalogów, w których leżą zdjęcia i filmy"><i class="ikl" data-ik="folder"></i><span class="t"> Foldery</span></button>
   <button id="w-osoby" title="Osoby — twarze na zdjęciach, grupowane w osoby (imiona nadajesz Ty)"><i class="ikl" data-ik="osoby"></i><span class="t"> Osoby</span></button>
   <button id="w-serie" title="Serie — kilka ujęć tej samej sceny w ciągu paru sekund; porównaj obok siebie i zostaw najlepsze"><i class="ikl" data-ik="serie"></i><span class="t"> Serie</span></button>
-  <button id="w-dzien" title="Zdjęcia z tego samego dnia w poprzednich latach"><img class="ikn" alt="" src="/ui/ikony_neon/tegodnia.webp"><span class="t"> Tego dnia</span><b class="znaczek" id="dzien-ile" hidden></b></button>
+  <button id="w-dzien" title="Ta sama data w różnych latach albo to samo miejsce w różnym czasie"><img class="ikn" alt="" src="/ui/ikony_neon/tegodnia.webp"><span class="t"> Tego dnia</span><b class="znaczek" id="dzien-ile" hidden></b></button>
   </span>
   <button id="szukaj-btn" title="Szukaj"><img class="ikn" alt="" src="/ui/ikony_neon/szukaj.webp"></button>
   <input id="szukaj" type="search" placeholder="Szukaj: Hel, lipiec 2019, Ania, Włochy, nazwa…" autocomplete="off"
@@ -535,6 +539,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
     </span>
     <span class="grp">
       <button id="p-miejsce" hidden title="Dodaj, zmień albo usuń miejsce zrobienia zdjęcia (L)">📍 Miejsce</button>
+      <button id="p-tsm" hidden title="To samo miejsce w różnym czasie — zdjęcia zrobione tutaj w innych latach">🕰 To samo miejsce</button>
       <button id="p-data" hidden title="Zmień datę zrobienia (zapis w pliku: JPEG — EXIF, inne — plik .xmp obok)">📅 Data</button>
       <button id="p-edytuj" hidden title="Przytnij, obróć, rozjaśnij, popraw kolory (E) — zapis jako kopia albo zamiast oryginału">✏ Edytuj</button>
       <button id="p-seria" hidden title="Porównaj ujęcia z tej serii obok siebie i zostaw najlepsze">🔀 Seria</button>

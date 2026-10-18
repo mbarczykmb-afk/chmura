@@ -81,8 +81,11 @@ def test_zmiana_typu_przenosi_w_bibliotece(tmp_path):
     galeria._FILTR.okno = True
     g = galeria.Galeria(tmp_path / "k.db")
     ids = {p["nazwa"]: p["id"] for p in g.pliki("2024", None)["pliki"]}
+    typ = lambda: {p["nazwa"]: bool(p["dokument"]) for p in g.pliki("2024", None)["pliki"]}  # lista zna typ (przycisk na pasku zaznaczenia)
+    assert typ() == {"d.jpg": True, "z.jpg": False}
     w = g.dokument([ids["d.jpg"]], False)  # dokument → zdjęcie: do istniejącego folderu kwietnia
     assert (bib / "Zdjęcia" / "Zdjęcia z 2024" / "Kwiecień w domu" / "d.jpg").is_file() and len(w["ruchy"]) == 1
+    assert typ() == {"d.jpg": False, "z.jpg": False}
     w2 = g.dokument([ids["z.jpg"]], True)  # zdjęcie → dokument
     assert (bib / "Dokumenty" / "Dokumenty z 2024" / "z.jpg").is_file()
     assert galeria.obsluz_post(g, "/api/g/przenies-z-powrotem", {"ruchy": w["ruchy"] + w2["ruchy"]})["przeniesione"] == 2

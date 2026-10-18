@@ -174,6 +174,8 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.40.0:** 🕰 „Tego dnia” ma dwa tryby: **📅 Ta sama data** (ten sam dzień w różnych latach) i nowy **📍 To samo miejsce** — zdjęcia zrobione w tym samym miejscu w różnych latach, pogrupowane latami („7 lat temu · 2 zdjęcia”). Miejsce wybierasz z listy znanych miejsc (od tych z największej liczby lat), promień ± 100 m / 300 m / 1 km / 5 km. W podglądzie zdjęcia z lokalizacją — przycisk „🕰 To samo miejsce”. Poprawka: na pasku zaznaczenia dla dokumentów jest teraz „📷 Zmień na zdjęcia” (wcześniej zawsze „Zmień na dokumenty”), a w podglądzie dokumentu podświetla się właściwy typ.
+
 **1.39.0:** Zmiana miejsca zdjęcia: w oknie lokalizacji od razu widać „Znane miejsca” — miejscowości (i kraje za granicą), które już są w bibliotece, od najczęstszych, z liczbą zdjęć. Jedno kliknięcie ustawia pinezkę; wpisywanie w wyszukiwarce zawęża też tę listę. Działa również przy zmianie miejsca wielu zaznaczonych zdjęć.
 
 **1.38.1:** Podgląd zdjęcia: obraz nie nachodzi już na pasek narzędzi — mieści się pod nim (także gdy pasek zawija się w wąskim oknie), strzałki ‹ › wyśrodkowane względem obrazu.

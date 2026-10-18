@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 import io
 import json
+import math
 import os
 import re
 import secrets
@@ -56,7 +57,9 @@ _NAZWY_MIES = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "li
                "październik", "listopad", "grudzień"]
 _KOLUMNY = ("rowid id, wzgledna, rodzaj, data, lat, lon, rozmiar, "  # + 🗂 albumy, w których jest zdjęcie (znaczek na miniaturze)
             "(SELECT group_concat(n.nazwa, ' · ') FROM g_album_pliki a JOIN g_albumy n ON n.id = a.album "
-            "WHERE a.sciezka = pliki.sciezka) albumy")
+            "WHERE a.sciezka = pliki.sciezka) albumy, "  # 📄 dokument: Twoja decyzja albo folder „Dokumenty…”
+            "(rodzaj = 'zdjecie' AND coalesce((SELECT d.dokument FROM decyzje_dok d WHERE d.sciezka = pliki.sciezka), "
+            "lower(wzgledna) LIKE '%dokument%')) dokument")
 _PORY = {"rano": (5, 11), "dzien": (11, 17), "wieczor": (17, 22), "noc": (22, 5)}  # 🕐 godziny [od, do)
 _UKR: dict = {}  # baza → (ukrywanie włączone, id ukrytych albumów) — wspólne dla wszystkich galerii tej bazy
 
@@ -64,6 +67,17 @@ _UKR: dict = {}  # baza → (ukrywanie włączone, id ukrytych albumów) — wsp
 def _nazwa(r: dict) -> dict:
     r["nazwa"] = re.split(r"[\\/]", r.pop("wzgledna"))[-1]
     return r
+
+
+def _nazwa_miejsca(etyk: str) -> str:
+    """„Kraków”; za granicą — nazwa kraju („Włochy”)."""
+    from . import miejsca
+    if not etyk.startswith("@"):
+        return etyk
+    for nazwa, kod in miejsca.KRAJE_NAZWY.items():
+        if kod == etyk[1:]:
+            return nazwa[:1].upper() + nazwa[1:]
+    return miejsca.fraza(etyk)
 
 
 class Galeria:
@@ -86,6 +100,7 @@ class Galeria:
             if "ukryty" not in {r[1] for r in db.execute("PRAGMA table_info(g_albumy)")}:  # od 1.35: 🙈 ukryte albumy
                 db.execute("ALTER TABLE g_albumy ADD COLUMN ukryty INTEGER NOT NULL DEFAULT 0")
             db.execute("CREATE TABLE IF NOT EXISTS g_ustawienia (klucz TEXT PRIMARY KEY, wartosc TEXT)")
+            db.execute("CREATE TABLE IF NOT EXISTS decyzje_dok (sciezka TEXT PRIMARY KEY, dokument INTEGER NOT NULL)")
             for t in ("g_ulubione", "g_album_pliki"):  # od 1.9.3: nazwa|rozmiar|data — odnajdywanie po przeniesieniu
                 if "klucz" not in {r[1] for r in db.execute(f"PRAGMA table_info({t})")}:
                     db.execute(f"ALTER TABLE {t} ADD COLUMN klucz TEXT")
@@ -297,37 +312,58 @@ class Galeria:
 
     def znane_miejsca(self, ile: int = 60) -> dict:
         """Miejsca, które już są w bibliotece (zdjęcia z GPS) — do szybkiego wyboru przy ustawianiu lokalizacji.
-        W Polsce — miejscowość, za granicą — okolica ~10 km w danym kraju; punkt = najczęstsze miejsce w grupie."""
+        W Polsce — miejscowość, za granicą — okolica ~10 km w danym kraju; punkt = najczęstsze miejsce w grupie.
+        `lat` = z ilu różnych lat są zdjęcia (do „to samo miejsce w różnym czasie”)."""
         from . import miejsca
         w, arg = self._warunek()
         db = self._db()
         try:
             komorki = db.execute(
-                f"""SELECT round(lat, 3), round(lon, 3), COUNT(*), MAX(data) FROM pliki
-                    WHERE rodzaj IN ('zdjecie','film') AND lat IS NOT NULL AND lon IS NOT NULL {w}
+                f"""SELECT round(lat, 3), round(lon, 3), COUNT(*), MAX(data), group_concat(DISTINCT substr(data, 1, 4))
+                    FROM pliki WHERE rodzaj IN ('zdjecie','film') AND lat IS NOT NULL AND lon IS NOT NULL {w}
                     GROUP BY 1, 2""", arg).fetchall()
         finally:
             db.close()
-        kraje = {}
-        for nazwa, kod in miejsca.KRAJE_NAZWY.items():
-            kraje.setdefault(kod, nazwa[:1].upper() + nazwa[1:])
         grupy = {}
-        for la, lo, n, data in komorki:
+        for la, lo, n, data, lata in komorki:
             et = miejsca.etykieta(la, lo)
             klucz = (et, round(la, 1), round(lo, 1)) if et.startswith("@") else (et,)
-            gr = grupy.setdefault(klucz, {"n": 0, "data": "", "naj": (0, la, lo)})
+            gr = grupy.setdefault(klucz, {"n": 0, "data": "", "naj": (0, la, lo), "lata": set()})
             gr["n"] += n
             gr["data"] = max(gr["data"], data or "")
+            gr["lata"].update((lata or "").split(","))
             if n > gr["naj"][0]:
                 gr["naj"] = (n, la, lo)
-        wynik = []
-        for klucz, gr in grupy.items():
-            et = klucz[0]
-            nazwa = (kraje.get(et[1:]) or miejsca.fraza(et)) if et.startswith("@") else et
-            wynik.append({"nazwa": nazwa, "lat": gr["naj"][1], "lon": gr["naj"][2], "n": gr["n"],
-                          "data": gr["data"][:10]})
+        wynik = [{"nazwa": _nazwa_miejsca(klucz[0]), "lat": gr["naj"][1], "lon": gr["naj"][2], "n": gr["n"],
+                  "data": gr["data"][:10], "lat_n": len(gr["lata"] - {""})} for klucz, gr in grupy.items()]
         wynik.sort(key=lambda x: (-x["n"], x["nazwa"]))
         return {"miejsca": wynik[:ile]}
+
+    def to_samo_miejsce(self, lat: float, lon: float, r: int = 300) -> dict:
+        """📍🕰 Zdjęcia i filmy z tego samego miejsca (w promieniu `r` metrów) — od najnowszych, pogrupowane latami."""
+        from . import miejsca
+        r = max(50, min(int(r or 300), 20000))
+        dla = r / 111200
+        dlo = dla / max(math.cos(math.radians(lat)), 0.05)
+        w, arg = self._warunek()
+        teraz = time.strftime("%Y")
+        db = self._db()
+        try:
+            wiersze = [dict(x) for x in db.execute(
+                f"""SELECT {_KOLUMNY} FROM pliki WHERE rodzaj IN ('zdjecie','film') AND data IS NOT NULL
+                    AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? {w}
+                    ORDER BY substr(data, 1, 4) {self._kier('nowe')}, data LIMIT 5000""",
+                [lat - dla, lat + dla, lon - dlo, lon + dlo] + arg)]
+        finally:
+            db.close()
+        wiersze = [x for x in wiersze if miejsca._odl(lat, lon, x["lat"], x["lon"]) * 1000 <= r]
+        lata: dict[str, int] = {}
+        for x in wiersze:
+            lata[x["data"][:4]] = lata.get(x["data"][:4], 0) + 1
+        return {"lat": lat, "lon": lon, "r": r, "nazwa": _nazwa_miejsca(miejsca.etykieta(lat, lon)),
+                "razem": len(wiersze),
+                "lata": [{"rok": k, "n": v, "lat_temu": int(teraz) - int(k)} for k, v in lata.items()],
+                "pliki": [_nazwa(x) for x in wiersze]}
 
     def _wiersz(self, id_: int):
         w, arg = self._warunek(ukryte=not getattr(_FILTR, "okno", False))
@@ -1383,7 +1419,7 @@ def wyslij_zip(h: BaseHTTPRequestHandler, sciezki: list[str], nazwa: str) -> Non
 
 _FILTR = threading.local()
 _LISTY = ("/api/g/lata", "/api/g/pliki", "/api/g/szukaj", "/api/g/tego-dnia", "/api/g/kolekcja", "/api/g/mapa",
-          "/api/g/osoba", "/api/g/foldery", "/api/g/folder", "/api/g/serie")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
+          "/api/g/osoba", "/api/g/foldery", "/api/g/folder", "/api/g/serie", "/api/g/to-samo-miejsce")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
 
 
 def biblioteka_pliku(sciezka: str) -> str | None:
@@ -1545,6 +1581,12 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
         return {"miejsca": [{"nazwa": n, "lat": la, "lon": lo} for la, lo, n in (w or {}).get("pl", [])[:8]]}, None
     if sciezka == "/api/g/znane-miejsca":
         return g.znane_miejsca(min(i("ile", 60), 300)), None
+    if sciezka == "/api/g/to-samo-miejsce":
+        try:
+            la, lo = float(q.get("lat", [""])[0]), float(q.get("lon", [""])[0])
+        except ValueError:
+            return {"blad": "Nieprawidłowe współrzędne."}, None
+        return g.to_samo_miejsce(la, lo, i("pr", 300)), None
     if sciezka == "/api/g/tego-dnia":
         return g.tego_dnia(q.get("md", [""])[0], i("dni")), None
     if sciezka == "/api/g/albumy":
