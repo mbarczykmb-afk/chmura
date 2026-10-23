@@ -409,6 +409,13 @@ body.galeria-otwarta .baner:not([hidden]){position:fixed;top:var(--nag,0px);left
   width:min(920px,calc(100vw - 24px));border:1px solid var(--akc);border-radius:0 0 14px 14px;box-shadow:0 12px 40px rgba(0,0,0,.35);background:var(--panel)}
 #biblioteka-btn.akt{background:var(--akc-miekki,var(--panel));border-color:var(--akc);color:var(--fg)}
 #galeria-nakladka iframe{border:0;width:100%;height:100%;display:block}
+#galeria-nakladka:not([hidden]){display:flex;flex-direction:column}
+#galeria-nakladka iframe{flex:1;min-height:0;height:auto}
+#zdalna-pasek{display:flex;align-items:center;gap:10px;padding:7px 14px;font-size:13.5px;border-bottom:1px solid var(--lin);
+  background:color-mix(in srgb,var(--akc) 10%,var(--panel))}
+#zdalna-pasek b{color:var(--akc)}
+#zdalna-pasek .info{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#zdalna-pasek button{padding:4px 12px}
 #biblioteka-btn{font-weight:600}
 /* --- pasek bieżącego zadania (zawsze widoczny u góry) --- */
 .pz{margin:0 24px 10px;padding:10px 14px;border-radius:10px;background:var(--akc-miekki);border:1px solid color-mix(in srgb,var(--akc) 30%,transparent);display:grid;grid-template-columns:1fr auto;gap:4px 16px;align-items:center}
@@ -618,6 +625,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
   </nav>
   <button class="projekt-btn" id="projekt-btn" title="Zmień projekt"><i class="ikl" data-ik="folder"></i> <span id="projekt-nazwa">…</span> ▾</button>
   <span class="odstep"></span>
+  <button id="zdalna-btn" hidden title="Biblioteka zdjęć w domu — przez most, bez VPN-u (tylko oglądanie)"><span>🌍</span><span class="t"> Dom</span></button>
   <button id="biblioteka-btn" class="tylko-porz" title="Przeglądaj bibliotekę: oś czasu i mapa miejsc; także na telefonie"><i class="ikl" data-ik="biblioteka"></i><span class="t"> Biblioteka</span></button>
   <button id="kosz-btn" title="Kosz: odłożone i usunięte pliki (folder Odłożone) — przywróć albo opróżnij"><i class="ikl" data-ik="kosz"></i><span class="kosz-licz" id="kosz-licz" hidden></span></button>
   <button id="telefon-btn" title="Telefon jako pilot: co robi program, uruchamianie kolejnych kroków, przeglądanie zdjęć"><i class="ikl" data-ik="telefon"></i></button>
@@ -654,7 +662,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
   <div class="krok klik" id="k4"><b>4</b>Porządkowanie</div>
 </nav>
 
-<div id="galeria-nakladka" hidden><iframe id="galeria-ramka" title="Biblioteka" allow="fullscreen" allowfullscreen></iframe></div>
+<div id="galeria-nakladka" hidden><div id="zdalna-pasek" hidden><b>🌍 Biblioteka w domu</b><span class="info" id="zdalna-opis">zdalnie, tylko oglądanie</span><button id="zdalna-odswiez" title="Wczytaj jeszcze raz">⟳</button><button id="zdalna-zamknij" title="Wróć do tego komputera">✕ Zamknij</button></div><iframe id="galeria-ramka" title="Biblioteka" allow="fullscreen" allowfullscreen></iframe></div>
 
 <div class="pz" id="pz" hidden>
   <div class="pz-tyt" id="pz-tyt"></div>
@@ -1226,18 +1234,35 @@ $("nagl-schowaj").onclick = () => ustawNaglowek(true);
 $("nagl-pokaz").onclick = () => ustawNaglowek(false);
 window.addEventListener("resize", wysokoscNaglowka);
 function zamknijGalerie() {
-  $("galeria-nakladka").hidden = true; $("galeria-ramka").src = "about:blank";
+  $("galeria-nakladka").hidden = true; $("galeria-ramka").src = "about:blank"; $("zdalna-pasek").hidden = true;
+  $("zdalna-btn").classList.remove("akt");
   document.body.classList.remove("galeria-otwarta"); $("biblioteka-btn").classList.remove("akt"); wysokoscNaglowka();
 }
 function otworzGalerie(z) {
   window.scrollTo(0, 0); document.body.classList.add("galeria-otwarta"); wysokoscNaglowka();
   $("galeria-ramka").src = `/galeria?t=${encodeURIComponent(TOKEN)}&app=1&z=${z}`;
+  $("zdalna-pasek").hidden = true; $("zdalna-btn").classList.remove("akt");
   $("galeria-nakladka").hidden = false;
   $("biblioteka-btn").classList.toggle("akt", z !== "przegladarka");  // widać, który moduł jest otwarty
 }
 // przed porządkowaniem biblioteka bywa pusta
 $("biblioteka-btn").onclick = () => otworzGalerie(stan.wykonanie ? "biblioteka" : "wszystko");
 $("przegladarka-btn").onclick = () => otworzGalerie("przegladarka");
+// 🌍 zdalna biblioteka (komputer w pracy): Przeglądarka z domu przez most — w tym samym miejscu, z paskiem powrotu
+let zdalnaLink = "";
+function otworzZdalna(link = zdalnaLink) {
+  if (!link) { otworzUstawienia(); return; }
+  window.scrollTo(0, 0); document.body.classList.add("galeria-otwarta"); wysokoscNaglowka();
+  $("galeria-ramka").src = link;
+  $("zdalna-opis").textContent = "zdalnie, tylko oglądanie · " + link.replace(/^https:\/\//, "").replace(/\/?#.*$/, "");
+  $("zdalna-pasek").hidden = false; $("galeria-nakladka").hidden = false;
+  $("biblioteka-btn").classList.remove("akt"); $("zdalna-btn").classList.add("akt");
+}
+function ustawZdalna(link) { zdalnaLink = link || ""; $("zdalna-btn").hidden = !zdalnaLink; }
+api("/api/zdalna").then(d => ustawZdalna(d.zdalna)).catch(() => {});
+$("zdalna-btn").onclick = () => otworzZdalna();
+$("zdalna-zamknij").onclick = zamknijGalerie;
+$("zdalna-odswiez").onclick = () => otworzZdalna();
 $("telefon-btn").onclick = () => { otworzGalerie(stan.wykonanie ? "biblioteka" : "wszystko"); $("galeria-ramka").src += "&tel=1"; };
 window.addEventListener("message", e => {
   if (e.data === "zamknij-galerie") zamknijGalerie();

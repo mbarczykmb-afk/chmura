@@ -41,7 +41,7 @@ async function rysujUstawienia() {
 
   // 🏠 co otwiera się po uruchomieniu
   const segS = el("span", {className: "seg"});
-  for (const [m, n] of [["przegladarka", "🔭 Przeglądarka"], ["wybor", "Ekran wyboru"]]) {
+  for (const [m, n] of [["przegladarka", "🔭 Przeglądarka"], ["wybor", "Ekran wyboru"], ...(d.zdalna ? [["zdalna", "🌍 Biblioteka w domu"]] : [])]) {
     segS.append(przyc(n, () => { try { localStorage.setItem("kat_start", m); } catch (e) { /* bez pamięci */ } rysujUstawienia(); },
                       trybStartu() === m ? "akt" : ""));
   }
@@ -72,6 +72,9 @@ async function rysujUstawienia() {
              const n = await oknoWpisz("Twój PIN (4–12 cyfr) — zapamiętany na stałe.\nPuste = losowy przy każdym włączeniu.", "");
              if (n !== null) telefonUst({wlacz: true, pin: n.trim()}).catch(e => toast(e.message));
            }))));
+
+  // 🌍 most do domu (ten komputer w domu) i zdalna biblioteka (komputer w pracy)
+  t.append(sekcjaMostu(d.most), sekcjaZdalnej(d.zdalna));
 
   // 🔭 Przeglądarka
   const godz = el("select", {}, ...[1, 3, 6, 12, 24].map(h => el("option", {value: h, textContent: `co ${h} h`, selected: +d.przegladarka.co_godzin === h})));
@@ -157,3 +160,65 @@ naStan.push(() => {
   if (ust.trwalo && !trwa && !$("okno-ust").hidden) rysujUstawienia();
   ust.trwalo = trwa;
 });
+
+// ---------- 🌍 most do domu: zdalna Przeglądarka bez VPN-u na komputerze w pracy ----------
+const kopiujTekst = async (tekst, co) => {
+  try { await navigator.clipboard.writeText(tekst); toast("Skopiowano " + co + "."); }
+  catch (e) { await oknoWpisz("Skopiuj " + co + " (Ctrl+C):", tekst); }
+};
+function sekcjaMostu(m) {
+  const s = sekcja("🌍 Most do domu — przeglądanie z pracy bez VPN-u");
+  s.append(el("div", {className: "info", innerHTML: "Na innym komputerze (np. w pracy) otworzysz swoją bibliotekę jak tutaj — <b>bez Tailscale i bez VPN-u " +
+    "na tamtym komputerze</b>. Ten komputer wystawia samą Przeglądarkę pod stałym adresem <code>https://….ts.net</code> " +
+    "(Tailscale Funnel). Wejście tylko z długim kluczem, <b>tylko do oglądania</b> — bez usuwania, pilota i pełnego programu. " +
+    "Ten komputer musi być włączony."}));
+  if (!m.tailscale && !m.wlaczony) {
+    s.append(wiersz(el("span", {className: "info"}, "Potrzebny jest Tailscale na tym komputerze (tylko tutaj, w domu): ",
+                       el("code", {textContent: "tailscale.com/download"}))));
+    return s;
+  }
+  const wynik = el("div", {className: "info"});
+  const wlacz = async (zmiany) => {
+    wynik.textContent = "Chwilę…";
+    let w;
+    try { w = await api("/api/most", zmiany); } catch (e) { wynik.textContent = e.message; return; }
+    if (w.blad) {
+      wynik.replaceChildren(el("b", {className: "zle", textContent: w.blad}));
+      if (w.link) wynik.append(" ", el("code", {textContent: w.link}), " ", przyc("Kopiuj link", () => kopiujTekst(w.link, "link")));
+      if (w.link) try { window.open(w.link, "_blank"); } catch (e) { /* okno programu bez nowych kart */ }
+      return;
+    }
+    rysujUstawienia();
+  };
+  if (m.wlaczony) {
+    s.append(
+      wiersz(el("span", {className: "info"}, "Adres: ", el("code", {textContent: m.adres}))),
+      wiersz(el("span", {className: "info"}, "Klucz: ", el("code", {textContent: m.klucz})), przyc("Kopiuj klucz", () => kopiujTekst(m.klucz, "klucz"))),
+      wiersz(el("span", {className: "info", innerHTML: "<b>Link do komputera w pracy</b> (adres z kluczem) — wklej go tam w ⚙ Ustawienia → 🌍 Zdalna biblioteka " +
+                                                          "albo otwórz w dowolnej przeglądarce:"})),
+      wiersz(el("code", {textContent: m.link, style: "overflow-wrap:anywhere"}), przyc("Kopiuj link", () => kopiujTekst(m.link, "link"), "glowny")),
+      wiersz(przyc("Nowy klucz", async () => {
+               if (await oknoTak("Utworzyć nowy klucz mostu?\n\nKomputery, które łączyły się starym kluczem, trzeba będzie połączyć od nowa (nowym linkiem)."))
+                 wlacz({wlacz: true, nowy_klucz: true});
+             }, "", "Gdy klucz trafił do niewłaściwej osoby"),
+             przyc("Wyłącz most", () => wlacz({wlacz: false}))),
+      wynik);
+  } else {
+    s.append(wiersz(el("span", {className: "info", textContent: "Wyłączony."}), przyc("Włącz most", () => wlacz({wlacz: true}), "glowny")), wynik);
+  }
+  return s;
+}
+function sekcjaZdalnej(link) {
+  const s = sekcja("🌍 Zdalna biblioteka (na komputerze poza domem)");
+  s.append(el("div", {className: "info", textContent: "Tu wklej link mostu skopiowany z Katalogatora w domu. Biblioteka otworzy się przyciskiem 🌍 Dom " +
+    "u góry okna (albo od razu po uruchomieniu — wybierz to w „Po uruchomieniu”)."}));
+  const pole = el("input", {type: "text", id: "zdalna-link", value: link || "", placeholder: "https://komputer.tailxxxx.ts.net/#k=…", style: "flex:1;min-width:0"});
+  const zapisz = async v => {
+    try { const w = await api("/api/zdalna", {link: v}); ustawZdalna(w.zdalna); toast(w.zdalna ? "Zapisano link do biblioteki w domu." : "Usunięto link."); rysujUstawienia(); }
+    catch (e) { toast(e.message); }
+  };
+  s.append(wiersz(pole, przyc("Zapisz", () => zapisz(pole.value.trim()), "glowny")));
+  if (link) s.append(wiersz(przyc("🌍 Otwórz bibliotekę w domu", () => { $("okno-ust").hidden = true; otworzZdalna(link); }),
+                            przyc("Usuń link", () => zapisz(""))));
+  return s;
+}

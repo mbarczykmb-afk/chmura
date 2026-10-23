@@ -1759,6 +1759,10 @@ def adresy_ip() -> list[str]:
     return sorted(wynik, key=lambda a: (not a.startswith(("192.168.", "10.", "172.")), not a.startswith("100.")))
 
 
+def _normalizuj_klucz(k: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (k or "").lower())
+
+
 def losowy_pin() -> str:
     return f"{secrets.randbelow(10**6):06d}"
 
@@ -1791,6 +1795,11 @@ class SerwerGalerii:
         self.pin = pin or losowy_pin()
         self.tokeny: set[str] = set()
         self.staly_token = staly_token  # przy własnym PIN-ie: telefon zostaje zalogowany po restarcie programu
+        # 🌍 most do domu (Tailscale Funnel): wejście tylko długim kluczem, osobne tokeny, domyślnie tylko oglądanie
+        self.klucz_mostu: str | None = None
+        self.staly_most: str | None = None
+        self.tokeny_most: set[str] = set()
+        self.most_zmiany = False
         self.nieudane: dict[str, list[float]] = {}
         self.serwer = ThreadingHTTPServer((host, port), self._handler())
         self.serwer.daemon_threads = True
@@ -1829,8 +1838,39 @@ class SerwerGalerii:
                 self.end_headers()
                 self.wfile.write(dane)
 
+            def _z_mostu(self) -> bool:
+                """Zapytanie z internetu przez most (Tailscale Funnel / Serve): adres *.ts.net albo pośrednik na
+                tym komputerze. Sam PIN tu nie wystarcza — potrzebny klucz mostu."""
+                host = (self.headers.get("Host") or "").split(":")[0].lower()
+                if host.endswith(".ts.net"):
+                    return True
+                return self.client_address[0] in ("127.0.0.1", "::1") and bool(
+                    self.headers.get("X-Forwarded-For") or self.headers.get("Tailscale-Funnel-Request"))
+
             def _znany(self, t) -> bool:
-                return bool(t) and (t in s.tokeny or bool(s.staly_token) and secrets.compare_digest(t, s.staly_token))
+                if not t:
+                    return False
+                if self._z_mostu():
+                    return bool(s.klucz_mostu) and (t in s.tokeny_most or bool(s.staly_most) and
+                                                    secrets.compare_digest(t, s.staly_most))
+                return t in s.tokeny or bool(s.staly_token) and secrets.compare_digest(t, s.staly_token)
+
+            def _most_zabronione(self, u) -> bool:
+                """Przez most: tylko Przeglądarka do oglądania (bez pilota, pełnego programu i zmian)."""
+                if not self._z_mostu():
+                    return False
+                if not s.klucz_mostu:
+                    self._wyslij({"blad": "Most do domu jest wyłączony."}, kod=HTTPStatus.FORBIDDEN)
+                    return True
+                if s.most_zmiany:
+                    return False
+                if self.command == "POST":
+                    ok = u.path in ("/api/g/zaloguj", "/api/g/zip")
+                else:
+                    ok = u.path in ("/", "/galeria") or u.path.startswith(("/ui/", "/api/g/", "/a/"))
+                if not ok:
+                    self._wyslij({"blad": "Przez most do domu można tylko oglądać zdjęcia."}, kod=HTTPStatus.FORBIDDEN)
+                return not ok
 
             def _sesja(self) -> str:
                 """Ciasteczko sesji z logowania PIN-em — pełny program przez przeglądarkę telefonu (obrazki, filmy)."""
@@ -1963,6 +2003,10 @@ class SerwerGalerii:
             def do_GET(self):
                 u = urlparse(self.path)
                 q = parse_qs(u.query)
+                if self._most_zabronione(u):
+                    return None
+                if u.path == "/" and self._z_mostu():  # zdalnie: od razu Przeglądarka (bez pilota)
+                    return self._wyslij((UI / "galeria.html").read_bytes(), "text/html; charset=utf-8")
                 if u.path.startswith("/a/"):
                     return self._album(u, q)
                 if u.path == "/program":  # 🖥 pełny program (duplikaty, dokumenty, drzewo…) — po PIN-ie
@@ -2009,6 +2053,8 @@ class SerwerGalerii:
 
             def do_POST(self):
                 u = urlparse(self.path)
+                if self._most_zabronione(u):
+                    return None
                 if u.path.startswith("/api/pilot/") and s.pilot is not None:
                     if not self._ok(parse_qs(u.query)):
                         return self._wyslij({"blad": "Podaj PIN"}, kod=HTTPStatus.UNAUTHORIZED)
@@ -2059,7 +2105,8 @@ class SerwerGalerii:
                     if s.pilot is not None and self._ok(parse_qs(u.query)):
                         return self._przekaz()  # pełny program: zapisy, decyzje, odkładanie…
                     return self._wyslij(None)
-                ip = self.client_address[0]
+                most = self._z_mostu()
+                ip = "most" if most else self.client_address[0]  # przez most wszyscy przychodzą z 127.0.0.1
                 teraz = time.time()
                 proby = [t for t in s.nieudane.get(ip, []) if teraz - t < 300]
                 if len(proby) >= 8:
@@ -2069,9 +2116,14 @@ class SerwerGalerii:
                     pin = str(json.loads(self.rfile.read(min(n, 1000)) or b"{}").get("pin", "")).strip()
                 except (ValueError, AttributeError):
                     pin = ""
-                if pin and secrets.compare_digest(pin, s.pin):
-                    t = s.staly_token or secrets.token_urlsafe(24)
-                    s.tokeny.add(t)
+                if most:  # przez most tylko klucz mostu — krótki PIN telefonu nie wystarcza w internecie
+                    dobry = bool(pin and s.klucz_mostu) and secrets.compare_digest(
+                        _normalizuj_klucz(pin), _normalizuj_klucz(s.klucz_mostu))
+                else:
+                    dobry = bool(pin) and secrets.compare_digest(pin, s.pin)
+                if dobry:
+                    t = (s.staly_most if most else s.staly_token) or secrets.token_urlsafe(24)
+                    (s.tokeny_most if most else s.tokeny).add(t)
                     dane = json.dumps({"t": t}).encode()
                     self.send_response(HTTPStatus.OK)
                     self._ciasteczko(t)
@@ -2082,7 +2134,7 @@ class SerwerGalerii:
                     return
                 time.sleep(1)
                 s.nieudane[ip] = proby + [teraz]
-                return self._wyslij({"blad": "Zły PIN"}, kod=HTTPStatus.UNAUTHORIZED)
+                return self._wyslij({"blad": "Zły klucz mostu" if most else "Zły PIN"}, kod=HTTPStatus.UNAUTHORIZED)
         return H
 
 

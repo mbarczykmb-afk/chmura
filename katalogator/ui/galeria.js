@@ -2097,4 +2097,22 @@ async function start() {
   }
   catch (e) { if (e.message !== "Podaj PIN") $("siatka").innerHTML = `<div class="pusto">${e.message}</div>`; }
 }
-start();
+// 🌍 most do domu (adres *.ts.net): zamiast PIN-u telefonu — klucz mostu; link „…/#k=KLUCZ” loguje od razu
+// (część po # nie trafia do serwera ani do historii adresów — po zalogowaniu znika też z paska)
+if (/\.ts\.net$/i.test(location.hostname)) {
+  const pin = $("pin"); pin.inputMode = "text"; pin.maxLength = 40; pin.placeholder = "Klucz mostu, np. k7pq2-9hm4x-…";
+  pin.autocomplete = "off";
+  $("login").querySelector(".info").textContent = "Podaj klucz mostu z Katalogatora w domu (⚙ Ustawienia → 🌍 Most do domu).";
+}
+(async () => {
+  const k = new URLSearchParams(location.hash.slice(1)).get("k");
+  if (k && !W_PROGRAMIE) {
+    history.replaceState(null, "", location.pathname + location.search);
+    try {
+      const r = await fetch("/api/g/zaloguj", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({pin: k})});
+      const j = await r.json();
+      if (r.ok && j.t) { TOKEN = j.t; try { localStorage.setItem(KLUCZ, TOKEN); } catch (e) { /* prywatne okno */ } }
+    } catch (e) { /* nie ma połączenia — pokaże się logowanie */ }
+  }
+  start();
+})();

@@ -110,6 +110,19 @@ kosz programu, kopia zapasowa, a na końcu cały dysk / pendrive (Windows File R
 widzi postęp prac, może uruchamiać kroki projektu i przeglądać bibliotekę. Ukryte albumy (np. „Praca”) na telefonie
 się nie pokazują. Działa, dopóki Katalogator jest otwarty.</p>`},
 
+  {id: "most", ik: "🌍", tyt: "Most do domu (praca)", tresc: `
+<p>Biblioteka z domu na innym komputerze, np. w pracy — <b>bez Tailscale i bez VPN-u na tamtym komputerze</b>.</p>
+<ol>
+  <li><b>W domu</b>: ⚙ Ustawienia → <b>🌍 Most do domu → Włącz most</b>. Potrzebny jest Tailscale na komputerze w domu.
+  Za pierwszym razem Tailscale poprosi o zgodę na Funnel (link w okienku) — zatwierdź i kliknij „Włącz most” jeszcze raz.</li>
+  <li>Skopiuj <b>link</b> (adres <code>https://….ts.net/#k=…</code> z kluczem).</li>
+  <li><b>W pracy</b>: Katalogator → ⚙ Ustawienia → <b>🌍 Zdalna biblioteka</b> → wklej link → Zapisz. Biblioteka otwiera się
+  przyciskiem <b>🌍 Dom</b> u góry (albo od razu po starcie — „Po uruchomieniu: 🌍 Biblioteka w domu”).
+  Link działa też w zwykłej przeglądarce, bez instalowania czegokolwiek.</li>
+</ol>
+<p>Przez most można <b>tylko oglądać</b> — bez usuwania, pilota i pełnego programu. Wejście tylko z kluczem (PIN telefonu
+nie działa). Gdy klucz trafi do niewłaściwej osoby: <b>Nowy klucz</b>. Komputer w domu musi być włączony.</p>`},
+
   {id: "klawisze", ik: "⌨", tyt: "Skróty klawiszy", tresc: `
 <table class="pm-tab">
 <tr><th colspan="2">Wszędzie</th></tr>

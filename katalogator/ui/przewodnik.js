@@ -257,8 +257,11 @@ naStan.push(() => {
 // ---------- start: Przeglądarka (główna część programu) albo ekran wyboru — do ustawienia w ⚙ ----------
 function trybStartu() { try { return localStorage.getItem("kat_start") || "przegladarka"; } catch (e) { return "przegladarka"; } }
 function startProgramu() {
+  const przegladarka = () => document.querySelector('.tryby button[data-tryb="przegladarka"]').click();
   if (trybStartu() === "wybor") pokazWyborTrybu();
-  else document.querySelector('.tryby button[data-tryb="przegladarka"]').click();
+  else if (trybStartu() === "zdalna")  // komputer w pracy: od razu biblioteka z domu (przez most)
+    api("/api/zdalna").then(d => { if (d.zdalna) { ustawZdalna(d.zdalna); otworzZdalna(d.zdalna); } else przegladarka(); }).catch(przegladarka);
+  else przegladarka();
 }
 
 // ---------- ekran startowy: trzy duże kafelki — czym się dziś zajmujemy ----------

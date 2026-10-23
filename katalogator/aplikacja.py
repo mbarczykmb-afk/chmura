@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import shutil
 import sqlite3
@@ -23,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, naprawa, odzyskiwanie, pilot, planista, projekty, przegladarka,
+from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, most, naprawa, odzyskiwanie, pilot, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, twarze, usuwanie, wykonawca, wysylanie)
 from .logi import LOG
 
@@ -118,6 +119,9 @@ class Stan:
                 self.serwer_tel = None
             if not wlacz:
                 aktualizacje.zapisz_ustawienia(self.katalog, telefon_auto=None)
+                if ust.get("most_auto"):  # bez serwera telefonu most nie ma dokąd prowadzić
+                    most.wylacz()
+                    aktualizacje.zapisz_ustawienia(self.katalog, most_auto=False)
                 return {"wlaczone": False}
             for port in (8765, 8766, 8767, 0):
                 try:
@@ -128,6 +132,8 @@ class Stan:
                 except OSError:
                     continue
             s = self.serwer_tel
+            if ust.get("most_auto"):
+                self._most_na_serwerze(s, True)
         LOG.info("Udostępnianie na telefon: %s", s.adresy())
         aktualizacje.zapisz_ustawienia(self.katalog, telefon_auto={"zakres": zakres, "sterowanie": sterowanie})
         return self._tel_info(s, sterowanie, wlasny)
@@ -136,6 +142,75 @@ class Stan:
     def _tel_info(s, sterowanie: bool, wlasny) -> dict:
         return {"wlaczone": True, "pin": s.pin, "wlasny_pin": bool(wlasny), "adresy": s.adresy(), "port": s.port,
                 "sterowanie": sterowanie, "autostart": autostart(), "autostart_mozliwy": autostart_mozliwy()}
+
+    # --- 🌍 most do domu: zdalna Przeglądarka przez Tailscale Funnel (bez VPN-u na komputerze w pracy) ----------
+    def _most_klucz(self, nowy: bool = False) -> str:
+        k = aktualizacje._ustawienia(self.katalog).get("most_klucz")
+        if nowy or not k:
+            k = most.nowy_klucz()
+            aktualizacje.zapisz_ustawienia(self.katalog, most_klucz=k)
+        return k
+
+    def _most_na_serwerze(self, s, wlacz: bool) -> None:
+        if s is None:
+            return
+        if not wlacz:
+            s.klucz_mostu = s.staly_most = None
+            s.tokeny_most.clear()
+            return
+        k = self._most_klucz()
+        sekret = aktualizacje._ustawienia(self.katalog).get("sekret_telefonu")
+        if not sekret:
+            sekret = secrets.token_hex(16)
+            aktualizacje.zapisz_ustawienia(self.katalog, sekret_telefonu=sekret)
+        if s.klucz_mostu != k:
+            s.tokeny_most.clear()
+        s.klucz_mostu = k
+        # stały token mostu: komputer w pracy zostaje zalogowany po restarcie programu w domu (do zmiany klucza)
+        s.staly_most = hmac.new(sekret.encode(), ("most:" + k).encode(), hashlib.sha256).hexdigest()
+
+    def most(self, wlacz: bool, nowy_klucz: bool = False) -> dict:
+        if not wlacz:
+            w = most.wylacz()
+            self._most_na_serwerze(self.serwer_tel, False)
+            aktualizacje.zapisz_ustawienia(self.katalog, most_auto=False)
+            LOG.info("Most do domu wyłączony")
+            return {**self.most_info(), **({"blad": w["blad"]} if "blad" in w else {})}
+        gotowe = most.sprawdz()
+        if "blad" in gotowe:
+            return gotowe
+        if self.serwer_tel is None:  # most prowadzi do serwera Przeglądarki — tego samego, co dla telefonu
+            ust = aktualizacje._ustawienia(self.katalog)
+            tel = ust.get("telefon_auto") if isinstance(ust.get("telefon_auto"), dict) else {}
+            w = self.telefon(True, "biblioteka", bool(tel.get("sterowanie", True)))
+            if "blad" in w:
+                return w
+        if nowy_klucz:
+            self._most_klucz(nowy=True)
+        w = most.wlacz(self.serwer_tel.port)
+        if "blad" in w:
+            return w
+        self._most_na_serwerze(self.serwer_tel, True)
+        aktualizacje.zapisz_ustawienia(self.katalog, most_auto=True, most_adres=w["adres"])
+        LOG.info("Most do domu włączony: %s", w["adres"])
+        return self.most_info()
+
+    def most_info(self) -> dict:
+        ust = aktualizacje._ustawienia(self.katalog)
+        s = self.serwer_tel
+        wl = bool(ust.get("most_auto")) and s is not None and bool(s.klucz_mostu)
+        adres, k = ust.get("most_adres") or "", ust.get("most_klucz") or ""
+        return {"wlaczony": wl, "adres": adres if wl else "", "klucz": k if wl else "",
+                "link": f"{adres}#k={k}" if wl and adres else "", "tailscale": bool(most.tailscale())}
+
+    def most_po_starcie(self) -> None:
+        if aktualizacje._ustawienia(self.katalog).get("most_auto") and self.serwer_tel is not None:
+            try:
+                w = most.wlacz(self.serwer_tel.port)  # port serwera mógł się zmienić — Funnel na nowo
+                if "blad" in w:
+                    LOG.warning("Most do domu po starcie: %s", w["blad"])
+            except Exception:
+                LOG.exception("Nie udało się włączyć mostu po starcie")
 
     def telefon_po_starcie(self) -> None:
         """Telefon był włączony przy poprzednim zamknięciu — włączamy od razu (ten sam PIN, ten sam adres)."""
@@ -1468,6 +1543,8 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/przegladarka":
                 return self._wyslij({**stan.przegladarka.opis(), "katalogator_pracuje": stan.zajety(),
                                      "biblioteka": stan.biblioteka_poza_przegladarka()})
+            if u.path == "/api/zdalna":  # 🌍 zapisany link do biblioteki w domu (komputer w pracy)
+                return self._wyslij({"zdalna": aktualizacje._ustawienia(stan.katalog).get("zdalna_biblioteka") or ""})
             if u.path == "/api/ustawienia-programu":  # ⚙ Ustawienia — wszystko w jednym oknie
                 ust = aktualizacje._ustawienia(stan.katalog)
                 st = stan.serwer_tel
@@ -1481,7 +1558,8 @@ def _handler(stan: Stan, token: str, zamknij):
                                 "wlasny_pin": bool(ust.get("pin_telefonu")), "pin": st.pin if st else ""},
                     "przegladarka": {"auto": prz.get("auto"), "co_godzin": prz.get("co_godzin"),
                                      "foldery": len(prz.get("foldery") or [])},
-                    "kopia": stan.kopia_info()})
+                    "kopia": stan.kopia_info(), "most": stan.most_info(),
+                    "zdalna": ust.get("zdalna_biblioteka") or ""})
             if u.path == "/api/dyski":
                 return self._wyslij({"dyski": dyski.lista_dyskow()})
             if u.path == "/api/foldery":
@@ -1631,6 +1709,16 @@ def _handler(stan: Stan, token: str, zamknij):
                 blad = ustaw_autostart(bool(dane.get("wlacz")))
                 return self._wyslij({"blad": blad} if blad else {"autostart": autostart()},
                                     kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
+            if u.path == "/api/most":  # 🌍 most do domu (w domu)
+                w = stan.most(bool(dane.get("wlacz")), bool(dane.get("nowy_klucz")))
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w and not w.get("link") else HTTPStatus.OK)
+            if u.path == "/api/zdalna":  # 🌍 zdalna biblioteka (w pracy): link z kluczem do domu
+                link = str(dane.get("link") or "").strip()
+                if link and not re.match(r"^https://[a-z0-9.-]+\.ts\.net/?(#k=[A-Za-z0-9-]+)?$", link):
+                    return self._wyslij({"blad": "To nie wygląda na link mostu — skopiuj go z Katalogatora w domu "
+                                                 "(⚙ Ustawienia → 🌍 Most do domu)."}, kod=HTTPStatus.BAD_REQUEST)
+                aktualizacje.zapisz_ustawienia(stan.katalog, zdalna_biblioteka=link)
+                return self._wyslij({"zdalna": link})
             if u.path == "/api/telefon":
                 return self._wyslij(stan.telefon(bool(dane.get("wlacz")), str(dane.get("zakres") or "biblioteka"),
                                                 bool(dane.get("sterowanie", True)),
@@ -1987,6 +2075,7 @@ def main(otworz: bool = True) -> None:
 
     threading.Thread(target=pilnuj, daemon=True).start()
     stan.telefon_po_starcie()
+    threading.Thread(target=stan.most_po_starcie, daemon=True).start()
     stan.kopia_po_starcie()
     if otworz:
         otworz_okno(url)
