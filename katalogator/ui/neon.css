@@ -1,0 +1,79 @@
+/* ✨ Neon z klasą: jedna para kolorów (turkus → fiolet → róż), świecenie tylko w motywie ciemnym i tylko przy tym, co
+   aktywne albo zaznaczone. W motywie jasnym te same akcenty w głębszych odcieniach, bez poświaty.
+   Wspólne dla okna programu (index.html) i Przeglądarki (galeria.html); ładowane po okna.css. */
+:root{
+  --neon-c:#0891b2; --neon-v:#7c3aed; --neon-m:#c026d3;
+  --neon-linia:linear-gradient(90deg,transparent,var(--neon-c) 18%,var(--neon-v) 50%,var(--neon-m) 82%,transparent);
+  --neon-blask-c:none; --neon-blask-m:none; --neon-tekst:none;
+  --grad:linear-gradient(135deg,#0891b2 0%,#7c3aed 55%,#c026d3 100%);
+  --poswiata:0 4px 14px rgba(124,58,237,.25);
+  --okno-pasek:linear-gradient(90deg,var(--neon-c),var(--neon-v) 50%,var(--neon-m));
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --neon-c:#22d3ee; --neon-v:#a78bfa; --neon-m:#e879f9;
+  --neon-blask-c:0 0 0 1px rgba(34,211,238,.55),0 0 14px rgba(34,211,238,.35);
+  --neon-blask-m:0 0 0 1px rgba(232,121,249,.5),0 0 16px rgba(232,121,249,.3);
+  --neon-tekst:0 0 10px rgba(34,211,238,.45);
+  --grad:linear-gradient(135deg,#06b6d4 0%,#8b5cf6 52%,#d946ef 100%);
+  --poswiata:0 0 0 1px rgba(34,211,238,.35),0 0 18px rgba(139,92,246,.35),0 0 30px rgba(217,70,239,.18)}}
+:root[data-theme="dark"]{
+  --neon-c:#22d3ee; --neon-v:#a78bfa; --neon-m:#e879f9;
+  --neon-blask-c:0 0 0 1px rgba(34,211,238,.55),0 0 14px rgba(34,211,238,.35);
+  --neon-blask-m:0 0 0 1px rgba(232,121,249,.5),0 0 16px rgba(232,121,249,.3);
+  --neon-tekst:0 0 10px rgba(34,211,238,.45);
+  --grad:linear-gradient(135deg,#06b6d4 0%,#8b5cf6 52%,#d946ef 100%);
+  --poswiata:0 0 0 1px rgba(34,211,238,.35),0 0 18px rgba(139,92,246,.35),0 0 30px rgba(217,70,239,.18)}
+
+/* cienka neonowa linia pod nagłówkiem — jedyny „dekoracyjny” element */
+header{position:relative}
+header::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--neon-linia);opacity:.85;
+  box-shadow:0 0 8px color-mix(in srgb,var(--neon-v) 55%,transparent);pointer-events:none}
+
+/* logo */
+header h1 img{filter:drop-shadow(0 0 8px color-mix(in srgb,var(--neon-c) 45%,transparent))}
+
+/* aktywny moduł (Przeglądarka / Porządkowanie / Sprzątanie) — gradient i poświata z tokenów --grad / --poswiata */
+.tryby button.akt{text-shadow:0 0 12px rgba(255,255,255,.35)}
+
+/* przyciski główne */
+button.glowny,.glowny-maly{background-image:var(--grad);border-color:transparent;box-shadow:var(--poswiata)}
+button.glowny:hover:not(:disabled){filter:brightness(1.08) saturate(1.1)}
+
+/* fokus z klawiatury — turkusowa obwódka */
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--neon-c);outline-offset:2px}
+
+/* Przeglądarka: aktywny widok na pasku — neonowe podkreślenie */
+.seg button.akt,.rodzaje button.akt{box-shadow:inset 0 -2px 0 var(--neon-c),var(--neon-blask-c)}
+
+/* zaznaczone zdjęcia */
+.k.zazn{outline-color:var(--neon-c)!important;box-shadow:var(--neon-blask-c)}
+.k.zazn .ob .zz{background:var(--neon-c);border-color:var(--neon-c);box-shadow:0 0 10px color-mix(in srgb,var(--neon-c) 70%,transparent)}
+.k:hover:not(.zazn){box-shadow:0 0 0 1px color-mix(in srgb,var(--neon-v) 45%,transparent)}
+
+/* wykres lat: zaznaczony miesiąc świeci, rok — gradient */
+.w-rok.akt .w-s i{background:linear-gradient(180deg,var(--neon-m),var(--neon-v) 55%,var(--neon-c))}
+.w-s.akt i{background:linear-gradient(180deg,var(--neon-m),var(--neon-c));box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--neon-c),0 0 14px color-mix(in srgb,var(--neon-c) 60%,transparent)}
+.w-rok.akt .w-et{color:var(--neon-c);text-shadow:var(--neon-tekst)}
+
+/* drzewo folderów i ścieżka */
+#drzewo .w.akt{box-shadow:inset 3px 0 0 var(--neon-c);color:var(--neon-c);text-shadow:var(--neon-tekst)}
+.okruszki b{background:linear-gradient(90deg,var(--neon-c),var(--neon-m));-webkit-background-clip:text;background-clip:text;color:transparent}
+.folderek:hover{box-shadow:var(--neon-blask-c);border-color:var(--neon-c)}
+
+/* znaczki (np. „Tego dnia”) — różowy akcent; licznik kosza zostaje czerwony (ostrzeżenie) */
+.znaczek{background:var(--neon-m)!important;color:#fff!important;box-shadow:0 0 10px color-mix(in srgb,var(--neon-m) 55%,transparent)}
+
+/* paski postępu */
+.tlo-p i,.pasek-postepu i,progress::-webkit-progress-value{background:linear-gradient(90deg,var(--neon-c),var(--neon-m))!important;
+  box-shadow:0 0 8px color-mix(in srgb,var(--neon-c) 55%,transparent)}
+
+/* suwaki */
+input[type=range]{accent-color:var(--neon-c)}
+input[type=checkbox],input[type=radio]{accent-color:var(--neon-v)}
+
+/* przewijanie: pasek przewijania nabiera koloru pod kursorem */
+::-webkit-scrollbar-thumb:hover{background-image:linear-gradient(180deg,var(--neon-c),var(--neon-m))!important}
+
+@media (prefers-reduced-motion:no-preference){
+  .k,.folderek,button.glowny{transition:box-shadow .18s,filter .18s,border-color .18s}
+}
