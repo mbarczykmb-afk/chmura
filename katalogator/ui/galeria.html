@@ -251,15 +251,41 @@ body.pasek-schowany #pasek-pokaz{display:block;position:fixed;top:0;right:14px;z
 #wl .wl-akcje button:hover{background:rgba(91,140,255,.3)}
 #wl .zle{color:#f87171}
 /* 🌳 drzewo folderów (po lewej), siatka obok */
-#drzewo{position:absolute;left:0;top:0;bottom:0;width:min(330px,42vw);overflow:auto;border-right:1px solid var(--lin);background:var(--panel);padding:8px 6px;font-size:13.5px}
-body.foldery #os{left:min(330px,42vw)}
-#drzewo .w{display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:7px;cursor:pointer;white-space:nowrap}
-#drzewo .w:hover{background:var(--akc-miekki)}
-#drzewo .w.akt{background:color-mix(in srgb,var(--akc) 22%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--akc) 60%,transparent);font-weight:600}
-#drzewo .str{width:18px;flex:none;text-align:center;color:var(--mut);font-size:11px}
+#drzewo{position:absolute;left:0;top:0;bottom:0;width:min(300px,40vw);overflow:auto;border-right:1px solid var(--lin);background:var(--bg);padding:10px 8px 24px;font-size:14.5px}
+body.foldery #os{left:min(300px,40vw)}
+#drzewo .drz-nagl{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);padding:4px 10px 8px}
+#drzewo .w{display:flex;align-items:center;gap:6px;min-height:34px;padding-right:10px;border-radius:8px;cursor:pointer;white-space:nowrap;color:var(--fg)}
+#drzewo .w:hover{background:color-mix(in srgb,var(--fg) 6%,transparent)}
+#drzewo .w:focus-visible{outline:2px solid var(--akc);outline-offset:-2px}
+#drzewo .w.akt{background:var(--akc-miekki);color:var(--akc);font-weight:600}
+#drzewo .str{width:20px;height:20px;flex:none;display:grid;place-items:center;color:var(--mut);border-radius:5px;transition:transform .15s}
+#drzewo .str:hover{background:color-mix(in srgb,var(--fg) 8%,transparent);color:var(--fg)}
+#drzewo .str.otw{transform:rotate(90deg)}
+#drzewo .w.akt .str{color:var(--akc)}
 #drzewo .nz{overflow:hidden;text-overflow:ellipsis}
-#drzewo .n{margin-left:auto;color:var(--mut);font-size:11.5px;padding-left:8px}
-#drzewo .dz{padding-left:14px}
+#drzewo .n{margin-left:auto;color:var(--mut);font-size:12px;font-weight:400;padding-left:10px;opacity:0;transition:opacity .15s}
+#drzewo .w:hover .n,#drzewo .w.akt .n{opacity:1}
+/* okruszki ścieżki nad zdjęciami */
+.okruszki{display:flex;align-items:center;flex-wrap:wrap;gap:2px;font-size:17px;min-width:0}
+.okruszki button{border:0;background:none;color:var(--fg);font-size:17px;padding:4px 6px;border-radius:7px;cursor:pointer;opacity:.85}
+.okruszki button:hover{background:color-mix(in srgb,var(--fg) 7%,transparent);opacity:1}
+.okruszki b{font-size:17px;padding:4px 6px}
+.okruszki .ok-sep{display:inline-grid;place-items:center;color:var(--mut)}
+/* kafelki podfolderów */
+.folderki{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-bottom:6px}
+.folderek{display:grid;grid-template-columns:44px minmax(0,1fr);grid-template-rows:auto auto;column-gap:12px;align-items:center;text-align:left;
+  padding:12px 14px;border:1px solid var(--lin);border-radius:12px;background:var(--panel);color:var(--fg);cursor:pointer}
+.folderek:hover{border-color:color-mix(in srgb,var(--akc) 55%,var(--lin));background:color-mix(in srgb,var(--akc) 5%,var(--panel))}
+.folderek svg{grid-row:1/3;width:44px;height:37px}
+.folderek .fz-n{font-weight:600;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.folderek .fz-l{font-size:12.5px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fz-tyl{fill:color-mix(in srgb,#f5b941 80%,#c98a12)}
+.fz-przod{fill:#f8cd5f}
+.pusto-ilu{width:170px;height:auto;display:block;margin:10px auto 14px}
+.pi-cien{fill:color-mix(in srgb,var(--fg) 8%,transparent)}
+.pi-slonce{fill:var(--akc-miekki);stroke:var(--akc);stroke-width:2}
+.pusto b{font-size:17px;color:var(--fg)}
+.pusto-folder{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center}
 /* 🗂 znaczek albumu na miniaturze */
 .k .ob .alb{position:absolute;left:6px;bottom:6px;background:rgba(10,16,32,.72);color:#fff;border-radius:999px;font-size:11px;padding:2px 7px;
   max-width:calc(100% - 12px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:auto;backdrop-filter:blur(4px)}

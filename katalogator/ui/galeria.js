@@ -266,9 +266,11 @@ function rysujSiatke(odIndeksu = 0) {  // odIndeksu > 0: dopisujemy tylko nowe (
   }
   if (!g.pliki.length) s.innerHTML = `<div class="pusto">${g.zrodlo.typ === "szukaj" ? "Nic nie znaleziono. Spróbuj: miejscowość, kraj, rok, miesiąc albo fragment nazwy."
     : g.zrodlo.typ === "kolekcja" ? (g.zrodlo.kol === "ulubione" ? "Brak ulubionych — otwórz zdjęcie i kliknij ☆ Ulubione (albo F)." : "Album jest pusty — otwórz zdjęcie i kliknij ＋ Album.")
+    : g.zrodlo.typ === "folder" ? PUSTY_FOLDER
     : g.zrodlo.typ === "miejsce" ? (g.zrodlo.lat == null ? "Żadne zdjęcie nie ma jeszcze miejsca — dodaj je w podglądzie (📍)." : "Brak innych zdjęć z tego miejsca — zwiększ promień.")
     : g.zrodlo.typ === "dzien" ? `Brak zdjęć z ${mdTxt(g.zrodlo.md || mdDzis())}${g.zrodlo.dni ? " (± " + g.zrodlo.dni + " dni)" : ""} z poprzednich lat.`
     : "Brak zdjęć w tym okresie."}</div>`;
+  if (!odIndeksu) kafelkiPodfolderow(s);
   if (!g.pliki.length && g.zrodlo.typ === "dzien" && g.zrodlo.najblizszy) {
     const nb = g.zrodlo.najblizszy;
     s.firstElementChild.append(document.createElement("br"), przycisk(`Najbliższy dzień ze zdjęciami: ${mdTxt(nb.md)} (${liczbaZdjec(nb.n)}) →`,
@@ -990,10 +992,10 @@ function rysujFiltr() {
     const t = document.createElement("span"); t.className = "tyt"; t.textContent = "🔀 Serie"; f.append(t);
     if (g.serie) f.append(inf(`${g.serie.razem.toLocaleString("pl-PL")} ${g.serie.razem === 1 ? "seria" : [2, 3, 4].includes(g.serie.razem % 10) && ![12, 13, 14].includes(g.serie.razem % 100) ? "serie" : "serii"} · ${liczbaZdjec(g.serie.zdjec)} — kliknij serię, porównaj i zostaw najlepsze`));
   } else if (g.widok === "foldery") {
-    const t = document.createElement("span"); t.className = "tyt"; t.textContent = "📁 " + (z.typ === "folder" ? z.nazwa || z.f : "Foldery");
-    t.title = z.f || ""; f.append(t);
+    if (z.typ === "folder") f.append(okruszki(z.f));
+    else { const t = document.createElement("span"); t.className = "tyt"; t.textContent = "📁 Foldery"; f.append(t); }
     if (z.typ === "folder") {
-      f.append(inf(ile(g.razem)));
+      if (g.razem) f.append(inf(ile(g.razem)));
       const l = document.createElement("label"); l.className = "menu-cb"; l.title = "Pokaż też zdjęcia z folderów wewnątrz";
       const c = document.createElement("input"); c.type = "checkbox"; c.checked = !!z.pod;
       c.onchange = () => pokazFolder(z.f, c.checked); l.append(c, " z podfolderami"); f.append(l);
@@ -1242,62 +1244,120 @@ async function rysujOsoby() {
   }
 }
 
-// ---------- 🌳 foldery: drzewo katalogów (po lewej), zdjęcia wybranego folderu (po prawej) ----------
-const drzewo = {dane: null, otwarte: new Set(), wybrany: null};
+// ---------- 🌳 foldery (jak w Synology Photos): drzewo po lewej, okruszki ścieżki, kafelki podfolderów nad zdjęciami ----------
+const PUSTY_FOLDER = '<svg class="pusto-ilu" viewBox="0 0 160 110" aria-hidden="true"><ellipse cx="80" cy="98" rx="62" ry="7" class="pi-cien"/><path d="M28 30a6 6 0 0 1 6-6h28l8 8h56a6 6 0 0 1 6 6v50a6 6 0 0 1-6 6H34a6 6 0 0 1-6-6z" class="fz-tyl"/><path d="M24 44a6 6 0 0 1 6-6h100a6 6 0 0 1 6 6v44a6 6 0 0 1-6 6H30a6 6 0 0 1-6-6z" class="fz-przod"/><circle cx="118" cy="22" r="9" class="pi-slonce"/></svg><b>Brak zdjęć</b><br>W tym folderze nie ma zdjęć ani filmów.';
+const drzewo = {start: null, wezly: new Map(), otwarte: new Set(), wybrany: null};
+const STRZALKA = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const IKONA_FOLDERU = '<svg viewBox="0 0 48 40" aria-hidden="true"><path d="M3 7a4 4 0 0 1 4-4h11l5 5h18a4 4 0 0 1 4 4v21a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" class="fz-tyl"/><path d="M3 14a4 4 0 0 1 4-4h34a4 4 0 0 1 4 4v19a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" class="fz-przod"/></svg>';
 async function rysujDrzewo() {
   const d = $("drzewo");
   if (g.zrodlo.typ !== "folder") { $("siatka").innerHTML = '<div class="pusto">📁 Wybierz folder z drzewa po lewej.</div>'; rysujFiltr(); }
-  d.textContent = "Wczytuję…";
+  if (!drzewo.start) d.textContent = "Wczytuję…";
   let r; try { r = await api("/api/g/foldery"); } catch (e) { d.textContent = e.message; return; }
   if (g.widok !== "foldery") return;
   // drzewo: każdy folder rozbity na części ścieżki; liczby z podfolderami
-  const korzen = {dz: new Map(), n: 0, razem: 0, sc: ""};
+  const korzen = {dz: new Map(), n: 0, razem: 0, sc: "", rodzic: null};
   for (const [sc, n] of r.foldery) {
     const sep = sc.includes("\\") ? "\\" : "/", czesci = sc.split(/[\\/]/).filter(Boolean);
     let w = korzen, droga = sc.startsWith("/") ? "" : null;
     for (const c of czesci) {
       droga = droga === null ? c : droga + sep + c;
-      if (!w.dz.has(c)) w.dz.set(c, {dz: new Map(), n: 0, razem: 0, sc: sc.startsWith("/") && !droga.startsWith("/") ? "/" + droga : droga, nazwa: c});
+      if (!w.dz.has(c)) w.dz.set(c, {dz: new Map(), n: 0, razem: 0, sc: sc.startsWith("/") && !droga.startsWith("/") ? "/" + droga : droga, nazwa: c, rodzic: w});
       w = w.dz.get(c); w.razem += n;
     }
     w.n += n; korzen.razem += n;
   }
-  // wspólny początek (np. C:\Users\Ja\Zdjęcia) — zwijamy w jeden węzeł
+  // wspólny początek (np. Z:\Uporządkowane) — zwijamy w jeden węzeł
   let start = korzen, prefiks = [];
   while (start.dz.size === 1 && !start.n) { const [c, w] = [...start.dz][0]; prefiks.push(c); start = w; }
-  if (prefiks.length) { start = {...start, nazwa: (prefiks.length > 2 ? "…" + (prefiks[0].endsWith(":") ? "" : "") : "") + prefiks.slice(-2).join(" › ")}; }
-  d.replaceChildren();
+  if (prefiks.length) start.nazwa = prefiks[prefiks.length - 1];
+  start.rodzic = null;
+  drzewo.start = start; drzewo.wezly = new Map();
+  (function zbierz(w) { drzewo.wezly.set(w.sc, w); for (const x of w.dz.values()) zbierz(x); })(start);
   if (!r.foldery.length) { d.textContent = "Brak folderów ze zdjęciami."; return; }
+  rysujGalezie();
+}
+const dzieci = w => [...w.dz.values()].sort((a, b) => a.nazwa.localeCompare(b.nazwa, "pl", {numeric: true}));
+function rysujGalezie() {
+  const d = $("drzewo"), przewin = d.scrollTop;
+  d.replaceChildren();
+  const naglowek = document.createElement("div"); naglowek.className = "drz-nagl"; naglowek.textContent = "Foldery";
   const wezel = (w, poziom) => {
     const box = document.createElement("div");
-    const wiersz = document.createElement("div"); wiersz.className = "w" + (drzewo.wybrany === w.sc ? " akt" : ""); wiersz.title = w.sc;
-    const ma = w.dz.size > 0, otw = drzewo.otwarte.has(w.sc) || poziom < 1;
-    const str = document.createElement("span"); str.className = "str"; str.textContent = ma ? (otw ? "▾" : "▸") : "";
-    const nz = document.createElement("span"); nz.className = "nz"; nz.textContent = (otw && ma ? "📂 " : "📁 ") + (w.nazwa || w.sc);
+    const wiersz = document.createElement("div"); wiersz.className = "w" + (drzewo.wybrany === w.sc ? " akt" : "");
+    wiersz.style.paddingLeft = (6 + poziom * 16) + "px"; wiersz.tabIndex = 0;
+    const ma = w.dz.size > 0, otw = ma && (drzewo.otwarte.has(w.sc) || poziom < 1);
+    const str = document.createElement("span"); str.className = "str" + (otw ? " otw" : ""); if (ma) str.innerHTML = STRZALKA;
+    const nz = document.createElement("span"); nz.className = "nz"; nz.textContent = w.nazwa || w.sc;
     const n = document.createElement("span"); n.className = "n"; n.textContent = w.razem.toLocaleString("pl-PL");
     wiersz.append(str, nz, n); box.append(wiersz);
-    const dz = document.createElement("div"); dz.className = "dz"; box.append(dz);
-    const rozwin = () => { dz.replaceChildren(...[...w.dz.values()].sort((a, b) => a.nazwa.localeCompare(b.nazwa, "pl", {numeric: true})).map(x => wezel(x, poziom + 1))); };
-    if (ma && otw) rozwin();
+    if (otw) for (const x of dzieci(w)) box.append(wezel(x, poziom + 1));
     str.onclick = e => {
       e.stopPropagation(); if (!ma) return;
-      if (drzewo.otwarte.has(w.sc) || (poziom < 1 && dz.childElementCount)) { drzewo.otwarte.delete(w.sc); dz.replaceChildren(); str.textContent = "▸"; }
-      else { drzewo.otwarte.add(w.sc); rozwin(); str.textContent = "▾"; }
+      if (otw) { drzewo.otwarte.delete(w.sc); if (poziom < 1) drzewo.otwarte.add("!" + w.sc); } else { drzewo.otwarte.add(w.sc); drzewo.otwarte.delete("!" + w.sc); }
+      rysujGalezie();
     };
-    wiersz.onclick = () => {
-      d.querySelectorAll(".w.akt").forEach(x => x.classList.remove("akt")); wiersz.classList.add("akt");
-      if (ma && !drzewo.otwarte.has(w.sc)) str.onclick({stopPropagation() {}});
-      pokazFolder(w.sc, !w.n);  // folder bez własnych zdjęć — od razu z podfolderami
+    wiersz.onclick = () => pokazFolder(w.sc);
+    wiersz.onkeydown = e => {
+      if (e.key === "Enter") pokazFolder(w.sc);
+      else if (e.key === "ArrowRight" && ma && !otw) str.onclick(e);
+      else if (e.key === "ArrowLeft" && ma && otw) str.onclick(e);
     };
     return box;
   };
-  d.append(wezel(start, 0));
+  // korzeń zwinięty ręcznie zostaje zwinięty
+  const s = drzewo.start;
+  if (drzewo.otwarte.has("!" + s.sc)) drzewo.otwarte.delete(s.sc);
+  d.append(naglowek, wezel(s, 0));
+  d.scrollTop = przewin;
+  const akt = d.querySelector(".w.akt"); if (akt) akt.scrollIntoView({block: "nearest"});
+}
+function sciezkaWezlow(sc) {  // od korzenia drzewa do folderu
+  const out = []; let w = drzewo.wezly.get(sc);
+  while (w) { out.unshift(w); w = w.rodzic; }
+  return out;
 }
 function pokazFolder(sc, pod = false) {
   drzewo.wybrany = sc;
+  for (const w of sciezkaWezlow(sc).slice(0, -1)) { drzewo.otwarte.add(w.sc); drzewo.otwarte.delete("!" + w.sc); }
+  if (drzewo.start) rysujGalezie();
   g.zrodlo = {typ: "folder", f: sc, pod, nazwa: sc.split(/[\\/]/).filter(Boolean).pop()}; g.pliki = []; g.razem = 0;
   $("siatka").innerHTML = '<div class="pusto">Wczytuję…</div>'; rysujFiltr();
   wczytajPliki().then(rysujFiltr).catch(e => { $("siatka").innerHTML = `<div class="pusto">${e.message}</div>`; });
+}
+// okruszki: Foldery › Uporządkowane › Zdjęcia › Zdjęcia z 2010 › Czerwiec w domu
+function okruszki(sc) {
+  const nav = document.createElement("nav"); nav.className = "okruszki"; nav.setAttribute("aria-label", "Ścieżka folderu");
+  const czesci = sciezkaWezlow(sc);
+  if (!czesci.length) { const b = document.createElement("b"); b.textContent = sc.split(/[\\/]/).filter(Boolean).pop() || sc; nav.append(b); return nav; }
+  czesci.forEach((w, i) => {
+    if (i) { const s = document.createElement("span"); s.className = "ok-sep"; s.innerHTML = STRZALKA; nav.append(s); }
+    if (i === czesci.length - 1) { const b = document.createElement("b"); b.textContent = w.nazwa; b.title = w.sc; nav.append(b); }
+    else { const a = document.createElement("button"); a.type = "button"; a.textContent = w.nazwa; a.title = w.sc; a.onclick = () => pokazFolder(w.sc); nav.append(a); }
+  });
+  return nav;
+}
+// kafelki podfolderów nad zdjęciami (tylko widok „ten folder”, bez „z podfolderami”)
+function kafelkiPodfolderow(s) {
+  const z = g.zrodlo; if (z.typ !== "folder" || z.pod) return;
+  const w = drzewo.wezly.get(z.f); if (!w || !w.dz.size) return;
+  const box = document.createElement("div"); box.className = "folderki";
+  for (const x of dzieci(w)) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "folderek"; b.title = x.sc;
+    b.innerHTML = IKONA_FOLDERU + "<span class='fz-n'></span><span class='fz-l'></span>";
+    b.querySelector(".fz-n").textContent = x.nazwa;
+    b.querySelector(".fz-l").textContent = liczbaZdjec(x.razem) + (x.dz.size ? ` · ${x.dz.size} ${x.dz.size === 1 ? "folder" : [2, 3, 4].includes(x.dz.size % 10) && ![12, 13, 14].includes(x.dz.size % 100) ? "foldery" : "folderów"}` : "");
+    b.onclick = () => pokazFolder(x.sc);
+    box.append(b);
+  }
+  s.prepend(box);
+  if (!g.pliki.length) {  // folder bez własnych zdjęć — tylko podfoldery, jak w Synology Photos
+    s.querySelectorAll(":scope > .pusto").forEach(x => x.remove());
+    const p = document.createElement("div"); p.className = "pusto pusto-folder";
+    p.append(Object.assign(document.createElement("span"), {textContent: "W tym folderze są tylko podfoldery. "}),
+             przycisk(`Pokaż wszystkie zdjęcia z podfolderów (${w.razem.toLocaleString("pl-PL")})`, () => pokazFolder(z.f, true), "", "akt"));
+    s.append(p);
+  }
 }
 
 // ---------- ✏ tryb edycji: narzędzia edycji obrazu widać tylko w nim ----------
