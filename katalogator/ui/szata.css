@@ -1,0 +1,110 @@
+/* 🎞 Szata „ciemnia”: neutralny grafit zamiast granatu — tło nie barwi zdjęć (tak pracują programy do zdjęć),
+   więc kolor zostaje dla zdjęć i dla stanu: neon (turkus → fiolet → róż) świeci tylko przy tym, co wybrane.
+   Jedno miejsce z charakterem: wykres lat — szare słupki jak na stole podświetlanym, zaznaczony rok w neonie.
+   Jedna czcionka (Instrument Sans, w programie — działa bez internetu), mniej ramek: przycisk dostaje tło dopiero
+   pod kursorem, grupy trzyma wspólna obwódka. Ładowane po okna.css i neon.css, w index.html i galeria.html. */
+
+@font-face{font-family:"Instrument Sans";font-style:normal;font-weight:400 700;font-stretch:75% 100%;font-display:swap;
+  src:url(/ui/fonty/InstrumentSans-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Instrument Sans";font-style:normal;font-weight:400 700;font-stretch:75% 100%;font-display:swap;
+  src:url(/ui/fonty/InstrumentSans-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+
+/* ── kolory ─────────────────────────────────────────────────────────────────────────────────────────────── */
+:root{
+  --bg:#f4f4f6; --panel:#ffffff; --fg:#18181b; --mut:#5a5d66; --lin:#e3e4e8;
+  --akc:#6d28d9; --akc-fg:#fff; --akc-miekki:#f1ebfd; --hover:#f3f0fd; --karta:#ffffff;
+  --szklo:rgba(255,255,255,.82); --tlo:none; --tytul:linear-gradient(90deg,#18181b,#3f3f46);
+  --cien:0 1px 2px rgba(24,24,27,.05),0 6px 20px rgba(24,24,27,.06);
+  --grad:linear-gradient(135deg,#0e7490 0%,#6d28d9 55%,#a21caf 100%);
+  --pod:rgba(24,24,27,.045);          /* tło przycisku pod kursorem */
+  --slupek:#c9cad1;                    /* nieaktywne słupki wykresu */
+  --font:"Instrument Sans","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#131416; --panel:#1b1c1f; --fg:#ececee; --mut:#a2a5ad; --lin:#2c2e33;
+  --akc:#7354f0; --akc-fg:#fff; --akc-miekki:rgba(115,84,240,.18); --hover:rgba(255,255,255,.05); --karta:#1b1c1f;
+  --szklo:rgba(19,20,22,.8); --tlo:none; --tytul:linear-gradient(90deg,#fff,#d4d4d8);
+  --cien:0 1px 0 rgba(255,255,255,.03) inset,0 12px 32px rgba(0,0,0,.4);
+  --grad:linear-gradient(135deg,#0e7490 0%,#6d28d9 55%,#a21caf 100%);
+  --pod:rgba(255,255,255,.06); --slupek:#3a3c42}}
+:root[data-theme="dark"]{
+  --bg:#131416; --panel:#1b1c1f; --fg:#ececee; --mut:#a2a5ad; --lin:#2c2e33;
+  --akc:#7354f0; --akc-fg:#fff; --akc-miekki:rgba(115,84,240,.18); --hover:rgba(255,255,255,.05); --karta:#1b1c1f;
+  --szklo:rgba(19,20,22,.8); --tlo:none; --tytul:linear-gradient(90deg,#fff,#d4d4d8);
+  --cien:0 1px 0 rgba(255,255,255,.03) inset,0 12px 32px rgba(0,0,0,.4);
+  --grad:linear-gradient(135deg,#0e7490 0%,#6d28d9 55%,#a21caf 100%);
+  --pod:rgba(255,255,255,.06); --slupek:#3a3c42}
+
+/* ── typografia ─────────────────────────────────────────────────────────────────────────────────────────── */
+body,button,input,select,textarea{font-family:var(--font)}
+body{font-feature-settings:"kern";text-rendering:optimizeLegibility}
+h1,h2,h3{letter-spacing:-.012em}
+header h1{font-weight:650}
+.znaczek,.kosz-licz,.info,.w-et,small,.chipy button small{font-variant-numeric:tabular-nums}
+
+/* ── nagłówki: przyciski bez ramek, tło dopiero pod kursorem ───────────────────────────────────────────── */
+header>button:not(.akt):not(.glowny),header .narz>button:not(.akt),header .menu-w>button:not(.akt),
+header .narz .menu-w>button:not(.akt),header>.menu-w>button:not(.akt){
+  border-color:transparent;background:transparent}
+header>button:not(.akt):not(.glowny):hover,header .narz>button:not(.akt):hover,header .menu-w>button:not(.akt):hover{
+  background:var(--pod);border-color:transparent}
+header #zamknij{border-color:var(--lin)!important}
+header .seg,header .rodzaje,header .tryby{border-color:var(--lin);background:var(--panel)}
+header .rodzaje button{background:transparent}
+header .rozm{border-color:transparent!important;background:transparent!important}
+
+/* ── siatka zdjęć: zdjęcie jest bohaterem — bez ramki i tła karty, podpis cichy ─────────────────────────── */
+#siatka{gap:14px 10px}
+#siatka .k:not(.osoba):not(.nowy){border:0;background:none;border-radius:0;overflow:visible}
+#siatka .k:not(.osoba):not(.nowy) .ob{border-radius:8px;overflow:hidden;background:var(--pod)}
+#siatka .k .op{padding:6px 2px 0}
+#siatka .k .op div:first-child{font-weight:550}
+#siatka .k.zazn{outline:none!important;box-shadow:none!important}
+#siatka .k.zazn .ob{outline:2px solid var(--neon-c);outline-offset:2px;box-shadow:var(--neon-blask-c)}
+#siatka .k:hover:not(.zazn){box-shadow:none}
+#siatka .k:not(.osoba):hover:not(.zazn) .ob{outline:1px solid color-mix(in srgb,var(--neon-v) 55%,transparent);outline-offset:2px}
+
+/* ── wykres lat: jedyne miejsce z charakterem ───────────────────────────────────────────────────────────── */
+.wykres{background:none}
+.w-s i{background:var(--slupek)}
+.w-s:hover:not(:disabled) i,.w-s:focus-visible i{background:color-mix(in srgb,var(--neon-v) 60%,var(--slupek))}
+.w-et{font-size:13px;font-weight:600;font-stretch:85%;letter-spacing:.01em}
+.w-rok.akt .w-et{font-size:15px;background:linear-gradient(90deg,var(--neon-c),var(--neon-m));
+  -webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
+
+/* ── karty w Porządkowaniu i Sprzątaniu: ta sama zasada co w siatce ────────────────────────────────────── */
+.karta:not(.duza){border-color:transparent;background:none}
+.karta:not(.duza) .ob{border-radius:8px}
+.karta.zazn{outline-color:var(--neon-c)}
+
+/* ── ikony zamiast emoji na przyciskach (ikony.js) ──────────────────────────────────────────────────────── */
+.ikl.zem{width:16px;height:16px;vertical-align:-3px}
+.ikl.zem.z-tekstem{margin-right:6px}
+#zz .ikl.zem{color:var(--mut)}
+#zz button:hover .ikl.zem{color:var(--fg)}
+.ikl.zem svg{filter:none!important}
+.wybor .ikl.zem{width:13px;height:13px;vertical-align:-2px}
+.wybor .ikl.zem.z-tekstem{margin-right:3px}
+
+/* pasek zaznaczenia: jedna ramka dookoła, przyciski w środku bez własnych ramek */
+#zz>button,#zz .zz-ed>button{border-color:transparent!important;background:transparent!important}
+#zz>button:hover,#zz .zz-ed>button:hover{background:var(--pod)!important}
+#zz>button.zly:hover,#zz>button[id*="usun"]:hover{color:var(--blad)}
+
+/* pełny podgląd: neutralna czerń (granat barwił zdjęcie), aktywny przycisk w barwach programu */
+#pelny{background:#0b0b0c!important}
+#pelny .narz .grp{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.08)}
+#pelny .narz .typ .et{color:#a2a5ad}
+#pelny .narz .typ button.akt,#pelny .narz button.akt:not(#p-ulub){background:var(--grad)!important;box-shadow:none!important;color:#fff}
+
+/* dymki podpowiedzi (podpowiedzi.js): grafit i ta sama czcionka */
+html #podp{background:#232427!important;border-color:rgba(255,255,255,.09)!important;font-family:var(--font)!important;
+  box-shadow:0 10px 28px rgba(0,0,0,.35)!important}
+html #podp kbd{background:#34363b!important;border-color:#4a4d54!important;font-family:var(--font)!important}
+html #podp .reszta{color:#c4c6cc!important}
+
+/* nagłówek programu: bez ramek przyciski potrzebują mniej miejsca — nazwa projektu się mieści */
+body>header{gap:6px}
+body>header>button:not(.akt):not(.glowny):not(#zamknij){padding-inline:10px}

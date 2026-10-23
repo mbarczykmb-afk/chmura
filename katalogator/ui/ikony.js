@@ -27,6 +27,33 @@ const IKONY_LINII = {
   szukaj: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   wiecej: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   zamknij: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  pinezka: '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+  ksiazka: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+  zakaz: '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
+  aparat: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  porownaj: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>',
+  auto: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/>',
+  start: '<circle cx="12" cy="12" r="10"/><path d="m10 8 6 4-6 4Z"/>',
+  blad: '<path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/>',
+  ekran: '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
+  drzewo: '<path d="M21 12h-8"/><path d="M21 6H8"/><path d="M21 18h-8"/><path d="M3 6v4c0 1.1.9 2 2 2h3"/><path d="M3 10v6c0 1.1.9 2 2 2h3"/>',
+  muzyka: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  paczka: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+  pobierz: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  wgraj: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+  zegar: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  swiat: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+  zapisz: '<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>',
+  schowek: '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+  zaznacz: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>',
+  olowek: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+  nozyczki: '<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>',
+  osoba: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+  ukryj: '<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>',
+  etykieta: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  odswiez: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
   schowaj: '<path d="m18 15-6-6-6 6"/>',
   serie: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path class="akcent" d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/>',
   filtr: '<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>',
@@ -63,6 +90,53 @@ const IKONY_LINII = {
     i.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${k}</svg>`; i.dataset.ok = "1";
   });
   window.wstawIkony = wstaw;
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => wstaw());
-  else wstaw();
+
+  // Emoji na początku napisu przycisku („📅 Data”) → ikona liniowa z tego samego zestawu. Emoji wyglądają inaczej
+  // w każdym systemie i nie dają się pokolorować motywem; strzałki i znaki typu ✕ ‹ › ↺ zostają (to zwykłe znaki pisma).
+  const Z_EMOJI = {
+    "🗑": "kosz", "📅": "kalendarz", "📆": "kalendarz", "📍": "pinezka", "📄": "dokument", "📖": "ksiazka", "⛔": "zakaz",
+    "📷": "aparat", "📸": "aparat", "🔀": "porownaj", "✨": "auto", "👋": "start", "🐞": "blad", "⚙": "ustawienia",
+    "🛟": "odzysk", "🖥": "ekran", "🌳": "drzewo", "🎬": "film", "🎞": "film", "🎵": "muzyka", "🗜": "paczka", "📦": "paczka",
+    "🔍": "szukaj", "🔎": "szukaj", "📤": "wgraj", "📱": "telefon", "🕰": "zegar", "🌍": "swiat", "💾": "zapisz",
+    "📂": "folder", "📁": "folder", "📋": "schowek", "☑": "zaznacz", "✏": "olowek", "✂": "nozyczki", "👤": "osoba",
+    "🙈": "ukryj", "🏷": "etykieta", "🔗": "link", "ℹ": "info", "⟳": "odswiez", "⬇": "pobierz", "🗺": "mapa",
+    "🖼": "zdjecie", "🧹": "sprzatanie", "💽": "dyski", "📚": "biblioteka", "📊": "statystyki"};
+  const WZOR = new RegExp("^(\\s*)(" + Object.keys(Z_EMOJI).join("|") + ")\\uFE0F?\\s*", "u");
+  const zamien = b => {
+    if (b.closest("[data-bez-ikon]")) return;
+    const w = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
+    let n; while ((n = w.nextNode()) && !n.data.trim());
+    if (!n) return;
+    const m = WZOR.exec(n.data);
+    if (!m) return;
+    const przed = b.querySelector("img, .ikl, svg");   // przycisk ma już ikonę przed napisem — zostaw
+    if (przed && (przed.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+    const reszta = n.data.slice(m[0].length);
+    const i = document.createElement("i");
+    i.className = "ikl zem" + (reszta.trim() || n.nextSibling ? " z-tekstem" : "");
+    i.dataset.ik = Z_EMOJI[m[2]];
+    i.setAttribute("aria-hidden", "true");
+    n.parentNode.insertBefore(i, n);
+    n.data = reszta;
+    wstaw(b);
+  };
+  const przejrzyj = kor => {
+    if (kor.nodeType !== 1) kor = kor.parentElement;
+    if (!kor) return;
+    const b = kor.closest("button");
+    if (b) zamien(b);
+    kor.querySelectorAll("button").forEach(zamien);
+  };
+  const obserwuj = () => {
+    przejrzyj(document.body);
+    new MutationObserver(lista => {
+      for (const z of lista) {
+        if (z.type === "characterData") przejrzyj(z.target);
+        else for (const d of z.addedNodes) if (d.nodeType === 1 || d.nodeType === 3) przejrzyj(d);
+      }
+    }).observe(document.body, {childList: true, subtree: true, characterData: true});
+  };
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { wstaw(); obserwuj(); });
+  else { wstaw(); obserwuj(); }
 })();
