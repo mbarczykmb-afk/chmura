@@ -123,6 +123,18 @@ się nie pokazują. Działa, dopóki Katalogator jest otwarty.</p>`},
 <p>Przez most można <b>tylko oglądać</b> — bez usuwania, pilota i pełnego programu. Wejście tylko z kluczem (PIN telefonu
 nie działa). Gdy klucz trafi do niewłaściwej osoby: <b>Nowy klucz</b>. Komputer w domu musi być włączony.</p>`},
 
+  {id: "ustawienia", ik: "⚙", tyt: "Ustawienia", tresc: `
+<p>Zakładka <b>Ustawienia</b> u góry (albo ⚙) zbiera wszystkie ustawienia w jednym miejscu — każde można tu zmienić:</p>
+<ul>
+  <li><b>Program</b> — wygląd, co pokazać po starcie, start z Windows, telefon, most do domu, aktualizacje, kopia zapasowa.</li>
+  <li><b>Projekt</b> — ustawienia bieżącego projektu: nazwa, notatki, źródła (K — kopiuj / P — przenieś), biblioteka
+    (Dokąd), „Mieszkam w”, foldery przychodzące i godzina codziennego sprawdzania. Inny projekt ma własne.</li>
+  <li><b>Przeglądarka</b> — dyski i foldery (zestawy), samoczynne odświeżanie, zapamiętany wygląd (kolejność, rodzaj,
+    wykres, panele) — zmiany wyglądu widać po następnym otwarciu Przeglądarki.</li>
+  <li><b>Porządkowanie i Sprzątanie</b> — opcje zakładek: schowany pasek, podpowiedzi, usuwanie duplikatów na stałe,
+    Podobne po jednej grupie, widok „Nie z aparatu”.</li>
+</ul>
+<p>Spis po lewej przenosi do wybranej części. Wyjście: kliknij inną zakładkę u góry.</p>`},
   {id: "klawisze", ik: "⌨", tyt: "Skróty klawiszy", tresc: `
 <table class="pm-tab">
 <tr><th colspan="2">Wszędzie</th></tr>
@@ -167,7 +179,8 @@ const pm = {okno: null, temat: "start"};
 function trybPomocy() {  // temat dla bieżącej zakładki
   if (typeof $ === "function" && $("galeria-nakladka") && !$("galeria-nakladka").hidden) return "przegladarka";
   const b = document.querySelector(".tryby button.akt");
-  return {przegladarka: "przegladarka", porzadkowanie: "porzadkowanie", sprzatanie: "sprzatanie"}[b && b.dataset.tryb] || "start";
+  return {przegladarka: "przegladarka", porzadkowanie: "porzadkowanie", sprzatanie: "sprzatanie",
+          ustawienia: "ustawienia"}[b && b.dataset.tryb] || "start";
 }
 
 function zbudujPomoc() {

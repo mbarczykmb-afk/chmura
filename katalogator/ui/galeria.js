@@ -1958,7 +1958,7 @@ function rysujPrz(s) {
   const f = $("prz-foldery"); f.replaceChildren();
   for (const sc of s.foldery) {
     const c = document.createElement("span"); c.className = "prz-f"; c.title = sc;
-    const n = document.createElement("span"); n.textContent = "\u200E📁 " + sc;
+    const n = document.createElement("span"); n.textContent = "\u200E📁 " + sc + "\u200E";
     const x = document.createElement("button"); x.textContent = "✕"; x.title = "Usuń z przeglądarki (pliki zostają na dysku)";
     x.onclick = async () => { rysujPrz(await post("/api/przegladarka/foldery", {foldery: prz.foldery.filter(y => y !== sc)})); g.punkty = null; start(); };
     c.append(n, x); f.append(c);

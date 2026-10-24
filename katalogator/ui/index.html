@@ -177,6 +177,30 @@ details.reczne summary{cursor:pointer;margin-bottom:6px}
 .ust .seg button{border:0;border-radius:0;border-right:1px solid var(--lin)}
 .ust .seg button:last-child{border-right:0}
 .ust .seg button.akt{background:var(--akc);color:#fff}
+/* ⚙ zakładka Ustawienia: cała strona pod nagłówkiem, spis części po lewej */
+#strona-ust{position:fixed;inset:0;top:var(--nag,0px);z-index:1500;background:var(--bg);overflow-y:auto;
+  display:grid;grid-template-columns:220px minmax(0,820px);gap:28px;padding:20px 28px 60px;justify-content:center}
+#strona-ust[hidden]{display:none}
+#ust-btn{display:none}  /* ⚙ to teraz zakładka Ustawienia */
+.ust-spis{position:sticky;top:0;align-self:start;display:flex;flex-direction:column;gap:2px;padding-top:6px}
+.ust-spis a{padding:8px 12px;border-radius:8px;color:var(--mut);text-decoration:none;font-weight:600}
+.ust-spis a:hover{background:var(--hover);color:var(--fg)}
+.ust-spis a.akt{color:var(--fg);box-shadow:inset 3px 0 0 var(--akc);background:var(--hover)}
+.ust-kol{display:flex;flex-direction:column;gap:30px;min-width:0}
+.ust-grupa{scroll-margin-top:12px}
+.ust-grupa>h2{font-size:20px;margin:0 0 4px}
+.ust-grupa>.opis{margin:0 0 10px;color:var(--mut)}
+#strona-ust .ust{overflow:visible;padding-right:0}
+.ust .sciezka{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:inherit;
+  background:var(--hover);border-radius:6px;padding:4px 8px}
+.ust input[type=text],.ust input[type=time],.ust textarea,.ust select{font:inherit;color:inherit;background:var(--panel);
+  border:1px solid var(--lin);border-radius:8px;padding:6px 10px}
+.ust input[type=text]{flex:1;min-width:160px}
+.ust textarea{width:100%;min-height:70px;resize:vertical}
+.ust .pusto{color:var(--mut);font-size:13px}
+.ust .etyk{flex:none;min-width:110px;color:var(--mut);font-size:13.5px}
+.ust .uwaga-ust{color:var(--mut);font-size:12.5px}
+@media (max-width:900px){#strona-ust{grid-template-columns:1fr;padding:14px}.ust-spis{position:static;flex-direction:row;flex-wrap:wrap}}
 .ust code{background:var(--bg);padding:2px 6px;border-radius:5px;word-break:break-all}
 .ust .problem{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;border-top:1px solid var(--lin);padding-top:6px}
 .ust .problem b{word-break:break-all}
@@ -624,6 +648,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
     <button role="tab" data-tryb="przegladarka" id="przegladarka-btn" title="Przeglądarka: zdjęcia z dowolnych dysków na osi czasu i mapie — oglądanie (i 🗑 usuwanie, gdy chcesz)"><i class="ikl" data-ik="przegladarka"></i><span class="t"> Przeglądarka</span></button>
     <button role="tab" data-tryb="porzadkowanie" title="Porządkowanie: kopiuje lub przenosi pliki do uporządkowanej biblioteki (Rok → Miesiąc → Miejsce)"><i class="ikl" data-ik="porzadek"></i><span class="t"> Porządkowanie</span></button>
     <button role="tab" data-tryb="sprzatanie" title="Sprzątanie na miejscu: duplikaty i śmieci w istniejących folderach — bez kopiowania i bez nowego drzewa"><i class="ikl" data-ik="sprzatanie"></i><span class="t"> Sprzątanie</span></button>
+    <button role="tab" data-tryb="ustawienia" title="Ustawienia: programu, bieżącego projektu, Przeglądarki i zakładek — wszystkie w jednym miejscu, do zmiany"><i class="ikl" data-ik="ustawienia"></i><span class="t"> Ustawienia</span></button>
   </nav>
   <button class="projekt-btn" id="projekt-btn" title="Zmień projekt"><i class="ikl" data-ik="folder"></i> <span id="projekt-nazwa">…</span> ▾</button>
   <span class="odstep"></span>
@@ -664,6 +689,20 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
   <div class="krok klik" id="k4"><b>4</b>Porządkowanie</div>
 </nav>
 
+<div id="strona-ust" hidden>
+  <nav class="ust-spis" aria-label="Części ustawień">
+    <a href="#ust-g-program">Program</a><a href="#ust-g-projekt">Projekt</a><a href="#ust-g-przeg">Przeglądarka</a>
+    <a href="#ust-g-zakl">Porządkowanie i Sprzątanie</a>
+  </nav>
+  <div class="ust-kol">
+    <section class="ust-grupa" id="ust-g-program"><h2>Program</h2>
+      <p class="opis">Dotyczy całego Katalogatora, niezależnie od projektu.</p>
+      <div class="ust" id="ust-tresc">Wczytuję…</div></section>
+    <section class="ust-grupa" id="ust-g-projekt"><h2>Projekt</h2><div class="ust" id="ust-projekt"></div></section>
+    <section class="ust-grupa" id="ust-g-przeg"><h2>Przeglądarka</h2><div class="ust" id="ust-przeg"></div></section>
+    <section class="ust-grupa" id="ust-g-zakl"><h2>Porządkowanie i Sprzątanie</h2><div class="ust" id="ust-zakl"></div></section>
+  </div>
+</div>
 <div id="galeria-nakladka" hidden><div id="zdalna-pasek" hidden><b>🌍 Biblioteka w domu</b><span class="info" id="zdalna-opis">zdalnie, tylko oglądanie</span><button id="zdalna-odswiez" title="Wczytaj jeszcze raz">⟳</button><button id="zdalna-zamknij" title="Wróć do tego komputera">✕ Zamknij</button></div><iframe id="galeria-ramka" title="Biblioteka" allow="fullscreen" allowfullscreen></iframe></div>
 
 <div class="pz" id="pz" hidden>
@@ -1029,13 +1068,6 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
   </div>
 </div>
 
-<div class="nakladka" id="okno-ust" hidden>
-  <div class="okno" role="dialog" aria-labelledby="okno-ust-tytul" style="width:min(720px,94vw)">
-    <h2 id="okno-ust-tytul"><img class="ik3d-tyt" alt="" src="/ui/ikony3d/ustawienia.webp">Ustawienia</h2>
-    <div class="ust" id="ust-tresc">Wczytuję…</div>
-    <div class="dol"><span class="wybor" id="ust-info"></span><button class="glowny" id="ust-zamknij">Gotowe</button></div>
-  </div>
-</div>
 
 <div class="nakladka" id="okno-proj" hidden>
   <div class="okno" role="dialog" aria-labelledby="okno-proj-tytul">
@@ -1116,7 +1148,7 @@ function wierszFolderu(sciezka, usun) {
   const d = document.createElement("div");
   d.className = "folder";
   const s = document.createElement("span");
-  s.textContent = "\u200E" + sciezka;   // poprawne wyświetlanie przy direction:rtl
+  s.textContent = "\u200E" + sciezka + "\u200E";   // poprawne wyświetlanie przy direction:rtl (także „N:\”)
   s.title = sciezka;
   const b = document.createElement("button");
   b.className = "ikonowy"; b.textContent = "✕"; b.title = "Usuń z listy";
@@ -1212,7 +1244,7 @@ function rysujPasekZadania() {
   if (b.czeka) info.push("wstrzymane");
   else if (b.eta) info.push(`<b>zostało ok. ${czasTxt(b.eta)}</b>`);
   $("pz-info").innerHTML = info.map(t => `<span>${t}</span>`).join("");
-  $("pz-plik").textContent = b.plik ? "\u200E" + b.plik : ""; $("pz-plik").title = b.plik || "";
+  $("pz-plik").textContent = b.plik ? "\u200E" + b.plik + "\u200E" : ""; $("pz-plik").title = b.plik || "";
   $("pz-czeka").hidden = !b.czeka; $("pz-czeka").textContent = b.czeka ? "⏸ " + b.czeka : "";
   document.title = (proc === null ? "" : Math.floor(proc) + "% · ") + b.tytul + " — " + tytulProjektu;
 }
@@ -1241,6 +1273,7 @@ function zamknijGalerie() {
   document.body.classList.remove("galeria-otwarta"); $("biblioteka-btn").classList.remove("akt"); wysokoscNaglowka();
 }
 function otworzGalerie(z) {
+  if (typeof zamknijUstawienia === "function") zamknijUstawienia();
   window.scrollTo(0, 0); document.body.classList.add("galeria-otwarta"); wysokoscNaglowka();
   $("galeria-ramka").src = `/galeria?t=${encodeURIComponent(TOKEN)}&app=1&z=${z}`;
   $("zdalna-pasek").hidden = true; $("zdalna-btn").classList.remove("akt");
@@ -1254,6 +1287,7 @@ $("przegladarka-btn").onclick = () => otworzGalerie("przegladarka");
 let zdalnaLink = "";
 function otworzZdalna(link = zdalnaLink) {
   if (!link) { otworzUstawienia(); return; }
+  if (typeof zamknijUstawienia === "function") zamknijUstawienia();
   window.scrollTo(0, 0); document.body.classList.add("galeria-otwarta"); wysokoscNaglowka();
   $("galeria-ramka").src = link;
   $("zdalna-opis").textContent = "zdalnie, tylko oglądanie · " + link.replace(/^https:\/\//, "").replace(/\/?#.*$/, "");

@@ -7,11 +7,17 @@ const OPIS_TRYBU = {
   sprzatanie: "🧹 Sprzątanie — szukam duplikatów i śmieci w istniejących folderach; nic nie jest kopiowane ani przenoszone do biblioteki.",
 };
 let trybGalerii = false;  // Przeglądarka otwarta nad bieżącym trybem
+let trybUst = false;      // zakładka Ustawienia otwarta nad bieżącym trybem
+function zamknijUstawienia() {  // tu, nie w ustawienia.js — przełącznik działa już przy starcie programu
+  if ($("strona-ust").hidden) return;
+  $("strona-ust").hidden = true; trybUst = false; oznaczTryby();
+}
 
 function oznaczTryby() {
   const t = sprzatanie() ? "sprzatanie" : "porzadkowanie";
   document.querySelectorAll(".tryby button").forEach(b => {
-    const akt = trybGalerii ? b.dataset.tryb === "przegladarka" : b.dataset.tryb === t;
+    const akt = trybUst ? b.dataset.tryb === "ustawienia"
+      : trybGalerii ? b.dataset.tryb === "przegladarka" : b.dataset.tryb === t;
     b.classList.toggle("akt", akt); b.setAttribute("aria-selected", String(akt));
   });
 }
@@ -19,6 +25,8 @@ function oznaczTryby() {
 document.querySelectorAll(".tryby button").forEach(b => {
   b.onclick = async () => {
     const t = b.dataset.tryb;
+    if (t === "ustawienia") { otworzUstawienia(); return; }
+    zamknijUstawienia();
     if (t === "przegladarka") { otworzGalerie("przegladarka"); trybGalerii = true; oznaczTryby(); return; }
     if (!$("galeria-nakladka").hidden) { zamknijGalerie(); trybGalerii = false; }
     if ((t === "sprzatanie") === sprzatanie()) { oznaczTryby(); return; }

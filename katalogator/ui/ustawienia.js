@@ -1,4 +1,5 @@
-// ⚙ Ustawienia — jedno okno: wygląd, start z Windows, telefon, Przeglądarka, aktualizacje, kopia zapasowa
+// ⚙ Ustawienia — zakładka w nagłówku: program (wygląd, start, telefon, most, aktualizacje, kopia), bieżący projekt,
+// Przeglądarka i zapamiętane opcje Porządkowania i Sprzątania — wszystko w jednym miejscu, z możliwością zmiany
 "use strict";
 
 const ust = {d: null, zegar: null};
@@ -22,15 +23,22 @@ const pole = (tekst, zaznaczone, zmiana, tytul = "") => {
 };
 const przyc = (tekst, akcja, klasa = "", tytul = "") => el("button", {textContent: tekst, className: klasa, title: tytul, on: {click: akcja}});
 
-async function otworzUstawienia() {
+async function otworzUstawienia(czesc) {
   $("pomoc-menu").hidden = true;
-  $("okno-ust").hidden = false;
-  await rysujUstawienia();
+  if (!$("galeria-nakladka").hidden) { zamknijGalerie(); trybGalerii = false; }
+  $("strona-ust").hidden = false; trybUst = true; oznaczTryby();
+  await rysujStroneUstawien();
+  if (czesc) $(czesc).scrollIntoView();
+}
+const ustOtwarte = () => !$("strona-ust").hidden;
+async function rysujStroneUstawien() {
+  rysujUstProjekt(); rysujUstZakl();
+  await Promise.all([rysujUstawienia(), rysujUstPrzeg()]);
 }
 async function rysujUstawienia() {
   let d;
   try { d = ust.d = await api("/api/ustawienia-programu"); } catch (e) { $("ust-tresc").textContent = e.message; return; }
-  const t = $("ust-tresc"), przewin = t.scrollTop; t.replaceChildren();
+  const t = $("ust-tresc"), strona = $("strona-ust"), przewin = strona.scrollTop; t.replaceChildren();
 
   // 🎨 wygląd
   const seg = el("span", {className: "seg"});
@@ -63,7 +71,7 @@ async function rysujUstawienia() {
     rysujUstawienia();
   };
   t.append(sekcja("📱 Telefon i dostęp z innych urządzeń",
-    wiersz(telStan, tel.wlaczony ? przyc("Kod QR…", () => { $("okno-ust").hidden = true; $("telefon-btn").click(); }) : null,
+    wiersz(telStan, tel.wlaczony ? przyc("Kod QR…", () => { zamknijUstawienia(); $("telefon-btn").click(); }) : null,
            przyc(tel.wlaczony ? "Wyłącz" : "Włącz", () => telefonUst({wlacz: !tel.wlaczony}).catch(e => toast(e.message)), tel.wlaczony ? "" : "glowny")),
     pole("Pozwól sterować z telefonu (kolejne kroki, 🗑 usuwanie, 📍 miejsce, ✏ edycja, 📤 wysyłanie zdjęć)", tel.sterowanie,
          v => { tel.sterowanie = v; return tel.wlaczony ? telefonUst({sterowanie: v}) : null; }),
@@ -76,23 +84,16 @@ async function rysujUstawienia() {
   // 🌍 most do domu (ten komputer w domu) i zdalna biblioteka (komputer w pracy)
   t.append(sekcjaMostu(d.most), sekcjaZdalnej(d.zdalna));
 
-  // 🔭 Przeglądarka
-  const godz = el("select", {}, ...[1, 3, 6, 12, 24].map(h => el("option", {value: h, textContent: `co ${h} h`, selected: +d.przegladarka.co_godzin === h})));
-  godz.onchange = () => api("/api/przegladarka/auto", {auto: d.przegladarka.auto, co_godzin: +godz.value}).then(rysujUstawienia).catch(e => toast(e.message));
-  t.append(sekcja("🔭 Przeglądarka dysków",
-    wiersz(pole("Odświeżaj samo (nowe zdjęcia na dyskach)", d.przegladarka.auto,
-                async v => { await api("/api/przegladarka/auto", {auto: v, co_godzin: +godz.value}); d.przegladarka.auto = v; }), godz)));
-
   // ⟳ aktualizacje
   t.append(sekcja("⟳ Aktualizacje",
     wiersz(pole("Sprawdzaj automatycznie (raz na 12 godzin)", d.sprawdzaj_aktualizacje,
                 v => api("/api/program/ustawienia", {sprawdzaj_aktualizacje: v})),
            el("span", {className: "info", textContent: `Wersja ${d.wersja}`}),
-           przyc("Sprawdź teraz", () => { $("okno-ust").hidden = true; sprawdzAktualizacje(true); }))));
+           przyc("Sprawdź teraz", () => sprawdzAktualizacje(true)))));
 
   // 💾 kopia zapasowa
   t.append(await sekcjaKopii(d.kopia));
-  t.scrollTop = przewin;
+  strona.scrollTop = przewin;
 }
 
 async function sekcjaKopii(k) {
@@ -105,9 +106,7 @@ async function sekcjaKopii(k) {
   s.append(wiersz(el("span", {className: "info"}, "Kopia: ", k.folder ? el("code", {textContent: k.folder}) : "nie wybrano",
                       k.folder && !k.dostepny ? el("b", {className: "zle", textContent: " — niedostępna (podłącz dysk)"}) : null),
                   przyc(k.folder ? "Zmień…" : "Wybierz folder…", () => {
-                    $("okno-ust").hidden = true;
                     otworzWyborFolderu("Gdzie trzymać kopię biblioteki? (inny dysk / NAS)", k.folder || "", async f => {
-                      $("okno-ust").hidden = false;
                       try { await api("/api/kopia/ustaw", {folder: f}); } catch (e) { toast(e.message); }
                       rysujUstawienia();
                     });
@@ -150,14 +149,12 @@ async function problem(x, akcja) {
   catch (e) { toast(e.message); }
   rysujUstawienia();
 }
-$("ust-btn").onclick = otworzUstawienia;
-$("m-ustawienia").onclick = otworzUstawienia;
-$("ust-zamknij").onclick = () => { $("okno-ust").hidden = true; };
-$("okno-ust").addEventListener("click", e => { if (e.target.id === "okno-ust") $("okno-ust").hidden = true; });
+$("ust-btn").onclick = () => otworzUstawienia();
+$("m-ustawienia").onclick = () => otworzUstawienia();
 // koniec kopii / sprawdzania przy otwartym oknie — odśwież sekcję
 naStan.push(() => {
   const trwa = !!(stan.biezace && ["kopia", "sprawdzanie"].includes(stan.biezace.nazwa));
-  if (ust.trwalo && !trwa && !$("okno-ust").hidden) rysujUstawienia();
+  if (ust.trwalo && !trwa && ustOtwarte()) rysujUstawienia();
   ust.trwalo = trwa;
 });
 
@@ -218,7 +215,167 @@ function sekcjaZdalnej(link) {
     catch (e) { toast(e.message); }
   };
   s.append(wiersz(pole, przyc("Zapisz", () => zapisz(pole.value.trim()), "glowny")));
-  if (link) s.append(wiersz(przyc("🌍 Otwórz bibliotekę w domu", () => { $("okno-ust").hidden = true; otworzZdalna(link); }),
+  if (link) s.append(wiersz(przyc("🌍 Otwórz bibliotekę w domu", () => otworzZdalna(link)),
                             przyc("Usuń link", () => zapisz(""))));
   return s;
 }
+
+// ---------- 📁 bieżący projekt: źródła, cel, dom, notatki, foldery przychodzące, harmonogram ----------
+const etyk = tekst => el("span", {className: "etyk", textContent: tekst});
+const sciezkaEl = s => el("span", {className: "sciezka", title: s, textContent: "‎" + s + "‎"});
+const pustoEl = tekst => el("div", {className: "pusto", textContent: tekst});
+const kluczProjektu = () => JSON.stringify([stan.projekt, stan.zrodla, stan.cel, sprzatanie(), stan.windows]);
+async function zmienProjekt(zmiany, komunikat) {
+  try { await api("/api/projekty/zmien", zmiany); stan = await api("/api/stan"); rysuj(); toast(komunikat); }
+  catch (e) { toast(e.message); }
+}
+function rysujUstProjekt() {
+  const t = $("ust-projekt"), p = stan.projekt || {}, sprz = sprzatanie();
+  ust.projekt = kluczProjektu();
+  t.replaceChildren();
+
+  const nazwa = el("input", {type: "text", value: p.nazwa || ""});
+  nazwa.onchange = () => { const n = nazwa.value.trim(); if (n && n !== p.nazwa) zmienProjekt({nazwa: n}, "Zapisano nazwę projektu."); };
+  const notatki = el("textarea", {value: p.notatki || "", placeholder: "Notatki do projektu — co zrobione, co dalej…"});
+  notatki.onchange = () => zmienProjekt({notatki: notatki.value}, "Zapisano notatki.");
+  t.append(sekcja("📁 Projekt",
+    el("div", {className: "info", textContent: "Ustawienia bieżącego projektu. Każdy projekt ma własne — po zmianie projektu ta część pokaże jego ustawienia."}),
+    wiersz(etyk("Nazwa"), nazwa, przyc("Zmień projekt…", () => { zamknijUstawienia(); $("projekt-btn").click(); })),
+    wiersz(etyk("Rodzaj"), el("span", {className: "info", textContent: sprz
+      ? "🧹 Sprzątanie — duplikaty i śmieci na miejscu, bez kopiowania (przełączasz zakładką Sprzątanie u góry)"
+      : "🗂 Porządkowanie — kopiowanie / przenoszenie do biblioteki (przełączasz zakładką Porządkowanie u góry)"})),
+    notatki));
+
+  const zr = sekcja(sprz ? "📂 Co sprzątamy" : "📂 Co porządkujemy (źródła)");
+  if (!sprz) zr.append(el("div", {className: "info", innerHTML: "<b>K — Kopiuj</b>: oryginały zostają · <b>P — Przenieś</b>: oryginały znikają ze źródła po sprawdzeniu kopii."}));
+  if (!stan.zrodla.length) zr.append(pustoEl("Nie wybrano folderów."));
+  for (const z of stan.zrodla) {
+    const seg = sprz ? null : el("span", {className: "seg"});
+    if (seg) for (const [k, n] of [["kopiuj", "K — Kopiuj"], ["przenies", "P — Przenieś"]])
+      seg.append(przyc(n, () => { if (z.tryb !== k) ustawZrodlo(z.sciezka, k); }, z.tryb === k ? "akt" : ""));
+    zr.append(wiersz(sciezkaEl(z.sciezka), seg, przyc("✕", () => ustawZrodlo(z.sciezka, null), "", "Usuń z listy")));
+  }
+  zr.append(wiersz(przyc("+ Dodaj folder…", () => otworzWyborFolderu("Dodaj folder do projektu", "", f => {
+    if (!stan.zrodla.some(z => norm(z.sciezka) === norm(f))) zapisz({zrodla: [...stan.zrodla, {sciezka: f, tryb: "kopiuj"}], cel: stan.cel});
+  }))));
+  t.append(zr);
+  if (sprz) return;
+
+  t.append(sekcja("🎯 Dokąd (biblioteka)",
+    el("div", {className: "info", textContent: "Miejsce docelowe — tu powstaje uporządkowane drzewo Rok → Miesiąc → Miejsce. Pliki, które już tu są, zostają na miejscu."}),
+    wiersz(stan.cel ? sciezkaEl(stan.cel) : pustoEl("Nie wybrano."),
+           przyc(stan.cel ? "Zmień…" : "Wybierz…", () => otworzWyborFolderu("Wybierz miejsce docelowe", stan.cel, f => zapisz({zrodla: stan.zrodla, cel: f}))),
+           stan.cel ? przyc("✕", () => zapisz({zrodla: stan.zrodla, cel: ""}), "", "Usuń") : null)));
+
+  const dom = el("input", {type: "text", value: p.dom || "", placeholder: "np. Olkusz — puste: program wykryje sam"});
+  dom.onchange = () => zmienProjekt({dom: dom.value.trim()}, "Zapisano miejsce zamieszkania.");
+  t.append(sekcja("🏠 Mieszkam w",
+    el("div", {className: "info", textContent: "Miejscowość zamieszkania — pomaga odróżnić zdjęcia z domu od wyjazdów przy nazywaniu folderów. Puste: najczęstsze miejsce na zdjęciach."}),
+    wiersz(dom)));
+
+  const lista = p.przychodzace || [];
+  const prz = sekcja("📥 Nowe pliki — foldery przychodzące",
+    el("div", {className: "info", textContent: "Np. zdjęcia z telefonu: nowe pliki są przenoszone do biblioteki według tych samych zasad."}));
+  if (!lista.length) prz.append(pustoEl("Brak folderów przychodzących."));
+  for (const f of lista)
+    prz.append(wiersz(sciezkaEl(f), przyc("✕", () => zapisz({zrodla: stan.zrodla, cel: stan.cel, przychodzace: lista.filter(x => x !== f)}), "", "Usuń z listy")));
+  prz.append(wiersz(przyc("+ Dodaj folder…", () => otworzWyborFolderu("Wybierz folder przychodzący", "", f => {
+    if (!lista.includes(f)) zapisz({zrodla: stan.zrodla, cel: stan.cel, przychodzace: [...lista, f]});
+  }))));
+  const godz = el("input", {type: "time", value: p.harmonogram || ""});
+  const moznaHarm = lista.length && stan.cel && stan.windows;
+  prz.append(wiersz(etyk("Codziennie o"), godz,
+    przyc("Ustaw", () => godz.value ? ustawHarmonogram(godz.value) : toast("Wybierz godzinę.")),
+    p.harmonogram ? przyc("Wyłącz", () => ustawHarmonogram("")) : null,
+    el("span", {className: "info", textContent: p.harmonogram ? `Włączony: codziennie o ${p.harmonogram}`
+      : !stan.windows ? "Harmonogram działa tylko w Windows." : !moznaHarm ? "Najpierw dodaj folder przychodzący i wybierz bibliotekę." : "Wyłączony."})));
+  t.append(prz);
+}
+naStan.push(() => {  // zmiana projektu, źródeł, celu… — odśwież część Projekt (nie w trakcie pisania)
+  if (ustOtwarte() && kluczProjektu() !== ust.projekt && !$("ust-projekt").contains(document.activeElement)) rysujUstProjekt();
+});
+
+// ---------- 🔭 Przeglądarka: dyski i foldery, odświeżanie, zapamiętany wygląd ----------
+const lsCzytaj = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } };
+const lsZapisz = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* bez pamięci */ } };
+function wybor(opcje, akt, zmiana) {
+  const s = el("span", {className: "seg"});
+  for (const [v, n] of opcje) s.append(przyc(n, () => zmiana(v), v === akt ? "akt" : ""));
+  return s;
+}
+const poleLs = (tekst, klucz, domyslnie, tytul) =>
+  pole(tekst, lsCzytaj(klucz, domyslnie) === "1", v => lsZapisz(klucz, v ? "1" : "0"), tytul);
+async function zmienPrzeg(sciezka, dane) {
+  try { const w = await api(sciezka, dane); if (w && w.blad) toast(w.blad); } catch (e) { toast(e.message); }
+  rysujUstPrzeg();
+}
+async function rysujUstPrzeg() {
+  const t = $("ust-przeg");
+  let d;
+  try { d = await api("/api/przegladarka"); } catch (e) { t.textContent = e.message; return; }
+  t.replaceChildren();
+
+  const zestaw = el("select", {}, ...(d.zestawy || []).map(z => el("option", {value: z.id, textContent: `${z.nazwa} (${z.n})`, selected: z.id === d.aktywny})));
+  zestaw.onchange = () => zmienPrzeg("/api/przegladarka/zestaw", {akcja: "wybierz", id: +zestaw.value});
+  const dy = sekcja("💽 Dyski i foldery",
+    el("div", {className: "info", textContent: "Co pokazuje Przeglądarka. Zestaw to zapamiętana lista folderów — można mieć kilka i przełączać."}),
+    wiersz(etyk("Zestaw"), zestaw));
+  if (!d.foldery.length) dy.append(pustoEl("Brak folderów — Przeglądarka pokaże bibliotekę projektu."));
+  for (const f of d.foldery)
+    dy.append(wiersz(sciezkaEl(f), przyc("✕", () => zmienPrzeg("/api/przegladarka/foldery", {foldery: d.foldery.filter(x => x !== f)}), "", "Usuń z zestawu")));
+  dy.append(wiersz(
+    przyc("+ Dodaj folder…", () => otworzWyborFolderu("Dodaj folder do Przeglądarki", "", f => {
+      if (!d.foldery.includes(f)) zmienPrzeg("/api/przegladarka/foldery", {foldery: [...d.foldery, f]});
+    })),
+    przyc("⟳ Skanuj teraz", () => zmienPrzeg("/api/przegladarka/skanuj", {}), "", "Dopisuje nowe zdjęcia z tych folderów"),
+    el("span", {className: "info", textContent: d.trwa ? "⏳ Skan trwa…" : "Ostatni skan: " + dataCzas(d.ostatni_skan)})));
+
+  const godz = el("select", {}, ...[1, 3, 6, 12, 24].map(h => el("option", {value: h, textContent: `co ${h} h`, selected: +d.co_godzin === h})));
+  godz.onchange = () => zmienPrzeg("/api/przegladarka/auto", {auto: d.auto, co_godzin: +godz.value});
+  const od = sekcja("⟳ Odświeżanie",
+    wiersz(pole("Odświeżaj samo (nowe zdjęcia na dyskach)", d.auto, v => zmienPrzeg("/api/przegladarka/auto", {auto: v, co_godzin: +godz.value})), godz));
+
+  const odswiez = () => rysujUstPrzeg();
+  const wy = sekcja("🖼 Wygląd Przeglądarki",
+    el("div", {className: "info", textContent: "Zapamiętane na tym komputerze. Zmiany widać po następnym otwarciu Przeglądarki."}),
+    wiersz(etyk("Kolejność"), wybor([["nowe", "Od najnowszych"], ["stare", "Od najstarszych"]], lsCzytaj("kat_g_kol", "nowe"),
+                                     v => { lsZapisz("kat_g_kol", v); odswiez(); })),
+    wiersz(etyk("Pokaż"), wybor([["", "Wszystko"], ["zdjecie", "Zdjęcia"], ["film", "Filmy"], ["dokument", "Dokumenty"]], lsCzytaj("kat_g_rodzaj", ""),
+                                v => { lsZapisz("kat_g_rodzaj", v); odswiez(); })),
+    poleLs("Wykres lat i miesięcy nad zdjęciami", "kat_g_wykres", innerWidth > 760 ? "1" : "0"),
+    poleLs("Pasek dysków nad zdjęciami", "kat_g_dyski", "0"),
+    poleLs("Schowany pasek narzędzi (więcej miejsca na zdjęcia)", "kat_g_pasek", "0"),
+    poleLs("Panel ℹ Właściwości w podglądzie zdjęcia", "kat_wl", "0"),
+    poleLs("Tryb edycji (obrót i edycja na miniaturach)", "kat_edycja", "0"));
+  t.append(dy, od, wy);
+}
+
+// ---------- 🗂 Porządkowanie i Sprzątanie: zapamiętane opcje zakładek ----------
+function rysujUstZakl() {
+  const t = $("ust-zakl"); t.replaceChildren();
+  t.append(sekcja("🧭 Okno programu",
+    pole("Schowany pasek u góry (więcej miejsca; wraca listwą „▾ Menu Katalogatora”)", lsCzytaj("kat_nagl_ukryty", "0") === "1", v => ustawNaglowek(v)),
+    pole("Podpowiedzi po najechaniu myszką", !window.podpowiedzi || window.podpowiedzi.wlaczone(), v => window.podpowiedzi && window.podpowiedzi.ustaw(v))));
+  const dup = $("dup-trwale");
+  t.append(sekcja("♊ Duplikaty",
+    pole("Od razu usuń na stałe, bez kosza", dup.checked, v => { dup.checked = v; dup.dispatchEvent(new Event("change")); },
+         "Dotyczy tylko identycznych kopii (sprawdzonych bajt w bajt) — oryginał zawsze zostaje. Bez zaznaczenia kopie trafiają do Odłożone\\Duplikaty i można je cofnąć."),
+    el("div", {className: "uwaga-ust", textContent: "Bez zaznaczenia kopie trafiają do kosza programu (Odłożone\\Duplikaty) i można je cofnąć."})));
+  t.append(sekcja("🔀 Podobne",
+    pole("Jedna grupa na ekran (Enter — zatwierdź i następna, S — zostaw wszystkie)", lsCzytaj("kat_pod_jedna", "0") === "1",
+         v => { if (an.jedna !== v) $("pod-jedna").click(); })));
+  t.append(sekcja("📷 Nie z aparatu",
+    wiersz(etyk("Widok"), wybor([["grupy", "▦ Grupy według folderu"], ["pojedynczo", "Pojedynczo"]], lsCzytaj("kat_inne_tryb", "grupy"),
+                                v => { document.querySelector(`#inne-tryb button[data-t="${v}"]`).click(); rysujUstZakl(); }))));
+}
+
+// spis części: podświetl tę, która jest na ekranie
+$("strona-ust").addEventListener("scroll", () => {
+  const s = $("strona-ust"), gora = s.getBoundingClientRect().top + 80;
+  let akt = null;
+  for (const g of s.querySelectorAll(".ust-grupa")) if (g.getBoundingClientRect().top <= gora) akt = g.id;
+  s.querySelectorAll(".ust-spis a").forEach(a => a.classList.toggle("akt", a.getAttribute("href") === "#" + (akt || "ust-g-program")));
+});
+$("strona-ust").querySelectorAll(".ust-spis a").forEach(a => a.onclick = e => {
+  e.preventDefault(); $(a.getAttribute("href").slice(1)).scrollIntoView({behavior: "smooth"});
+});
