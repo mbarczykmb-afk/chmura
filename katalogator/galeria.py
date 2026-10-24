@@ -115,16 +115,30 @@ class Galeria:
 
     def _napraw_kolekcje(self, db) -> int:
         """Zdjęcia z ulubionych/albumów przeniesione (Katalogator, Odłożone, ręcznie) — odnajdujemy je po nazwie,
-        rozmiarze i dacie i poprawiamy ścieżkę. Zwraca liczbę naprawionych."""
+        rozmiarze i dacie i poprawiamy ścieżkę. Także po przeniesieniu całej biblioteki na inny dysk (np. My Cloud
+        Z: → NAS U:): wpis wskazujący poza oglądane foldery szukamy w oglądanych. Zwraca liczbę naprawionych."""
         k = self._klucz_sql()
-        brak = {t: db.execute(f"SELECT rowid, sciezka, klucz FROM {t} WHERE klucz IS NOT NULL AND sciezka NOT IN "
-                              f"(SELECT sciezka FROM pliki)").fetchall() for t in ("g_ulubione", "g_album_pliki")}
-        if not any(brak.values()):
+        korz = self.korzenie()
+        pref = tuple(os.path.normcase(os.path.abspath(r).rstrip("\\/") + os.sep) for r in korz or [])
+
+        def w_zakresie(s: str) -> bool:
+            return korz is None or os.path.normcase(s).startswith(pref)
+        brak = {t: [r for r in db.execute(
+                    f"SELECT rowid, sciezka, klucz, sciezka IN (SELECT sciezka FROM pliki) jest FROM {t} "
+                    f"WHERE klucz IS NOT NULL").fetchall() if not r["jest"] or not w_zakresie(r["sciezka"])]
+                for t in ("g_ulubione", "g_album_pliki")}
+        if not any(brak.values()) or korz == []:
+            return 0
+        # zdjęcie z albumu leży tylko na dysku, którego już nie oglądamy — nie szukamy go przy każdym otwarciu albumu,
+        # dopóki nie zmienią się pliki w bazie albo lista brakujących
+        stan = (tuple(sorted(r["klucz"] for w in brak.values() for r in w)), pref,
+                tuple(db.execute("SELECT COUNT(*), MAX(rowid) FROM pliki").fetchone()))
+        if getattr(self, "_bez_zmian_kolekcji", None) == stan:
             return 0
         potrzebne = {r["klucz"] for w in brak.values() for r in w}
         gdzie: dict[str, str] = {}
         for r in db.execute(f"SELECT sciezka, {k} klucz FROM pliki WHERE rodzaj IN ('zdjecie','film')"):
-            if r["klucz"] in potrzebne and r["klucz"] not in gdzie:
+            if r["klucz"] in potrzebne and r["klucz"] not in gdzie and w_zakresie(r["sciezka"]):
                 gdzie[r["klucz"]] = r["sciezka"]
         n = 0
         for t, wiersze in brak.items():
@@ -134,6 +148,7 @@ class Galeria:
                     db.execute(f"UPDATE OR IGNORE {t} SET sciezka=? WHERE rowid=?", (nowa, r["rowid"]))
                     n += 1
         db.commit()
+        self._bez_zmian_kolekcji = None if n else stan
         return n
 
     def _warunek(self, obszar: tuple | None = None, ukryte: bool = True) -> tuple[str, list]:

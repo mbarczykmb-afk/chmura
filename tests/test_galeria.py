@@ -286,6 +286,32 @@ def test_ulubione_po_przeniesieniu_przez_katalogator(biblioteka):
     assert g.plik(ul[0]["id"])["ulubione"]
 
 
+
+def test_albumy_po_przeniesieniu_biblioteki_na_inny_dysk(tmp_path):
+    """Biblioteka skopiowana na NAS (Z: → U:): w Przeglądarce zamieniamy folder — album i ulubione pokazują
+    zdjęcia z nowego dysku, choć stare wpisy z Z: zostały w bazie."""
+    import shutil
+    z, u = tmp_path / "MyCloud", tmp_path / "NAS"
+    (z / "2023").mkdir(parents=True)
+    _jpg_z_exif(z / "2023" / "IMG_1.jpg", data="2023:07:11 12:00:00", gps=HEL)
+    _jpg_z_exif(z / "2023" / "IMG_2.jpg", data="2023:07:12 12:00:00", gps=HEL)
+    shutil.copytree(z, u)
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(z), db, wypisz=lambda *_: None)
+    foldery = [str(z)]
+    g = galeria.Galeria(tmp_path / "k.db", lambda: foldery)
+    jeden = next(p["id"] for p in g.pliki("2023", 7)["pliki"] if p["nazwa"] == "IMG_1.jpg")
+    g.ulubione(jeden)
+    a = g.album_nowy("Hel", [jeden])["id"]
+    skaner.skanuj(str(u), db, wypisz=lambda *_: None)   # NAS dopisany, wpisy z My Cloud zostają w bazie
+    foldery[:] = [str(u)]                                # Przeglądarka: Z: zamienione na U:
+    assert g.albumy()["albumy"][0]["n"] == 1
+    alb = g.kolekcja("album", a)["pliki"]
+    assert [p["nazwa"] for p in alb] == ["IMG_1.jpg"] and g.sciezka(alb[0]["id"]).startswith(str(u))
+    assert g.sciezka(g.kolekcja("ulubione")["pliki"][0]["id"]).startswith(str(u))
+    foldery[:] = []                                      # pusta lista folderów — niczego nie psujemy
+    assert g.albumy()["albumy"][0]["n"] == 0
+
 def test_otworz_tylko_zdjecia_i_filmy(tmp_path):
     k = tmp_path / "d"
     k.mkdir()
