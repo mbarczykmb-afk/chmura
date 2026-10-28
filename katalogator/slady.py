@@ -84,23 +84,58 @@ def zapisz_klucze(katalog, nowe: dict) -> None:
         pass
 
 
+def _etykieta(t: str) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(t)).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]", "", t)
+
+
+# etykiety z plików tekstowych / arkuszy (np. „Client_secret_strava”, „token_odświeżania_strava”, „intervals_api_key_michal”)
+def _pole_z_etykiety(e: str) -> str | None:
+    if "intervals" in e and "athlete" in e:
+        return "intervals_athlete_id"
+    if "intervals" in e and ("apikey" in e or e.endswith("key")):
+        return "intervals_api_key"
+    if "secret" in e:
+        return "strava_client_secret"
+    if "refresh" in e or "odswiez" in e:
+        return "strava_refresh_token"
+    if e in ("clientid", "identyfikatorklienta") or e.startswith(("clientid", "identyfikatorklienta", "stravaclientid")):
+        return "strava_client_id"
+    return None
+
+
+def _z_tekstu(tekst: str) -> dict:
+    wynik: dict = {}
+    for linia in tekst.splitlines():
+        czesci = [c.strip().strip('"\'') for c in re.split(r"\t|;|=|:|,", linia, maxsplit=1)]
+        if len(czesci) == 2 and czesci[1]:
+            pole = _pole_z_etykiety(_etykieta(czesci[0]))
+            if pole:
+                wynik[pole] = czesci[1]
+    return wynik
+
+
 def klucze_z_kopii(katalog, plik: str) -> dict:
-    """Przepisuje klucze z kopii zapasowej aplikacji Szczyty (lub pliku Zawody) — lokalnie, nic nie jest wyświetlane."""
+    """Przepisuje klucze z kopii zapasowej aplikacji Szczyty (JSON: blok settings / access) albo z pliku tekstowego / CSV
+    z parami „nazwa  wartość” — lokalnie, nic nie jest wyświetlane ani wysyłane."""
     p = Path(str(plik or "").strip().strip('"'))
-    if not p.is_file() or p.suffix.lower() != ".json" or p.stat().st_size > 20 * 1048576:
-        return {"blad": "Wskaż plik kopii zapasowej (.json) aplikacji Szczyty."}
+    if not p.is_file() or p.suffix.lower() not in (".json", ".txt", ".csv", ".tsv", ".md") or p.stat().st_size > 20 * 1048576:
+        return {"blad": "Wskaż plik z kluczami: kopię zapasową aplikacji Szczyty (.json) albo plik tekstowy / CSV z parami nazwa–wartość."}
     try:
-        d = json.loads(p.read_text(encoding="utf-8-sig"))
+        tekst = p.read_text(encoding="utf-8-sig")
     except (OSError, ValueError):
         return {"blad": "Nie udało się odczytać tego pliku."}
-    blok = None
+    nowe: dict = {}
+    try:
+        d = json.loads(tekst)
+    except ValueError:
+        d = None
     if isinstance(d, dict):
-        for n in ("settings", "access"):
-            if isinstance(d.get(n), dict):
-                blok = d[n]
-                break
-        blok = blok or d
-    nowe = {POLA_Z_KOPII[n]: blok[n] for n in POLA_Z_KOPII if isinstance(blok, dict) and blok.get(n)}
+        blok = next((d[n] for n in ("settings", "access") if isinstance(d.get(n), dict)), d)
+        nowe = {POLA_Z_KOPII[n]: blok[n] for n in POLA_Z_KOPII if blok.get(n)}
+    if not nowe:
+        nowe = _z_tekstu(tekst)
     if not nowe:
         return {"blad": "W tym pliku nie ma kluczy Stravy ani Intervals.icu."}
     zapisz_klucze(katalog, nowe)

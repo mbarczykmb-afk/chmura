@@ -90,6 +90,13 @@ def test_klucze_zapis_odczyt_i_kopia(tmp_path):
     zawody = tmp_path / "zawody.json"
     zawody.write_text(json.dumps({"access": {"intervalsApiKey": "k2"}}), encoding="utf-8")
     assert slady.klucze_z_kopii(tmp_path, str(zawody))["wczytano"] == 1
+    arkusz = tmp_path / "klucze.tsv"
+    arkusz.write_text("Client_secret_strava\tSEKRET\ntoken_strava\tACCESS\ntoken_odświeżania_strava\tREFRESH\nIdentyfikator_klienta\t111111\n"
+                      "intervals_athlete_id_michal\ti000000\nintervals_api_key_michal\tKLUCZ\nPusta_pozycja\t\n", encoding="utf-8")
+    assert slady.klucze_z_kopii(tmp_path, str(arkusz)) == {"ok": True, "wczytano": 5}
+    k = slady.klucze(tmp_path)
+    assert (k["strava_client_id"], k["strava_client_secret"], k["strava_refresh_token"], k["intervals_athlete_id"], k["intervals_api_key"]) == \
+           ("111111", "SEKRET", "REFRESH", "i000000", "KLUCZ")       # token_strava (krótkotrwały) pomijamy
     assert "blad" in slady.klucze_z_kopii(tmp_path, str(tmp_path / "nie-ma.json"))
     (tmp_path / "puste.json").write_text("{}", encoding="utf-8")
     assert "blad" in slady.klucze_z_kopii(tmp_path, str(tmp_path / "puste.json"))
