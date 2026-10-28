@@ -3,12 +3,15 @@
 Żeby nie czytać całych plików przez sieć, korzystamy z miniatury zapisanej przez aparat
 w nagłówku EXIF (pierwsze ~256 KB pliku). Pełny obraz dekodujemy tylko, gdy jej brak.
 Wyniki trafiają do tabeli `analiza` i są liczone ponownie tylko dla zmienionych plików.
+Etap 3: zdjęcia podejrzane o bycie dokumentem czyta OCR (ocr.py) — odczytany tekst potwierdza dokument albo go
+wyklucza (pasy, kafelki, żaluzje bez liter) i można go potem wyszukać.
 """
 
 from __future__ import annotations
 
 import io
 import json
+import logging
 import operator
 import re
 import sqlite3
@@ -20,6 +23,8 @@ from PIL import Image, ImageChops, ImageFilter, ImageOps, ImageStat
 
 from . import indeks
 from .skaner import Przerwano
+
+LOG = logging.getLogger("katalogator.analiza")
 
 SCHEMAT = """
 CREATE TABLE IF NOT EXISTS analiza (
@@ -47,6 +52,7 @@ WERSJA_DOKUMENTOW = 3  # 1.25: bez faktur z długimi pasami (blacha, żaluzje). 
 PROG_WSTEPNY = 0.45    # etap 1 (miniatura): jasne, mało kolorowe — tylko te sprawdzamy dokładniej
 PROG_KANDYDAT = 0.6    # etap 2 (tekst): od tej oceny zdjęcie pokazujemy jako możliwy dokument
 PROG_PEWNY = 0.8       # od tej — wstępnie zaznaczone
+PROG_OCR = 0.35        # etap 3 (OCR): od tej oceny tekstu czytamy, co jest na zdjęciu
 PROG_PODOBNE = 8       # maks. różnica bitów odcisku obrazu (wstępne dopasowanie)
 PROG_SZAROSCI = 14     # maks. średnia różnica jasności podpisów 8×8 (0–255)
 PROG_KOLORU = 16       # maks. średnia różnica kolorów podpisów 4×4
@@ -60,7 +66,8 @@ _ORIENTACJA = {2: (Image.Transpose.FLIP_LEFT_RIGHT,), 3: (Image.Transpose.ROTATE
 def przygotuj(db: sqlite3.Connection) -> None:
     db.executescript(SCHEMAT)
     kol = {r[1] for r in db.execute("PRAGMA table_info(analiza)")}
-    for nazwa, typ in (("podpis", "TEXT"), ("tekst", "REAL")):  # kolumny od wersji 1.2.1
+    for nazwa, typ in (("podpis", "TEXT"), ("tekst", "REAL"),  # kolumny od wersji 1.2.1
+                       ("ocr_znaki", "INTEGER"), ("ocr_tekst", "TEXT")):  # 1.47: OCR (-1 = nie dało się przeczytać)
         if nazwa not in kol:
             db.execute(f"ALTER TABLE analiza ADD COLUMN {nazwa} {typ}")
     db.commit()
@@ -354,11 +361,64 @@ def analizuj(db: sqlite3.Connection, postep=None, przerwij=None, watki: int = 4)
             if postep and i % 5 == 0:
                 postep("szukanie tekstu (dokumenty)", i, len(kandydaci), 0)
     zatwierdz(wymus=True)
+    _czytaj_tekst(db, straznik, postep, przerwij, zatwierdz)
     grupy_podobnych(db, postep=postep)  # liczone raz, tu — potem z pamięci
     return podsumowanie(db)
 
 
 _AKTUALNE = "a.sciezka = p.sciezka AND a.rozmiar = p.rozmiar AND a.mtime = p.mtime"
+# ocena „dokument” z OCR: dużo przeczytanych liter = dokument; wzór „jak wiersze tekstu” bez liter = nie dokument
+OCENA_SQL = """CASE WHEN a.ocr_znaki IS NULL OR a.ocr_znaki < 0 THEN a.tekst
+                    WHEN a.ocr_znaki >= 150 THEN MAX(COALESCE(a.tekst, 0), 0.9)
+                    WHEN a.ocr_znaki >= 60 THEN MAX(COALESCE(a.tekst, 0), 0.7)
+                    WHEN a.ocr_znaki < 10 THEN MIN(COALESCE(a.tekst, 0), 0.4)
+                    ELSE a.tekst END"""
+
+
+def _czytaj_tekst(db, straznik, postep, przerwij, zatwierdz) -> None:
+    """Etap 3: OCR zdjęć z oceną tekstu od PROG_OCR — tylko jeszcze nieprzeczytanych (wznawialne)."""
+    from . import ocr
+    powod = ocr.dostepne()
+    if powod:
+        LOG.info("OCR pominięty: %s", powod)
+        return
+    wiersze = [tuple(r) for r in db.execute(
+        f"""SELECT a.sciezka, a.rozmiar, a.mtime FROM analiza a JOIN pliki p ON {_AKTUALNE}
+            WHERE a.tekst >= ? AND a.ocr_znaki IS NULL AND a.blad IS NULL""", (PROG_OCR,))]
+    # przeczytane już w innym projekcie / trybie — ze wspólnego indeksu, bez czytania z dysku
+    z_indeksu = indeks.pobierz("ocr", wiersze)
+    for sc, zi in z_indeksu.items():
+        db.execute("UPDATE analiza SET ocr_znaki=?, ocr_tekst=? WHERE sciezka=?", (zi["znaki"], zi["tekst"], sc))
+    zatwierdz(wymus=True)
+    rozm = {w[0]: w[1:] for w in wiersze}
+    do_czytania = [w[0] for w in wiersze if w[0] not in z_indeksu]
+
+    def czytaj(sc):
+        if przerwij is not None and przerwij.is_set():
+            raise Przerwano(sc)
+        try:
+            return sc, straznik.wykonaj(ocr.czytaj, sc, sc)
+        except Przerwano:
+            raise
+        except OSError as e:
+            if e.errno is not None:
+                return sc, None  # brak dostępu (sieć) — spróbujemy przy następnej analizie
+            return sc, {"znaki": -1, "tekst": None}
+        except Exception as e:  # noqa: BLE001 — nietypowy plik: nie czytamy go w kółko
+            LOG.info("OCR %s: %s", sc, e)
+            return sc, {"znaki": -1, "tekst": None}
+
+    if postep:
+        postep("czytanie tekstu dokumentów (OCR)", 0, len(do_czytania), 0)
+    with ThreadPoolExecutor(max_workers=2) as pula:  # dekodowanie obok czytania; samo OCR i tak po kolei
+        for i, (sc, w) in enumerate(pula.map(czytaj, do_czytania), 1):
+            if w is not None:
+                db.execute("UPDATE analiza SET ocr_znaki=?, ocr_tekst=? WHERE sciezka=?", (w["znaki"], w["tekst"], sc))
+                indeks.zapisz("ocr", [{"sciezka": sc, "rozmiar": rozm[sc][0], "mtime": rozm[sc][1], **w}])
+                zatwierdz()
+            if postep and i % 3 == 0:
+                postep("czytanie tekstu dokumentów (OCR)", i, len(do_czytania), 0)
+    zatwierdz(wymus=True)
 
 
 def podsumowanie(db: sqlite3.Connection) -> dict:
@@ -376,11 +436,12 @@ def podsumowanie(db: sqlite3.Connection) -> dict:
 def kandydaci_dokumentow(db: sqlite3.Connection, tylko_nowe: bool = False) -> list[dict]:
     przygotuj(db)
     wiersze = db.execute(
-        f"""SELECT p.rowid id, p.sciezka, p.wzgledna, p.data, COALESCE(a.tekst, 0) ocena, d.dokument decyzja
+        f"""SELECT * FROM (SELECT p.rowid id, p.sciezka, p.wzgledna, p.data, COALESCE({OCENA_SQL}, 0) ocena,
+                                  d.dokument decyzja, substr(a.ocr_tekst, 1, 160) ocr
             FROM pliki p JOIN analiza a ON {_AKTUALNE}
             LEFT JOIN decyzje_dok d ON d.sciezka = p.sciezka
-            WHERE p.rodzaj='zdjecie' AND (a.tekst >= ? OR d.dokument = 1)
-            ORDER BY a.tekst DESC""", (PROG_KANDYDAT,)).fetchall()
+            WHERE p.rodzaj='zdjecie') WHERE ocena >= ? OR decyzja = 1
+            ORDER BY ocena DESC""", (PROG_KANDYDAT,)).fetchall()
     wynik = []
     for w in wiersze:
         if _ZRZUT.search(w["wzgledna"]):

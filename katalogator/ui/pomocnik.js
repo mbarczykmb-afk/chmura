@@ -29,7 +29,8 @@ to samo miejsce w różnym czasie).</p>
   <li><b>📍 Miejsce</b> — kliknij na mapie albo wybierz z „Znanych miejsc”. <b>📅 Data</b> — gdy aparat miał zły zegar.</li>
   <li><b>Typ: 📷 Zdjęcie / 📄 Dokument</b> — w uporządkowanej bibliotece plik od razu przenosi się do właściwego folderu.</li>
   <li><b>✏ Edycja</b> (przełącznik na pasku) — obrót, kadrowanie, kolory; zapis jako kopia albo w miejsce oryginału.</li>
-  <li><b>Wyszukiwarka</b> rozumie miejscowości, kraje, lata, miesiące, imiona osób i fragmenty nazw.</li>
+  <li><b>Wyszukiwarka</b> rozumie miejscowości, kraje, lata, miesiące, imiona osób i fragmenty nazw — a także
+  <b>tekst z dokumentów</b> (np. „faktura”, „PESEL”), jeśli zdjęcie było analizowane w Porządkowaniu lub Sprzątaniu.</li>
 </ul>
 <h4>Nowy projekt</h4>
 <p>Dodaj folder (np. <code>D:\\Telefon\\DCIM</code>) i poczekaj na skan — pierwszy trwa najdłużej, kolejne czytają tylko zmiany.</p>
@@ -49,7 +50,8 @@ a <b>Cofnij porządkowanie</b> przywraca stan sprzed.</p>
   <li><b>Źródła</b> — foldery do uporządkowania; przy każdym <b>K</b> (kopiuj) albo <b>P</b> (przenieś).</li>
   <li><b>Miejsce docelowe</b> — np. <code>Z:\\Uporządkowane</code>.</li>
   <li><b>Skanuj</b> → <b>Duplikaty</b> → zakładki <b>Dokumenty</b>, <b>Podobne</b>, <b>Nie z aparatu</b> (klawisze
-  <kbd>1</kbd> zdjęcie, <kbd>2</kbd> dokument, <kbd>3</kbd> śmieci).</li>
+  <kbd>1</kbd> zdjęcie, <kbd>2</kbd> dokument, <kbd>3</kbd> śmieci). Zdjęcia podobne do dokumentów program
+  <b>czyta (OCR)</b>: odczytany tekst potwierdza dokument albo go wyklucza, a jego początek widać pod miniaturą.</li>
   <li><b>🌳 Drzewo</b> — tu widzisz, gdzie trafi każdy plik; zmieniaj nazwy folderów (ta sama nazwa = scalenie),
   oznaczaj „✓ Przejrzany”.</li>
   <li><b>Uporządkuj pliki…</b> — kopiowanie / przenoszenie. Przy setkach GB przez sieć najlepiej na noc.</li>

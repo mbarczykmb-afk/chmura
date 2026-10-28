@@ -24,7 +24,11 @@ CREATE TABLE IF NOT EXISTS analiza (
     sciezka TEXT PRIMARY KEY, rozmiar INTEGER NOT NULL, mtime REAL NOT NULL, wersja INTEGER NOT NULL,
     dhash TEXT, dokument REAL, ostrosc REAL, szer INTEGER, wys INTEGER, blad TEXT, podpis TEXT, tekst REAL
 );
+CREATE TABLE IF NOT EXISTS ocr (  -- tekst odczytany ze zdjęć dokumentów (także do wyszukiwania w Przeglądarce)
+    sciezka TEXT PRIMARY KEY, rozmiar INTEGER NOT NULL, mtime REAL NOT NULL, znaki INTEGER, tekst TEXT
+);
 """
+_TABELE = ("meta", "odciski", "analiza", "ocr")
 _SCIEZKA: Path | None = None
 _blokada = threading.Lock()
 
@@ -60,7 +64,7 @@ def _polacz() -> sqlite3.Connection:
 
 def pobierz(tabela: str, pliki, wersja: int | None = None) -> dict[str, dict]:
     """{ścieżka: wiersz} dla plików [(ścieżka, rozmiar, mtime)], których zapis w indeksie jest aktualny."""
-    if not _SCIEZKA or tabela not in ("meta", "odciski", "analiza"):
+    if not _SCIEZKA or tabela not in _TABELE:
         return {}
     pliki = list(pliki)
     wynik: dict[str, dict] = {}
@@ -83,7 +87,7 @@ def pobierz(tabela: str, pliki, wersja: int | None = None) -> dict[str, dict]:
 
 def zapisz(tabela: str, wiersze: list[dict]) -> None:
     """Dopisuje / nadpisuje wiersze (słowniki z kolumnami tabeli)."""
-    if not _SCIEZKA or not wiersze or tabela not in ("meta", "odciski", "analiza"):
+    if not _SCIEZKA or not wiersze or tabela not in _TABELE:
         return
     kol = list(wiersze[0])
     with _blokada:
@@ -126,10 +130,26 @@ def usun(sciezki: list[str]) -> None:
             try:
                 for i in range(0, len(sciezki), 500):
                     cz = sciezki[i:i + 500]
-                    for t in ("meta", "odciski", "analiza"):
+                    for t in _TABELE:
                         db.execute(f"DELETE FROM {t} WHERE sciezka IN ({','.join('?' * len(cz))})", cz)
                 db.commit()
             finally:
                 db.close()
         except sqlite3.Error:
             pass
+
+
+def szukaj_tekstu(slowo: str, ile: int = 5000) -> list[str]:
+    """Ścieżki zdjęć, w których OCR odczytał to słowo (bez rozróżniania wielkości liter, także ą, ł, ź…)."""
+    if not _SCIEZKA or not slowo.strip():
+        return []
+    try:
+        db = _polacz()
+        try:
+            db.create_function("pl_lower", 1, lambda s: s.lower() if s else s, deterministic=True)
+            return [r[0] for r in db.execute("SELECT sciezka FROM ocr WHERE pl_lower(tekst) LIKE ? LIMIT ?",
+                                             (f"%{slowo.lower()}%", ile))]
+        finally:
+            db.close()
+    except sqlite3.Error:
+        return []

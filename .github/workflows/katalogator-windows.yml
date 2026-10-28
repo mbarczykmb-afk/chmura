@@ -56,6 +56,7 @@ jobs:
           --add-data "katalogator/ui;katalogator/ui"
           --add-data "katalogator/dane;katalogator/dane"
           --collect-all pillow_heif
+          --collect-all rapidocr
           --exclude-module imageio_ffmpeg
           uruchom.py
 
@@ -78,8 +79,19 @@ jobs:
           --add-data "katalogator/ui;katalogator/ui"
           --add-data "katalogator/dane;katalogator/dane"
           --collect-all pillow_heif
+          --collect-all rapidocr
           --exclude-module imageio_ffmpeg
           uruchom.py
+
+      - name: Test OCR w zbudowanym programie
+        shell: pwsh
+        run: |
+          foreach ($exe in "dist\instalacja\Katalogator\Katalogator.exe", "dist\Katalogator.exe") {
+            $plik = Join-Path $env:RUNNER_TEMP "autotest.txt"
+            $p = Start-Process -FilePath $exe -ArgumentList "--autotest", $plik -PassThru -Wait
+            Get-Content $plik -Encoding UTF8 -ErrorAction SilentlyContinue
+            if ($p.ExitCode -ne 0) { throw "$exe --autotest: kod $($p.ExitCode)" }
+          }
 
       - name: Test uruchomienia exe (serwer startuje)
         shell: pwsh

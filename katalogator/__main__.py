@@ -9,10 +9,29 @@ from pathlib import Path
 from . import raport, skaner
 
 
+def _autotest(plik: str) -> int:
+    """Czyta tekst z wygenerowanej kartki; wynik (albo błąd) zapisuje do pliku `plik`."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+
+        from . import ocr
+        im = Image.new("RGB", (900, 300), "white")
+        ImageDraw.Draw(im).text((40, 100), "FAKTURA 2024 RAZEM", fill="black", font=ImageFont.load_default(size=48))
+        w = ocr.czytaj_obraz(im)
+        wynik, kod = f"OCR: {w['tekst']!r} ({w['znaki']} znaków)", 0 if "FAKTURA" in w["tekst"] else 1
+    except Exception as e:  # noqa: BLE001
+        wynik, kod = f"OCR: błąd {type(e).__name__}: {e}", 2
+    if plik:
+        Path(plik).write_text(wynik, encoding="utf-8")
+    return kod
+
+
 def main(argv=None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if sys.stdout is None:  # Katalogator.exe bez konsoli (UTF-8, bo domyślne cp1252 nie zna polskich znaków)
         sys.stdout = sys.stderr = open(os.devnull, "w", encoding="utf-8", errors="replace")
+    if args[:1] == ["--autotest"]:  # CI: czy w zbudowanym programie działają OCR (i silnik twarzy) — kod 0 = tak
+        return _autotest(args[1] if len(args) > 1 else "")
     if args[:1] in (["--auto"], ["--usun-harmonogramy"], ["--w-tle"]) or not args:
         # tryby bez konsoli: wszystko (także błędy) do pliku dziennika, nigdy okienko z błędem
         from . import logi

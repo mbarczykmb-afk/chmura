@@ -168,6 +168,10 @@ function rysujDokumenty() {
     const k = karta(d.id, "zdjecie", d.wzgledna, `${(d.data || "").slice(0, 10)} · pewność ${Math.round(d.ocena * 100)}%` + kopieTxt(d),
                     false, () => undefined, true);
     k.querySelector("input").remove(); k.onclick = null; k.style.cursor = "default";
+    if (d.ocr) {  // 📄 początek tekstu odczytanego ze zdjęcia (OCR) — widać, czemu to dokument
+      const o = document.createElement("div"); o.className = "m ocr"; o.title = "Tekst odczytany ze zdjęcia (OCR)";
+      o.textContent = "📄 " + d.ocr.replace(/\s+/g, " "); k.querySelector(".op").append(o);
+    }
     k.append(przyciskiKategorii([d.id, ...(d.kopie || [])], dokZapisana(d), v => { d.kat = v; d.decyzja = null; dokStopka(); dokDalej(); }, dokSugestia(d)));
     s.append(k);
   }

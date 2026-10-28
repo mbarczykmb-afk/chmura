@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import analiza, miejsca, skaner
+from . import analiza, indeks, miejsca, skaner
 
 UI = Path(__file__).parent / "ui"
 _TYPY = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".png": "image/png",
@@ -95,6 +95,7 @@ class Galeria:
 
     def _db(self):
         db = skaner.otworz_baze(self.baza)
+        db.create_function("pl_lower", 1, lambda s: s.lower() if s else s, deterministic=True)  # SQLite: Ł, Ź…
         if not getattr(self, "_schemat", False):
             db.executescript(SCHEMAT_KOLEKCJI)
             if "ukryty" not in {r[1] for r in db.execute("PRAGMA table_info(g_albumy)")}:  # od 1.35: 🙈 ukryte albumy
@@ -107,6 +108,14 @@ class Galeria:
             db.commit()
             self._schemat = True
         return db
+
+    def _ma_ocr(self) -> bool:
+        """Czy w tej bazie jest tekst odczytany z dokumentów (analiza projektu z OCR)."""
+        db = self._db()
+        try:
+            return "ocr_tekst" in {r[1] for r in db.execute("PRAGMA table_info(analiza)")}
+        finally:
+            db.close()
 
     @staticmethod
     def _klucz_sql() -> str:  # nazwa pliku (małe litery) | rozmiar | data zdjęcia
@@ -537,9 +546,13 @@ class Galeria:
             war.append("substr(data, 1, 4) = ?"); a.append(rok)
         if mies:
             war.append("CAST(substr(data, 6, 2) AS INTEGER) = ?"); a.append(mies)
-        for s in tekstowe:
-            war.append("(lower(wzgledna) LIKE ? OR lower(coalesce(aparat, '')) LIKE ?)")
-            a += [f"%{s.lower()}%"] * 2
+        ocr = self._ma_ocr()
+        for s in tekstowe:  # 📄 także tekst odczytany z dokumentów (OCR) — „faktura”, „PESEL”, „Orlen”
+            z_indeksu = indeks.szukaj_tekstu(s)  # Przeglądarka: tekst przeczytany w projektach (wspólny indeks)
+            war.append("(lower(wzgledna) LIKE ? OR lower(coalesce(aparat, '')) LIKE ?" +
+                       (" OR sciezka IN (SELECT sciezka FROM analiza WHERE pl_lower(ocr_tekst) LIKE ?)" if ocr else "") +
+                       (f" OR sciezka IN ({','.join('?' * len(z_indeksu))})" if z_indeksu else "") + ")")
+            a += [f"%{s.lower()}%"] * (3 if ocr else 2) + z_indeksu
         for o in osoby_ids:
             war.append("sciezka IN (SELECT sciezka FROM g_twarze WHERE osoba=?)"); a.append(o)
         if miejsce:

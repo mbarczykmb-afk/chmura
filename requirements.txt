@@ -3,4 +3,6 @@ pillow-heif>=0.16   # zdjęcia HEIC (opcjonalnie)
 mutagen>=1.47
 opencv-python-headless>=4.8,<5  # 👤 Osoby: wykrywanie i rozpoznawanie twarzy (YuNet + SFace)
 imageio-ffmpeg>=0.5  # ffmpeg: podgląd i miniatury starych filmów (AVI, MPG, 3GP, WMV…)
+rapidocr>=3.9,<4     # 📄 OCR dokumentów (modele PP-OCRv6 w paczce, ok. 31 MB)
+onnxruntime>=1.18    # silnik modeli ONNX dla OCR
 pytest>=8           # tylko do testów
