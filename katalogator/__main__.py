@@ -19,8 +19,11 @@ def _autotest(plik: str) -> int:
         ImageDraw.Draw(im).text((40, 100), "FAKTURA 2024 RAZEM", fill="black", font=ImageFont.load_default(size=48))
         w = ocr.czytaj_obraz(im)
         wynik, kod = f"OCR: {w['tekst']!r} ({w['znaki']} znaków)", 0 if "FAKTURA" in w["tekst"] else 1
+        import cv2  # silnik twarzy (SCRFD + ArcFace): OpenCV do wyrównania twarzy, ONNX Runtime do modeli
+        import onnxruntime
+        wynik += f"; twarze: OpenCV {cv2.__version__}, ONNX Runtime {onnxruntime.__version__}"
     except Exception as e:  # noqa: BLE001
-        wynik, kod = f"OCR: błąd {type(e).__name__}: {e}", 2
+        wynik, kod = f"autotest: błąd {type(e).__name__}: {e}", 2
     if plik:
         Path(plik).write_text(wynik, encoding="utf-8")
     return kod

@@ -78,3 +78,44 @@ def test_wykrywanie_osoby_nazwa_szukanie(tmp_path, monkeypatch):
             break
         time.sleep(0.1)
     assert twarze.stan(g.baza)["wszystkie"] == 0
+    # ⚙ zmiana silnika na dokładniejszy (InsightFace buffalo_l): zdjęcia od nowa, imię zostaje przy osobie
+    if not twarze.model_pobrany("arcface"):
+        return
+    monkeypatch.setattr(twarze, "SILNIK", "arcface")
+    if twarze.dostepne():
+        return
+    twarze.start(g)
+    for _ in range(600):
+        if not twarze.stan(g.baza).get("trwa"):
+            break
+        time.sleep(0.1)
+    s = twarze.stan(g.baza)
+    assert not s.get("blad") and s["zrobione"] == 3
+    db = twarze.otworz_baze(tmp_path / "k.db")
+    assert {r[0] for r in db.execute("SELECT DISTINCT length(wektor) FROM g_twarze")} == {512 * 4}  # stare znikły
+    o = twarze.osoby(g)
+    lena2 = next(x for x in o["osoby"] if x["nazwa"] == "Lena")
+    assert {p["nazwa"] for p in g.osoba(lena2["id"])["pliki"]} == {"lena1.jpg", "lena2.jpg"}
+    assert twarze.miniatura_twarzy(g, lena2["twarz"]).startswith(b"\xff\xd8")  # okładka wskazuje nową twarz
+    messi = db.execute("SELECT osoba FROM g_twarze WHERE sciezka LIKE '%messi.jpg'").fetchone()[0]
+    assert messi != lena2["id"]
+
+
+def test_pobieranie_modeli_buffalo_sprawdza_sumy(tmp_path, monkeypatch):
+    """Paczka buffalo_l: rozpakowujemy tylko 2 potrzebne modele i sprawdzamy ich sumy; zła suma = nic nie zostaje."""
+    import hashlib
+    import zipfile
+    paczka = tmp_path / "buffalo_l.zip"
+    with zipfile.ZipFile(paczka, "w") as z:
+        z.writestr("det_10g.onnx", b"wykrywanie")
+        z.writestr("w600k_r50.onnx", b"rozpoznawanie")
+        z.writestr("1k3d68.onnx", b"niepotrzebny")
+    monkeypatch.setattr(twarze, "URL_BUFFALO", paczka.as_uri())
+    monkeypatch.setattr(twarze, "KATALOG_MODELI", tmp_path / "modele")
+    with pytest.raises(OSError):
+        twarze.pobierz_buffalo()
+    assert not twarze.model_pobrany("arcface") and not list((tmp_path / "modele" / "buffalo_l").glob("*.zip*"))
+    monkeypatch.setattr(twarze, "PLIKI_BUFFALO", {n: hashlib.sha256(b).hexdigest() for n, b in
+                                                 (("det_10g.onnx", b"wykrywanie"), ("w600k_r50.onnx", b"rozpoznawanie"))})
+    kat = twarze.pobierz_buffalo()
+    assert twarze.model_pobrany("arcface") and sorted(p.name for p in kat.iterdir()) == ["det_10g.onnx", "w600k_r50.onnx"]

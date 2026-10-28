@@ -56,10 +56,41 @@ class Stan:
         indeks.ustaw(Path(katalog) / "wspolny_indeks.db")
         self.przegladarka = przegladarka.Przegladarka(katalog)  # dyski do oglądania, osobna baza
         twarze.KATALOG_MODELI = Path(katalog) / "modele"  # model rozpoznawania twarzy (pobierany raz)
+        twarze.SILNIK = aktualizacje._ustawienia(katalog).get("twarze_silnik") or "sface"
         self.serwer_tel = None
         self.wzorce_pamiec: dict = {}  # marka ftyp → wzorce, które zadziałały przy naprawie filmów
         pid = self.projekty.ostatni() or self.projekty.nowy("Mój projekt")
         self._otworz(pid)
+
+    def twarze_silnik_info(self) -> dict:
+        return {"silnik": twarze.SILNIK, "stan": twarze.stan(self.przegladarka.galeria.baza),
+                "silniki": [{"id": k, **v, "pobrany": twarze.model_pobrany(k)} for k, v in twarze.SILNIKI.items()]}
+
+    def twarze_silnik(self, silnik: str) -> dict:
+        """Zmiana silnika: zapis w ustawieniach i ponowne przejrzenie zdjęć Przeglądarki (w tle; imiona zostają).
+        Biblioteki projektów przejdą na nowy silnik przy następnym „Szukaj twarzy” w ich widoku Osoby."""
+        if silnik not in twarze.SILNIKI:
+            return {"blad": "Nieznany silnik."}
+        if silnik == twarze.SILNIK:
+            return self.twarze_silnik_info()
+        g = self.przegladarka.galeria
+        if twarze.stan(g.baza).get("trwa"):
+            twarze.przerwij(g.baza)
+            for _ in range(100):  # bieżące zdjęcie kończy się w ułamku sekundy
+                if not twarze.stan(g.baza).get("trwa"):
+                    break
+                time.sleep(0.1)
+        aktualizacje.zapisz_ustawienia(self.katalog, twarze_silnik=silnik)
+        twarze.SILNIK = silnik
+        db = g._db()
+        try:  # Przeglądarka używała już Osób — od razu przechodzimy na nowy silnik
+            uzywane = db.execute("SELECT 1 FROM sqlite_master WHERE name='g_twarze'").fetchone() and \
+                db.execute("SELECT 1 FROM g_twarze LIMIT 1").fetchone()
+        finally:
+            db.close()
+        if uzywane:
+            twarze.start(g)
+        return self.twarze_silnik_info()
 
     def biblioteka_poza_przegladarka(self) -> str | None:
         """Uporządkowana biblioteka (miejsce docelowe), której jeszcze nie ma w Przeglądarce — do dodania jednym klikiem."""
@@ -1560,6 +1591,8 @@ def _handler(stan: Stan, token: str, zamknij):
                                      "foldery": len(prz.get("foldery") or [])},
                     "kopia": stan.kopia_info(), "most": stan.most_info(),
                     "zdalna": ust.get("zdalna_biblioteka") or ""})
+            if u.path == "/api/twarze/silnik":  # 👤 silnik rozpoznawania twarzy (⚙ Ustawienia → Przeglądarka)
+                return self._wyslij(stan.twarze_silnik_info())
             if u.path == "/api/dyski":
                 return self._wyslij({"dyski": dyski.lista_dyskow()})
             if u.path == "/api/foldery":
@@ -1803,6 +1836,9 @@ def _handler(stan: Stan, token: str, zamknij):
                 if adres.startswith("https://github.com/"):
                     webbrowser.open(adres)
                 return self._wyslij({"ok": True})
+            if u.path == "/api/twarze/silnik":
+                w = stan.twarze_silnik(str(dane.get("silnik", "")))
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/program/ustawienia":
                 zmiany = {k: bool(dane[k]) for k in ("sprawdzaj_aktualizacje", "powitanie_widziane") if k in dane}
                 if dane.get("motyw") in ("dark", "light", "auto"):

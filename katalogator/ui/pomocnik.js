@@ -29,6 +29,8 @@ to samo miejsce w różnym czasie).</p>
   <li><b>📍 Miejsce</b> — kliknij na mapie albo wybierz z „Znanych miejsc”. <b>📅 Data</b> — gdy aparat miał zły zegar.</li>
   <li><b>Typ: 📷 Zdjęcie / 📄 Dokument</b> — w uporządkowanej bibliotece plik od razu przenosi się do właściwego folderu.</li>
   <li><b>✏ Edycja</b> (przełącznik na pasku) — obrót, kadrowanie, kolory; zapis jako kopia albo w miejsce oryginału.</li>
+  <li><b>👤 Osoby</b> — twarze pogrupowane w osoby; imię nadajesz klikając podpis. Dokładniejszy silnik rozpoznawania
+  (InsightFace, jak w Immich) włączysz w zakładce <b>Ustawienia → Przeglądarka → Osoby</b> — imiona zostają.</li>
   <li><b>Wyszukiwarka</b> rozumie miejscowości, kraje, lata, miesiące, imiona osób i fragmenty nazw — a także
   <b>tekst z dokumentów</b> (np. „faktura”, „PESEL”), jeśli zdjęcie było analizowane w Porządkowaniu lub Sprzątaniu.</li>
 </ul>
@@ -132,7 +134,7 @@ nie działa). Gdy klucz trafi do niewłaściwej osoby: <b>Nowy klucz</b>. Komput
   <li><b>Projekt</b> — ustawienia bieżącego projektu: nazwa, notatki, źródła (K — kopiuj / P — przenieś), biblioteka
     (Dokąd), „Mieszkam w”, foldery przychodzące i godzina codziennego sprawdzania. Inny projekt ma własne.</li>
   <li><b>Przeglądarka</b> — dyski i foldery (zestawy), samoczynne odświeżanie, zapamiętany wygląd (kolejność, rodzaj,
-    wykres, panele) — zmiany wyglądu widać po następnym otwarciu Przeglądarki.</li>
+    wykres, panele) — zmiany wyglądu widać po następnym otwarciu Przeglądarki — oraz silnik rozpoznawania twarzy.</li>
   <li><b>Porządkowanie i Sprzątanie</b> — opcje zakładek: schowany pasek, podpowiedzi, usuwanie duplikatów na stałe,
     Podobne po jednej grupie, widok „Nie z aparatu”.</li>
 </ul>

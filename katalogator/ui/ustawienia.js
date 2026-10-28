@@ -347,7 +347,43 @@ async function rysujUstPrzeg() {
     poleLs("Schowany pasek narzędzi (więcej miejsca na zdjęcia)", "kat_g_pasek", "0"),
     poleLs("Panel ℹ Właściwości w podglądzie zdjęcia", "kat_wl", "0"),
     poleLs("Tryb edycji (obrót i edycja na miniaturach)", "kat_edycja", "0"));
-  t.append(dy, od, wy);
+  t.append(dy, od, wy, await sekcjaTwarzy());
+}
+
+// 👤 silnik rozpoznawania twarzy (widok Osoby)
+async function sekcjaTwarzy() {
+  const s = sekcja("👤 Osoby — rozpoznawanie twarzy");
+  let d;
+  try { d = await api("/api/twarze/silnik"); } catch (e) { s.append(el("div", {className: "zle", textContent: e.message})); return s; }
+  const opisy = {
+    sface: "Szybki, model 38 MB. Dobry przy wyraźnych twarzach na wprost.",
+    arcface: "Dokładniejszy — ten sam zestaw co w Immich (SCRFD + ArcFace): lepiej znajduje małe, boczne i ciemne twarze " +
+             "i pewniej odróżnia podobne osoby (np. rodzeństwo). Model ok. 190 MB, pobierany raz. " +
+             "Licencja modeli InsightFace: tylko użytek niekomercyjny — prywatne, rodzinne zdjęcia: tak."};
+  for (const x of d.silniki) {
+    const akt = x.id === d.silnik;
+    s.append(el("label", {className: "silnik" + (akt ? " akt" : "")},
+      el("input", {type: "radio", name: "silnik-twarzy", checked: akt, on: {change: () => zmienSilnikTwarzy(x, d)}}),
+      el("span", {}, el("b", {textContent: x.nazwa}), el("br"),
+         el("span", {className: "info", textContent: opisy[x.id] + (x.pobrany ? " Model jest już pobrany." : "")}))));
+  }
+  const st = d.stan || {};
+  if (st.trwa) s.append(el("div", {className: "info", textContent: `⏳ ${st.komunikat || "Przeglądam zdjęcia…"} ` +
+                                   (st.wszystkie ? `${st.zrobione || 0} z ${st.wszystkie}` : "")}));
+  else if (st.blad) s.append(el("div", {className: "zle", textContent: st.blad}));
+  return s;
+}
+async function zmienSilnikTwarzy(x, d) {
+  const tekst = x.id === "arcface"
+    ? "Przełączyć na dokładniejszy silnik rozpoznawania twarzy?\n\n" +
+      (x.pobrany ? "" : "Program pobierze raz paczkę ok. 275 MB (zostanie ok. 190 MB). ") +
+      "Zdjęcia zostaną przejrzane od nowa w tle — można przerwać i dokończyć później. Imiona i połączenia osób zostają.\n\n" +
+      "Modele InsightFace są tylko do użytku niekomercyjnego."
+    : "Wrócić do standardowego silnika rozpoznawania twarzy?\n\nZdjęcia zostaną przejrzane od nowa w tle. Imiona i połączenia osób zostają.";
+  if (!await oknoTak(tekst)) { rysujUstPrzeg(); return; }
+  try { await api("/api/twarze/silnik", {silnik: x.id}); toast("👤 Silnik twarzy zmieniony — zdjęcia są przeglądane od nowa w tle."); }
+  catch (e) { toast(e.message); }
+  rysujUstPrzeg();
 }
 
 // ---------- 🗂 Porządkowanie i Sprzątanie: zapamiętane opcje zakładek ----------
