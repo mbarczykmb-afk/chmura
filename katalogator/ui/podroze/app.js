@@ -2031,6 +2031,7 @@ function renderCatalogGrid() {
   if (detectedTrips.length === 0) {
     grid.classList.add('hidden');
     emptyState.classList.remove('hidden');
+    if (window.osCzasu) window.osCzasu.rysuj([], [], showDetailView);
     return;
   }
 
@@ -2041,6 +2042,7 @@ function renderCatalogGrid() {
     if (selectedYearFilter !== 'all' && trip.year.toString() !== selectedYearFilter) {
       return false;
     }
+    if (window.kraje && !window.kraje.filtr(trip)) return false;
     if (searchQuery) {
       const matchTitle = trip.title.toLowerCase().includes(searchQuery);
       const matchHighlights = trip.highlights.some(h => h.toLowerCase().includes(searchQuery));
@@ -2057,6 +2059,9 @@ function renderCatalogGrid() {
     if (currentSort === 'walk-desc') return b.stats.walkKm - a.stats.walkKm;
     return 0;
   });
+
+  if (window.osCzasu) window.osCzasu.rysuj(detectedTrips, filtered, showDetailView);
+  if (window.kraje) window.kraje.po(detectedTrips);
 
   if (filtered.length === 0) {
     grid.innerHTML = `
@@ -3546,8 +3551,12 @@ function renderMapPoints(points, photos = []) {
     routeToDraw = trip.routePoints;
   }
 
+  // Ślad trasy: odcinki z GPS ciągłą linią, luki przerywaną (trasa.js); bez dni ze śladem — dawna linia przez miejsca
+  const rysowanoSlad = !!(window.trasaPodrozy && trip && window.trasaPodrozy.rysuj(map, trip, currentActiveDayFilter));
+  if (!rysowanoSlad && window.trasaPodrozy) window.trasaPodrozy.czysc(map);
+
   // Draw connecting path
-  if (routeToDraw.length > 1) {
+  if (!rysowanoSlad && routeToDraw.length > 1) {
     mapRouteLine = L.polyline(routeToDraw, {
       color: '#00f0ff',
       weight: 3.5,

@@ -149,9 +149,13 @@ def test_zasoby_i_dane_przez_ciasteczko(program):
     kod, tresc, _ = g("/podroze/api/version", c)
     assert kod == 200 and json.loads(tresc)["totalTrips"] == 2
     for plik, typ in (("app.js", "javascript"), ("podroze.css", "text/css"), ("jszip.min.js", "javascript"),
-                      ("motyw.css", "text/css"), ("katalogator-motyw.js", "javascript")):
+                      ("motyw.css", "text/css"), ("katalogator-motyw.js", "javascript"), ("nowe.css", "text/css"),
+                      ("nowe.js", "javascript"), ("os-czasu.js", "javascript"), ("kraje.js", "javascript"), ("trasa.js", "javascript"),
+                      ("kraje.json", "json")):
         kod, tresc, nag = g("/podroze/" + plik, c)
         assert kod == 200 and typ in nag["Content-Type"] and len(tresc) > 100, plik
+    granice = json.loads(g("/podroze/kraje.json", c)[1])["features"]   # granice państw do mapy i rozpoznawania państwa wyprawy
+    assert {"PL", "PT", "CV", "TR", "CY"} <= {f["properties"]["a2"] for f in granice}
     kod, tresc, nag = g("/podroze/sample-trips.json", c)
     assert kod == 200 and json.loads(tresc)["trips"][1]["title"] == "Madera" and int(nag["Content-Length"]) == len(tresc)
     assert g("/podroze/thumbnails/mini1.jpg", c)[0] == 200

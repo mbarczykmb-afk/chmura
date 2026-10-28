@@ -33,3 +33,11 @@ Kod aplikacji jest w `katalogator/ui/podroze/`, serwer w `katalogator/podroze.py
 
 Port generatora wypraw (`generate_all_real_trips.py`) i integracji Strava / Intervals / PeakBagger / OSM do modułów Pythona
 Katalogatora, z paskiem postępu; klucze z ustawień programu; bez zaszytych danych osobistych (rezerwacje, ścieżki).
+
+## Wygląd (1.51.0)
+
+- Menu **＋ Nowe**: wczytanie pliku Timeline (okno z przeciąganiem), odświeżenie danych, wycieczka ITAKA.
+- **Oś czasu** (`os-czasu.js`) i **mapa państw** (`kraje.js`, granice `kraje.json` z Natural Earth — domena publiczna; państwo wyprawy
+  z jej miejsc, bez lotnisk).
+- **Ślad GPS** (`trasa.js`): linia ciągła tam, gdzie jest ślad; przerywana tam, gdzie Google zapisał tylko początek i koniec
+  odcinka. „Wyznacz drogi” pyta `routing.openstreetmap.de` (tylko współrzędne końców luki, po zgodzie; wynik w `localStorage`).

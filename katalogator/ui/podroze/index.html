@@ -16,6 +16,7 @@
   <script src="/ui/mapa/leaflet.js"></script>
   <script src="jszip.min.js"></script>
   <link rel="stylesheet" href="motyw.css">
+  <link rel="stylesheet" href="nowe.css">
 
   <style>
     body {
@@ -209,12 +210,16 @@
 
       <!-- Header Action Buttons -->
       <div class="flex items-center space-x-2 sm:space-x-3">
-        <button id="btn-reindex-all" class="px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-xl transition border border-amber-500/40 flex items-center gap-1.5 shadow-sm" title="Odśwież dane podróży">
-          <span>⚡</span> <span class="hidden lg:inline">Odśwież dane</span><span class="lg:hidden">Zdjęcia</span>
-        </button>
-        <button id="btn-load-demo" class="px-3 py-1.5 text-xs sm:text-sm font-bold bg-teal-600 hover:bg-teal-500 text-white rounded-xl shadow-sm transition flex items-center gap-1.5">
-          <span>✨</span> <span class="hidden sm:inline">Wycieczka</span> ITAKA
-        </button>
+        <div class="np-menu">
+          <button id="btn-nowe" aria-haspopup="true" aria-expanded="false" class="px-3 py-1.5 text-xs sm:text-sm font-bold bg-teal-600 hover:bg-teal-500 text-white rounded-xl shadow-sm transition flex items-center gap-1.5">
+            <span>＋</span> <span>Nowe</span> <span class="text-3xs opacity-80">▾</span>
+          </button>
+          <div id="menu-nowe" class="np-menu-lista" hidden>
+            <button id="nowe-plik" class="np-poz"><span class="np-ik">📂</span><span><b>Wczytaj plik Google Timeline…</b><small>Archiwum .zip z Google Takeout albo plik .json z telefonu</small></span></button>
+            <button id="btn-reindex-all" class="np-poz" title="Odśwież dane podróży i zdjęcia z folderów"><span class="np-ik">⚡</span><span><b>Odśwież dane</b><small>Wczytaj ponownie wyprawy i zdjęcia z biblioteki</small></span></button>
+            <button id="btn-load-demo" class="np-poz"><span class="np-ik">✨</span><span><b>Wycieczka ITAKA</b><small>Przykładowa wycieczka z voucherami biura podróży</small></span></button>
+          </div>
+        </div>
         <button id="btn-help" class="px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition border border-slate-700 flex items-center gap-1">
           <span>❓</span> <span class="hidden md:inline">Pomoc</span>
         </button>
@@ -230,8 +235,27 @@
     <!-- ======================================================== -->
     <div id="catalog-view" class="flex flex-col gap-6">
 
-      <!-- Welcome / Upload Hero Card -->
-      <section id="upload-card" class="rounded-2xl p-6 sm:p-7 border-2 border-dashed border-slate-700 bg-slate-900/60 hover:border-teal-500/60 hover:bg-slate-900 transition text-center shadow-lg relative group cursor-pointer">
+      <!-- Oś czasu wypraw -->
+      <section id="os-czasu" class="np-sekcja" hidden>
+        <div class="np-gl">
+          <div><h3>🕒 Oś czasu wypraw</h3><p id="os-czasu-opis">Kliknij wyprawę, aby ją otworzyć</p></div>
+          <div class="flex items-center gap-1.5">
+            <button id="os-czasu-lewo" class="np-przyc" title="Wcześniej" aria-label="Wcześniej">‹</button>
+            <button id="os-czasu-prawo" class="np-przyc" title="Później" aria-label="Później">›</button>
+            <button id="os-czasu-oddal" class="np-przyc" title="Pomniejsz" aria-label="Pomniejsz">−</button>
+            <button id="os-czasu-przybliz" class="np-przyc" title="Powiększ" aria-label="Powiększ">+</button>
+            <button id="os-czasu-teraz" class="np-przyc" title="Najnowsze">Najnowsze</button>
+          </div>
+        </div>
+        <div id="os-czasu-przew" class="np-os-przew custom-scroll"><div id="os-czasu-tor" class="np-os-tor"></div></div>
+      </section>
+
+      
+      <!-- Okno „Wczytaj plik” (z menu Nowe) -->
+      <div id="nowe-plik-modal" class="np-modal" hidden>
+        <div class="np-modal-karta">
+          <button id="nowe-plik-zamknij" class="np-x" aria-label="Zamknij">✕</button>
+          <section id="upload-card" class="rounded-2xl p-6 sm:p-7 border-2 border-dashed border-slate-700 bg-slate-900/60 hover:border-teal-500/60 hover:bg-slate-900 transition text-center shadow-lg relative group cursor-pointer">
         <input type="file" id="file-input" multiple accept=".json,.zip" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20">
         <div class="flex flex-col items-center justify-center space-y-2.5">
           <div class="w-12 h-12 bg-teal-500/10 border border-teal-500/30 rounded-2xl flex items-center justify-center text-teal-400 text-2xl group-hover:scale-105 transition">
@@ -249,6 +273,8 @@
           </div>
         </div>
       </section>
+        </div>
+      </div>
 
       <!-- Upload Loading Indicator Toast -->
       <div id="upload-loading-indicator" class="hidden rounded-2xl p-5 bg-teal-950/70 border border-teal-500/40 text-center shadow-lg flex flex-col items-center justify-center gap-3">
@@ -351,22 +377,24 @@
           </div>
         </div>
 
-        <!-- Quick Destination Tags -->
-        <div id="quick-dest-bar" class="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scroll text-2xs pt-2 border-t border-slate-800/80">
-          <span class="text-slate-400 font-bold shrink-0">Kierunki:</span>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-teal-600 text-white font-bold transition" data-dest="all">Wszystkie</button>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="tatry">🏔️ Tatry & Zakopane</button>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="madera">🇵🇹 Madera</button>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="cabo verde">🇨🇻 Cabo Verde</button>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="maroko">🇲🇦 Maroko</button>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="turcja">🇹🇷 Turcja</button>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="cypr">🇨🇾 Cypr</button>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="bułgaria">🇧🇬 Bułgaria</button>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="albania">🇦🇱 Albania</button>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="francja">🇫🇷 Francja</button>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="czechy">🇨🇿 Czechy & Praga</button>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="niemcy">🇩🇪 Niemcy</button>
-          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="holandia">🇳🇱 Holandia</button>
+        <!-- Mapa państw (zamiast przycisków Kierunki) -->
+        <div id="quick-dest-bar" class="np-kraje-pudlo pt-2 border-t border-slate-800/80">
+          <div class="np-gl" style="margin-bottom:6px">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 style="margin:0;font-size:13px;font-weight:800;color:#f1f5f9">🌍 Państwa</h3>
+              <span id="kraje-opis" class="text-xs text-slate-400">Kliknij państwo, aby pokazać tylko jego wycieczki</span>
+              <span id="kraje-filtr" class="np-filtr" hidden><span id="kraje-filtr-nazwa"></span><button id="kraje-filtr-x" aria-label="Wyczyść filtr państwa" title="Wyczyść filtr">✕</button></span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="np-legenda-kraje"><span><i style="background:#134e4a"></i>1</span><span><i style="background:#0f766e"></i>2–3</span><span><i style="background:#14b8a6"></i>4–7</span><span><i style="background:#5eead4"></i>8+</span></span>
+              <button id="kraje-odwiedzone" class="np-przyc" title="Przybliż odwiedzone państwa">🎯 Odwiedzone</button>
+              <button id="kraje-swiat" class="np-przyc" title="Pokaż cały świat">🌍 Świat</button>
+            </div>
+          </div>
+          <div class="np-kraje-uklad">
+            <div id="kraje-mapa" role="img" aria-label="Mapa świata z odwiedzonymi państwami"></div>
+            <ul id="kraje-lista" class="np-kraje-lista custom-scroll" aria-label="Odwiedzone państwa"></ul>
+          </div>
         </div>
       </section>
 
@@ -954,7 +982,11 @@
   <script src="photo-matcher.js?v=20261027_02"></script>
   <script src="booking-parser.js?v=20261027_02"></script>
   <script src="export-manager.js?v=20261027_02"></script>
+  <script src="trasa.js"></script>
+  <script src="os-czasu.js"></script>
+  <script src="kraje.js"></script>
   <script src="app.js?v=20261027_02"></script>
+  <script src="nowe.js"></script>
 
   <!-- Mobile Segmented Control & Lightbox Enhanced Interactivity -->
   <script>
