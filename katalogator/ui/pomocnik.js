@@ -139,6 +139,18 @@ nie działa). Gdy klucz trafi do niewłaściwej osoby: <b>Nowy klucz</b>. Komput
     Podobne po jednej grupie, widok „Nie z aparatu”.</li>
 </ul>
 <p>Spis po lewej przenosi do wybranej części. Wyjście: kliknij inną zakładkę u góry.</p>`},
+  {id: "podroze", ik: "✈", tyt: "Podróże", tresc: `
+<p>Zakładka <b>Podróże</b> pokazuje Twoją aplikację <b>Google Timeline Travels</b>: wyprawy na mapie, trasy GPS, szczyty,
+profil wysokości i zdjęcia. To osobny program (Node.js) — Katalogator uruchamia go z wybranego folderu i pokazuje w ramce.</p>
+<ul>
+  <li><b>Pierwszy raz:</b> Podróże → wskaż folder projektu (ten z <code>server.js</code>) → <b>Uruchom serwer</b>. Potrzebny jest
+  Node.js (<code>winget install OpenJS.NodeJS.LTS</code>).</li>
+  <li><b>Dane zostają u Ciebie:</b> historia lokalizacji, trasy i rezerwacje leżą w folderze projektu — Katalogator ich nie kopiuje
+  ani nie wysyła.</li>
+  <li><b>↗ W przeglądarce</b> — ta sama aplikacja w osobnym oknie. <b>⏹ Zatrzymaj</b> — kończy serwer uruchomiony przez Katalogator
+  (serwera uruchomionego samodzielnie nie rusza).</li>
+  <li><b>Adapter motywu</b> (⚙ Ustawienia → Podróże) — czcionka i kolory Katalogatora w aplikacji; usuwalny jednym kliknięciem.</li>
+</ul>`},
   {id: "klawisze", ik: "⌨", tyt: "Skróty klawiszy", tresc: `
 <table class="pm-tab">
 <tr><th colspan="2">Wszędzie</th></tr>
@@ -184,7 +196,7 @@ function trybPomocy() {  // temat dla bieżącej zakładki
   if (typeof $ === "function" && $("galeria-nakladka") && !$("galeria-nakladka").hidden) return "przegladarka";
   const b = document.querySelector(".tryby button.akt");
   return {przegladarka: "przegladarka", porzadkowanie: "porzadkowanie", sprzatanie: "sprzatanie",
-          ustawienia: "ustawienia"}[b && b.dataset.tryb] || "start";
+          ustawienia: "ustawienia", podroze: "podroze"}[b && b.dataset.tryb] || "start";
 }
 
 function zbudujPomoc() {

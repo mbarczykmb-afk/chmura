@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, most, naprawa, odzyskiwanie, pilot, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, twarze, usuwanie, wykonawca, wysylanie)
+from . import podroze
 from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
@@ -61,6 +62,50 @@ class Stan:
         self.wzorce_pamiec: dict = {}  # marka ftyp → wzorce, które zadziałały przy naprawie filmów
         pid = self.projekty.ostatni() or self.projekty.nowy("Mój projekt")
         self._otworz(pid)
+
+    def podroze_ust(self) -> dict:
+        d = aktualizacje._ustawienia(self.katalog).get("podroze")
+        return d if isinstance(d, dict) else {}
+
+    def podroze_info(self) -> dict:
+        return podroze.stan(self.podroze_ust())
+
+    def podroze_akcja(self, dane: dict) -> dict:
+        """✈ Podróże: zapis ustawień (folder, port, start automatyczny), start / stop serwera, adapter motywu."""
+        ust = dict(self.podroze_ust())
+        if "folder" in dane:
+            folder = str(dane["folder"] or "").strip()
+            powod = podroze.sprawdz_folder(folder) if folder else None
+            if powod:
+                return {"blad": powod}
+            ust["folder"] = os.path.normpath(folder) if folder else ""
+        if "port" in dane:
+            port = podroze.port_poprawny(dane["port"])
+            if not port:
+                return {"blad": "Port musi być liczbą od 1024 do 65535."}
+            ust["port"] = port
+        if "auto" in dane:
+            ust["auto"] = bool(dane["auto"])
+        if ust != self.podroze_ust():
+            if podroze._wlasny_dziala() and ("folder" in dane or "port" in dane):
+                podroze.zatrzymaj()  # inny folder / port — stary serwer już nie pasuje
+            aktualizacje.zapisz_ustawienia(self.katalog, podroze=ust)
+        akcja = str(dane.get("akcja") or "")
+        if akcja == "start":
+            w = podroze.uruchom(ust)
+            if "blad" in w:
+                return w
+        elif akcja == "stop":
+            podroze.zatrzymaj()
+        elif akcja == "adapter":
+            w = podroze.zainstaluj_adapter(ust.get("folder") or "")
+            if "blad" in w:
+                return w
+        elif akcja == "adapter-usun":
+            w = podroze.usun_adapter(ust.get("folder") or "")
+            if "blad" in w:
+                return w
+        return self.podroze_info()
 
     def twarze_silnik_info(self) -> dict:
         return {"silnik": twarze.SILNIK, "stan": twarze.stan(self.przegladarka.galeria.baza),
@@ -1591,6 +1636,8 @@ def _handler(stan: Stan, token: str, zamknij):
                                      "foldery": len(prz.get("foldery") or [])},
                     "kopia": stan.kopia_info(), "most": stan.most_info(),
                     "zdalna": ust.get("zdalna_biblioteka") or ""})
+            if u.path == "/api/podroze":
+                return self._wyslij(stan.podroze_info())
             if u.path == "/api/twarze/silnik":  # 👤 silnik rozpoznawania twarzy (⚙ Ustawienia → Przeglądarka)
                 return self._wyslij(stan.twarze_silnik_info())
             if u.path == "/api/dyski":
@@ -1836,6 +1883,9 @@ def _handler(stan: Stan, token: str, zamknij):
                 if adres.startswith("https://github.com/"):
                     webbrowser.open(adres)
                 return self._wyslij({"ok": True})
+            if u.path == "/api/podroze":
+                w = stan.podroze_akcja(dane)
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path == "/api/twarze/silnik":
                 w = stan.twarze_silnik(str(dane.get("silnik", "")))
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
@@ -2118,6 +2168,7 @@ def main(otworz: bool = True) -> None:
     try:
         serwer.serve_forever()
     finally:
+        podroze.zatrzymaj()  # serwer Podróży uruchomiony przez Katalogator kończy się razem z nim
         serwer.server_close()
         try:
             if json.loads(plik_instancji.read_text(encoding="utf-8")).get("pid") == os.getpid():

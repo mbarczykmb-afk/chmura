@@ -27,6 +27,7 @@ const IKONY_LINII = {
   szukaj: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   wiecej: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   zamknij: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  podroze: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
   pinezka: '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
   ksiazka: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
   zakaz: '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
@@ -76,6 +77,7 @@ const IKONY_LINII = {
 .ikl[data-ik=osoby]{--ik:var(--ik-cyan);--ik-akc:var(--ik-violet)}
 .ikl[data-ik=statystyki]{--ik:var(--ik-cyan);--ik-akc:var(--ik-violet)}
 .ikl[data-ik=kosz]{--ik:var(--ik-gray)}
+.ikl[data-ik=podroze]{--ik:var(--ik-green)}
 .ikl[data-ik=odzysk]{--ik:var(--ik-blue)}
 .ikl[data-ik=ustawienia],.ikl[data-ik=dyski],.ikl[data-ik=folder]{--ik:var(--ik-steel)}
 .akt>.ikl,.akt .ikl,button.glowny .ikl{--ik:currentColor;--ik-akc:currentColor}

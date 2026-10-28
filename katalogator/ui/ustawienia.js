@@ -26,6 +26,7 @@ const przyc = (tekst, akcja, klasa = "", tytul = "") => el("button", {textConten
 async function otworzUstawienia(czesc) {
   $("pomoc-menu").hidden = true;
   if (!$("galeria-nakladka").hidden) { zamknijGalerie(); trybGalerii = false; }
+  zamknijPodroze();
   $("strona-ust").hidden = false; trybUst = true; oznaczTryby();
   await rysujStroneUstawien();
   if (czesc) $(czesc).scrollIntoView();
@@ -33,7 +34,7 @@ async function otworzUstawienia(czesc) {
 const ustOtwarte = () => !$("strona-ust").hidden;
 async function rysujStroneUstawien() {
   rysujUstProjekt(); rysujUstZakl();
-  await Promise.all([rysujUstawienia(), rysujUstPrzeg()]);
+  await Promise.all([rysujUstawienia(), rysujUstPrzeg(), rysujUstPodroze()]);
 }
 async function rysujUstawienia() {
   let d;
@@ -415,3 +416,10 @@ $("strona-ust").addEventListener("scroll", () => {
 $("strona-ust").querySelectorAll(".ust-spis a").forEach(a => a.onclick = e => {
   e.preventDefault(); $(a.getAttribute("href").slice(1)).scrollIntoView({behavior: "smooth"});
 });
+
+// ---------- ✈ Podróże (aplikacja Google Timeline Travels) ----------
+async function rysujUstPodroze() {
+  const t = $("ust-podroze");
+  try { pod.d = await api("/api/podroze"); } catch (e) { t.textContent = e.message; return; }
+  t.replaceChildren(sekcjaPodrozy(pod.d, rysujUstPodroze));
+}

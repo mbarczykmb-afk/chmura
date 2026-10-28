@@ -181,6 +181,15 @@ details.reczne summary{cursor:pointer;margin-bottom:6px}
 #strona-ust{position:fixed;inset:0;top:var(--nag,0px);z-index:1500;background:var(--bg);overflow-y:auto;
   display:grid;grid-template-columns:220px minmax(0,820px);gap:28px;padding:20px 28px 60px;justify-content:center}
 #strona-ust[hidden]{display:none}
+#podroze-nakladka{position:fixed;inset:0;top:var(--nag,0px);z-index:1500;background:var(--bg);display:flex;flex-direction:column}
+#podroze-nakladka[hidden]{display:none}
+#podroze-pasek{display:flex;align-items:center;gap:10px;padding:7px 14px;font-size:13.5px;border-bottom:1px solid var(--lin);background:var(--panel)}
+#podroze-pasek b{color:var(--akc)}
+#podroze-pasek .info{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#podroze-pasek button{padding:4px 12px}
+#podroze-ramka{flex:1;min-height:0;width:100%;border:0;display:block;background:var(--bg)}
+#podroze-ramka[hidden],#podroze-konfig[hidden]{display:none}
+#podroze-konfig{flex:1;min-height:0;overflow-y:auto;padding:24px 28px;max-width:860px;width:100%;margin:0 auto}
 #ust-btn{display:none}  /* ⚙ to teraz zakładka Ustawienia */
 .ust-spis{position:sticky;top:0;align-self:start;display:flex;flex-direction:column;gap:2px;padding-top:6px}
 .ust-spis a{padding:8px 12px;border-radius:8px;color:var(--mut);text-decoration:none;font-weight:600}
@@ -198,6 +207,7 @@ details.reczne summary{cursor:pointer;margin-bottom:6px}
 .ust input[type=text]{flex:1;min-width:160px}
 .ust textarea{width:100%;min-height:70px;resize:vertical}
 .ust .pusto{color:var(--mut);font-size:13px}
+.ust .wiersz button.glowny{width:auto;padding:8px 18px}
 .ust .etyk{flex:none;min-width:110px;color:var(--mut);font-size:13.5px}
 .ust label.silnik{align-items:flex-start;padding:10px 12px;border:1px solid var(--lin);border-radius:10px;cursor:pointer}
 .ust label.silnik.akt{border-color:var(--akc);background:var(--akc-miekki)}
@@ -595,8 +605,9 @@ button.niebezp{background:linear-gradient(135deg,#dc2626,#b91c1c)!important;box-
 header>*{flex-shrink:0} header .projekt-btn{flex-shrink:1;min-width:0}
 header .wersja,#biblioteka-btn,.tryby button{white-space:nowrap}
 @media (max-width:1400px){header .wersja{display:none}}
-@media (max-width:1300px){.tryby button{padding:6px 10px} #biblioteka-btn .t{display:none}}
-@media (max-width:1150px){.tryby button .t{display:none} .tryby button{font-size:17px;padding:5px 12px} header h1 .logo-tekst{display:none}}
+@media (max-width:1650px){.tryby button{padding:6px 10px} #odzysk-btn .t{display:none}}
+@media (max-width:1480px){#biblioteka-btn .t{display:none}}
+@media (max-width:1300px){.tryby button .t{display:none} .tryby button{font-size:17px;padding:5px 12px} header h1 .logo-tekst{display:none}}
 /* --- telefon (pełny program przez serwer telefonu): jedna kolumna, zakładki na górze, bez przewijania w bok --- */
 @media (max-width:760px){
   html,body{overflow-x:hidden;max-width:100vw}
@@ -652,6 +663,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
     <button role="tab" data-tryb="przegladarka" id="przegladarka-btn" title="Przeglądarka: zdjęcia z dowolnych dysków na osi czasu i mapie — oglądanie (i 🗑 usuwanie, gdy chcesz)"><i class="ikl" data-ik="przegladarka"></i><span class="t"> Przeglądarka</span></button>
     <button role="tab" data-tryb="porzadkowanie" title="Porządkowanie: kopiuje lub przenosi pliki do uporządkowanej biblioteki (Rok → Miesiąc → Miejsce)"><i class="ikl" data-ik="porzadek"></i><span class="t"> Porządkowanie</span></button>
     <button role="tab" data-tryb="sprzatanie" title="Sprzątanie na miejscu: duplikaty i śmieci w istniejących folderach — bez kopiowania i bez nowego drzewa"><i class="ikl" data-ik="sprzatanie"></i><span class="t"> Sprzątanie</span></button>
+    <button role="tab" data-tryb="podroze" title="Podróże: Twoje wyprawy na mapie — trasy GPS, szczyty, zdjęcia (aplikacja Google Timeline Travels z folderu na tym komputerze)"><i class="ikl" data-ik="podroze"></i><span class="t"> Podróże</span></button>
     <button role="tab" data-tryb="ustawienia" title="Ustawienia: programu, bieżącego projektu, Przeglądarki i zakładek — wszystkie w jednym miejscu, do zmiany"><i class="ikl" data-ik="ustawienia"></i><span class="t"> Ustawienia</span></button>
   </nav>
   <button class="projekt-btn" id="projekt-btn" title="Zmień projekt"><i class="ikl" data-ik="folder"></i> <span id="projekt-nazwa">…</span> ▾</button>
@@ -696,7 +708,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
 <div id="strona-ust" hidden>
   <nav class="ust-spis" aria-label="Części ustawień">
     <a href="#ust-g-program">Program</a><a href="#ust-g-projekt">Projekt</a><a href="#ust-g-przeg">Przeglądarka</a>
-    <a href="#ust-g-zakl">Porządkowanie i Sprzątanie</a>
+    <a href="#ust-g-zakl">Porządkowanie i Sprzątanie</a><a href="#ust-g-podroze">Podróże</a>
   </nav>
   <div class="ust-kol">
     <section class="ust-grupa" id="ust-g-program"><h2>Program</h2>
@@ -705,7 +717,17 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
     <section class="ust-grupa" id="ust-g-projekt"><h2>Projekt</h2><div class="ust" id="ust-projekt"></div></section>
     <section class="ust-grupa" id="ust-g-przeg"><h2>Przeglądarka</h2><div class="ust" id="ust-przeg"></div></section>
     <section class="ust-grupa" id="ust-g-zakl"><h2>Porządkowanie i Sprzątanie</h2><div class="ust" id="ust-zakl"></div></section>
+    <section class="ust-grupa" id="ust-g-podroze"><h2>Podróże</h2><div class="ust" id="ust-podroze"></div></section>
   </div>
+</div>
+<div id="podroze-nakladka" hidden>
+  <div id="podroze-pasek"><b>✈ Podróże</b><span class="info" id="podroze-opis"></span>
+    <button id="podroze-odswiez" title="Wczytaj aplikację jeszcze raz">⟳</button>
+    <button id="podroze-przegladarka" title="Otwórz w przeglądarce internetowej (pełny ekran, osobne okno)">↗ W przeglądarce</button>
+    <button id="podroze-ust" title="Folder projektu, port, adapter motywu">⚙ Ustawienia</button>
+    <button id="podroze-stop" title="Zatrzymaj serwer Podróży uruchomiony przez Katalogator" hidden>⏹ Zatrzymaj</button></div>
+  <div id="podroze-konfig" class="ust-kol" hidden><div class="ust" id="podroze-konfig-tresc"></div></div>
+  <iframe id="podroze-ramka" title="Podróże" allow="fullscreen; geolocation" allowfullscreen hidden></iframe>
 </div>
 <div id="galeria-nakladka" hidden><div id="zdalna-pasek" hidden><b>🌍 Biblioteka w domu</b><span class="info" id="zdalna-opis">zdalnie, tylko oglądanie</span><button id="zdalna-odswiez" title="Wczytaj jeszcze raz">⟳</button><button id="zdalna-zamknij" title="Wróć do tego komputera">✕ Zamknij</button></div><iframe id="galeria-ramka" title="Biblioteka" allow="fullscreen" allowfullscreen></iframe></div>
 
@@ -1278,6 +1300,7 @@ function zamknijGalerie() {
 }
 function otworzGalerie(z) {
   if (typeof zamknijUstawienia === "function") zamknijUstawienia();
+  if (typeof zamknijPodroze === "function") zamknijPodroze();
   window.scrollTo(0, 0); document.body.classList.add("galeria-otwarta"); wysokoscNaglowka();
   $("galeria-ramka").src = `/galeria?t=${encodeURIComponent(TOKEN)}&app=1&z=${z}`;
   $("zdalna-pasek").hidden = true; $("zdalna-btn").classList.remove("akt");
@@ -1292,6 +1315,7 @@ let zdalnaLink = "";
 function otworzZdalna(link = zdalnaLink) {
   if (!link) { otworzUstawienia(); return; }
   if (typeof zamknijUstawienia === "function") zamknijUstawienia();
+  if (typeof zamknijPodroze === "function") zamknijPodroze();
   window.scrollTo(0, 0); document.body.classList.add("galeria-otwarta"); wysokoscNaglowka();
   $("galeria-ramka").src = link;
   $("zdalna-opis").textContent = "zdalnie, tylko oglądanie · " + link.replace(/^https:\/\//, "").replace(/\/?#.*$/, "");
@@ -1854,6 +1878,7 @@ function rysujDup() {
 <script src="/ui/pomoc.js"></script>
 <script src="/ui/pomocnik.js"></script>
 <script src="/ui/ustawienia.js"></script>
+<script src="/ui/podroze.js"></script>
 <script src="/ui/odzysk.js"></script>
 </body>
 </html>

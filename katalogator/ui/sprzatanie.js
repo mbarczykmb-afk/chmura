@@ -8,6 +8,11 @@ const OPIS_TRYBU = {
 };
 let trybGalerii = false;  // Przeglądarka otwarta nad bieżącym trybem
 let trybUst = false;      // zakładka Ustawienia otwarta nad bieżącym trybem
+let trybPodroze = false;  // zakładka Podróże otwarta nad bieżącym trybem
+function zamknijPodroze() {  // tylko chowa nakładkę — aplikacja w ramce zostaje załadowana (ciężkie dane podróży)
+  if ($("podroze-nakladka").hidden) return;
+  $("podroze-nakladka").hidden = true; trybPodroze = false; oznaczTryby();
+}
 function zamknijUstawienia() {  // tu, nie w ustawienia.js — przełącznik działa już przy starcie programu
   if ($("strona-ust").hidden) return;
   $("strona-ust").hidden = true; trybUst = false; oznaczTryby();
@@ -16,7 +21,7 @@ function zamknijUstawienia() {  // tu, nie w ustawienia.js — przełącznik dzi
 function oznaczTryby() {
   const t = sprzatanie() ? "sprzatanie" : "porzadkowanie";
   document.querySelectorAll(".tryby button").forEach(b => {
-    const akt = trybUst ? b.dataset.tryb === "ustawienia"
+    const akt = trybUst ? b.dataset.tryb === "ustawienia" : trybPodroze ? b.dataset.tryb === "podroze"
       : trybGalerii ? b.dataset.tryb === "przegladarka" : b.dataset.tryb === t;
     b.classList.toggle("akt", akt); b.setAttribute("aria-selected", String(akt));
   });
@@ -26,7 +31,9 @@ document.querySelectorAll(".tryby button").forEach(b => {
   b.onclick = async () => {
     const t = b.dataset.tryb;
     if (t === "ustawienia") { otworzUstawienia(); return; }
+    if (t === "podroze") { otworzPodroze(); return; }
     zamknijUstawienia();
+    zamknijPodroze();
     if (t === "przegladarka") { otworzGalerie("przegladarka"); trybGalerii = true; oznaczTryby(); return; }
     if (!$("galeria-nakladka").hidden) { zamknijGalerie(); trybGalerii = false; }
     if ((t === "sprzatanie") === sprzatanie()) { oznaczTryby(); return; }
