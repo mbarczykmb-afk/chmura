@@ -140,16 +140,16 @@ nie działa). Gdy klucz trafi do niewłaściwej osoby: <b>Nowy klucz</b>. Komput
 </ul>
 <p>Spis po lewej przenosi do wybranej części. Wyjście: kliknij inną zakładkę u góry.</p>`},
   {id: "podroze", ik: "✈", tyt: "Podróże", tresc: `
-<p>Zakładka <b>Podróże</b> pokazuje Twoją aplikację <b>Google Timeline Travels</b>: wyprawy na mapie, trasy GPS, szczyty,
-profil wysokości i zdjęcia. To osobny program (Node.js) — Katalogator uruchamia go z wybranego folderu i pokazuje w ramce.</p>
+<p>Zakładka <b>Podróże</b> to dziennik Twoich wypraw: katalog podróży z mapą świata, trasy GPS z profilem wysokości, szczyty,
+rezerwacje (loty, hotele, auta, bilety) i zdjęcia dopasowane do dni i miejsc. To <b>część Katalogatora</b> — nie osobny program.</p>
 <ul>
-  <li><b>Pierwszy raz:</b> Podróże → wskaż folder projektu (ten z <code>server.js</code>) → <b>Uruchom serwer</b>. Potrzebny jest
-  Node.js (<code>winget install OpenJS.NodeJS.LTS</code>).</li>
-  <li><b>Dane zostają u Ciebie:</b> historia lokalizacji, trasy i rezerwacje leżą w folderze projektu — Katalogator ich nie kopiuje
-  ani nie wysyła.</li>
-  <li><b>↗ W przeglądarce</b> — ta sama aplikacja w osobnym oknie. <b>⏹ Zatrzymaj</b> — kończy serwer uruchomiony przez Katalogator
-  (serwera uruchomionego samodzielnie nie rusza).</li>
-  <li><b>Adapter motywu</b> (⚙ Ustawienia → Podróże) — czcionka i kolory Katalogatora w aplikacji; usuwalny jednym kliknięciem.</li>
+  <li><b>Pierwszy raz:</b> Podróże → wskaż folder dotychczasowego projektu (z plikiem <code>sample-trips.json</code>) → <b>Importuj dane</b>.
+  Dane są kopiowane do folderu danych programu; oryginalny folder zostaje.</li>
+  <li><b>Dane zostają na komputerze:</b> historia lokalizacji, trasy i rezerwacje nie są wysyłane — zakładka nie jest dostępna przez
+  most do domu ani przez telefon.</li>
+  <li><b>Zdjęcia</b> są pokazywane tylko z folderów biblioteki: miejsce docelowe projektów, foldery Przeglądarki i dodatkowe
+  (⚙ Dane i zdjęcia).</li>
+  <li><b>↗ W przeglądarce</b> — ta sama aplikacja w osobnym oknie. <b>⟳</b> wczytuje ją jeszcze raz.</li>
 </ul>`},
   {id: "klawisze", ik: "⌨", tyt: "Skróty klawiszy", tresc: `
 <table class="pm-tab">

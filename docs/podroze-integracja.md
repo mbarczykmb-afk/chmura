@@ -1,58 +1,35 @@
-# Podróże — integracja Google Timeline Travels z Katalogatorem
+# Podróże — Google Timeline Travels jako część Katalogatora
 
-Zakładka **Podróże** uruchamia Twoją aplikację (`C:\Users\Dom\.gemini\antigravity\scratch\google-timeline-travels`)
-i pokazuje ją w ramce. Dane podróży **zostają w tym folderze** — nie są częścią repozytorium (jest publiczne).
+Zakładka **Podróże** to dziennik wypraw (oś czasu Google, trasy GPS, szczyty, rezerwacje, zdjęcia) wbudowany w program.
+Nie ma osobnego programu ani Node: serwer Katalogatora serwuje aplikację pod `/podroze/`, a zakładka pokazuje ją w ramce.
+Kod aplikacji jest w `katalogator/ui/podroze/`, serwer w `katalogator/podroze.py`.
 
-## Jak to działa (kontrakt)
+**Dane podróży nie należą do repozytorium (jest publiczne).** Leżą w folderze danych programu
+(`%LOCALAPPDATA%\Katalogator\podroze\dane`) i trafiają tam z dotychczasowego folderu projektu przyciskiem
+*Importuj dane* (Ustawienia → Podróże albo sama zakładka). Oryginały zostają nietknięte.
+
+## Kontrakt
 
 | Co | Jak |
 |---|---|
-| Uruchomienie | `node server.js` w folderze projektu, zmienna `PORT` (domyślnie 8080). Jeśli na porcie już ktoś odpowiada (np. `launch_app.bat`), Katalogator go używa i **nie zatrzymuje**. |
-| Adres w ramce | `http://127.0.0.1:<port>/?katalogator=1&motyw=dark\|light` |
-| Motyw | Katalogator wysyła do ramki `postMessage({typ:"katalogator-motyw", motyw, kolory:{"--kat-bg":…}})` po załadowaniu ramki i przy każdej zmianie motywu. |
-| Adapter | `katalogator-motyw.js` + `.css` (+ czcionka Instrument Sans) dopisywane do projektu przyciskiem (Ustawienia → Podróże). Dopisuje do `index.html` **jedną linię** (po znaczniku `<!-- katalogator-motyw -->`), kopia: `index.html.katalogator.bak`. Odinstalowanie przywraca stan sprzed. |
-| Zmienne CSS | `--kat-bg --kat-panel --kat-fg --kat-mut --kat-lin --kat-akc --kat-akc-fg --kat-font`; atrybuty na `<html>`: `data-katalogator="1"`, `data-katalogator-motyw="dark\|light"`. |
-
-Adapter celowo nie zmienia tła, kart ani układu aplikacji (nie zna jej klas CSS) — daje czcionkę, pasek przewijania, kolor
-akcentu i zmienne. **Dopasowanie wyglądu kart, przycisków i map robi się w CSS samego projektu** — to zadanie dla agenta,
-który widzi pliki projektu (patrz niżej).
-
-## Zadanie dla `gemini-worker` (na Twoim komputerze, w folderze projektu)
-
-> Dopasuj wygląd aplikacji Google Timeline Travels do stylu Katalogatora, gdy jest otwarta w jego ramce
-> (`html[data-katalogator]`). Nie zmieniaj działania ani danych — tylko CSS (nowy plik `katalogator-styl.css`, dołączony
-> w `index.html` po `katalogator-motyw.css`), a poza ramką (bez `data-katalogator`) wygląd ma zostać taki jak dziś.
->
-> Styl Katalogatora („ciemnia”): neutralny grafit zamiast granatu (tło `--kat-bg`, panele `--kat-panel`), jedna czcionka
-> `--kat-font` (Instrument Sans), zdjęcia i mapa jako bohaterowie — karty bez ramek i cieni, podpisy ciche (`--kat-mut`),
-> kolor tylko dla stanu aktywnego/zaznaczonego (`--kat-akc`, fiolet; neon turkus→fiolet→róż tylko w ciemnym motywie, tam
-> też poświata), przyciski bez obwódek (tło dopiero po najechaniu), promienie 8–10 px, ikony liniowe zamiast emoji,
-> fokus z klawiatury widoczny, `prefers-reduced-motion` respektowane. Kontrast tekstu ≥ 4,5:1 w obu motywach.
-> Zmienne `--kat-*` są ustawiane przez adapter; ich wartości dla motywu jasnego i ciemnego są w `katalogator-motyw.css`.
-> Zrób zrzuty (Playwright) widoku katalogu, mapy, szczegółów wyprawy i profilu wysokości w obu motywach, w ramce 1400×900.
-
-## Zadanie dla `codex-worker` (przegląd i testy po stronie projektu)
-
-> Przejrzyj projekt pod kątem: (1) czy `server.js` czyta port z `process.env.PORT` i nasłuchuje tylko na `127.0.0.1`,
-> (2) czy nie ustawia nagłówków blokujących ramki (`X-Frame-Options`, `frame-ancestors`) dla `http://127.0.0.1:*`,
-> (3) czy `sw.js` nie cache'uje w sposób, który przytrzymuje starą wersję po aktualizacji, (4) czy jakikolwiek plik z tokenami
-> (Strava, Intervals) nie trafia do `git`/backupów. Dopisz testy (np. Node `--test`) dla generowania wypraw z
-> `generate_all_real_trips.py` na małej próbce danych.
+| Adres | `/podroze/?t=<token>` — przy pierwszym wejściu serwer ustawia ciasteczko `kat_podroze` (`HttpOnly`, `SameSite=Strict`, `Path=/podroze`) |
+| API aplikacji | `api/version`, `api/user-photos`, `api/photo?path=…`, `api/reindex` (POST) |
+| Zdjęcia | tylko z folderów biblioteki projektów, folderów Przeglądarki i dodatkowych z ustawień; bez SVG; zdjęcie spoza nich → 403 |
+| Dostępność | tylko na komputerze — serwer telefonu i most do domu blokują `/podroze` |
+| Motyw | `postMessage({typ:"katalogator-motyw", motyw, kolory:{"--kat-bg":…}})`, aplikacja prosi o niego komunikatem `katalogator-gotowe` |
+| Zasoby | wszystko lokalnie (Tailwind zbudowany raz — `narzedzia/podroze-css/`, Leaflet, JSZip, czcionka); z sieci tylko kafelki mapy OSM |
 
 ## Pięć propozycji ulepszeń
 
-1. **Zdjęcia z biblioteki Katalogatora zamiast własnego skanowania.** Katalogator ma już datę, GPS i miniatury każdego
-   zdjęcia (oś czasu, mapa, „Tego dnia”). Zdjęcia dnia wyprawy można brać z jego API (zakres dat + obszar) — odpada
-   `auto_index_all_trip_photos.py`, folder `thumbnails/` i zależność od litery dysku `U:\`.
-2. **Prywatność i bezpieczeństwo.** `Os_czasu_real.json` (95 MB, cała historia lokalizacji) i tunel `cloudflared`
-   wystawiają wrażliwe dane: dostęp tylko z kluczem (jak most do domu w Katalogatorze), tryb „udostępnij wyprawę” z
-   rozmyciem okolic domu (np. 500 m), tokeny Strava/Intervals w `.env` poza folderem objętym backupem/synchronizacją.
-3. **Jedno źródło danych zamiast dwóch kopii.** `sample-trips.json` (25 MB) i `sample-data.js` (23,5 MB) to to samo —
-   zamiast tego SQLite z ładowaniem wypraw na żądanie (lista lekka, trasa GPS dopiero po wejściu) i przyrostowa aktualizacja
-   przyciskiem „Zaktualizuj podróże” (nowe dni z Timeline + Strava) bez przeliczania wszystkiego.
-4. **Wyprawa ↔ album ↔ osoby.** Z wyprawy jednym kliknięciem tworzysz album „Madera 2024” w Katalogatorze (zdjęcia z jej dni),
-   widzisz, kto jest na zdjęciach (Osoby), a w Katalogatorze w „Tego dnia” pojawia się znacznik wyprawy. Plus podsumowania:
-   rok w liczbach (km, przewyższenia, szczyty, kraje), wejścia na szczyty z PeakBagger na osi czasu.
-5. **Szybkość i tryb offline.** Dane podróży wczytywane naraz (23 MB) spowalniają start — podział na pliki per wyprawa,
-   uproszczenie tras (Douglas–Peucker po stronie generatora), cache kafli mapy (OSM/Topo) w Service Workerze dla ostatnio
-   oglądanych obszarów, profil wysokości liczony z wygładzonych danych barometrycznych (mniej „ząbków”).
+1. **Zdjęcia z biblioteki Katalogatora zamiast skanowania `U:\`** — data, GPS i miniatury już są w bazie; zdjęcia dnia wyprawy
+   brane z niej (zakres dat + obszar). *(Wbudowana wersja już szuka plików po nazwie w bazie Przeglądarki.)*
+2. **Prywatność** — dostęp tylko z kluczem, tryb „udostępnij wyprawę” z rozmyciem okolic domu, klucze Strava/Intervals w
+   ustawieniach programu, nie w plikach projektu.
+3. **Jedno źródło danych** — SQLite zamiast dwóch kopii 25 MB, ładowanie wypraw na żądanie, przyrostowa aktualizacja.
+4. **Wyprawa ↔ album ↔ osoby** — album z wyprawy jednym kliknięciem, osoby na zdjęciach, znacznik wyprawy w „Tego dnia”, rok w liczbach.
+5. **Szybkość i offline** — pliki per wyprawa, uproszczenie tras, cache kafli mapy, wygładzony profil wysokości.
+
+## Etap 2 (plan)
+
+Port generatora wypraw (`generate_all_real_trips.py`) i integracji Strava / Intervals / PeakBagger / OSM do modułów Pythona
+Katalogatora, z paskiem postępu; klucze z ustawień programu; bez zaszytych danych osobistych (rezerwacje, ścieżki).

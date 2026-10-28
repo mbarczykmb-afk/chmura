@@ -1,10 +1,11 @@
-// ✈ Podróże — zakładka z aplikacją Google Timeline Travels (osobny serwer Node.js z folderu projektu na tym komputerze).
-// Dane podróży nie opuszczają folderu projektu; Katalogator uruchamia serwer, pokazuje go w ramce i przekazuje motyw.
+// ✈ Podróże — dziennik wypraw jako część Katalogatora: aplikacja (ui/podroze/) jest serwowana przez serwer programu pod /podroze/
+// i pokazywana w ramce. Dane podróży leżą w folderze danych programu; tu: import z dotychczasowego folderu projektu, foldery
+// ze zdjęciami i przekazywanie motywu do aplikacji.
 "use strict";
 
-const pod = {d: null, laduje: false, ramkaAdres: ""};
+const pod = {d: null, zaladowana: false, odpytuje: null};
 
-// Motyw Katalogatora → aplikacja w ramce (adapter motywu: katalogator-motyw.js w projekcie). Zmienne --kat-* = nasze tokeny.
+// Motyw Katalogatora → aplikacja w ramce (katalogator-motyw.js): zmienne --kat-* i atrybut data-katalogator-motyw.
 function motywPodrozy() {
   const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
   return {typ: "katalogator-motyw", motyw: cs.colorScheme.includes("dark") ? "dark" : "light",
@@ -13,29 +14,27 @@ function motywPodrozy() {
 }
 function wyslijMotywPodrozy() {
   const r = $("podroze-ramka");
-  if (!pod.ramkaAdres || !r.contentWindow) return;
-  try { r.contentWindow.postMessage(motywPodrozy(), new URL(pod.ramkaAdres).origin); } catch (e) { /* ramka jeszcze się ładuje */ }
+  if (pod.zaladowana && r.contentWindow) r.contentWindow.postMessage(motywPodrozy(), location.origin);
 }
-window.addEventListener("message", e => {
-  // adapter w aplikacji prosi o motyw po załadowaniu; odpowiadamy tylko ramce Podróży z jej adresu
-  if (!e.data || e.data.typ !== "katalogator-gotowe" || e.source !== $("podroze-ramka").contentWindow) return;
-  if (pod.ramkaAdres && e.origin === new URL(pod.ramkaAdres).origin) wyslijMotywPodrozy();
+window.addEventListener("message", e => {   // aplikacja prosi o motyw po załadowaniu
+  if (e.origin === location.origin && e.source === $("podroze-ramka").contentWindow && e.data && e.data.typ === "katalogator-gotowe")
+    wyslijMotywPodrozy();
 });
 new MutationObserver(wyslijMotywPodrozy).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme", "style"]});
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", wyslijMotywPodrozy);
 
-function pokazRamkePodrozy(adres) {
-  const r = $("podroze-ramka"), motyw = motywPodrozy().motyw;
-  const url = `${adres}?katalogator=1&motyw=${motyw}`;
+const adresPodrozy = () => `/podroze/?t=${encodeURIComponent(TOKEN)}`;
+
+function pokazRamkePodrozy() {
+  const r = $("podroze-ramka");
   $("podroze-konfig").hidden = true; r.hidden = false;
-  if (pod.ramkaAdres !== adres) { pod.ramkaAdres = adres; r.src = url; }   // aplikacja zostaje załadowana między zakładkami
-  $("podroze-opis").textContent = adres.replace(/^http:\/\//, "").replace(/\/$/, "") +
-    (pod.d && pod.d.zewnetrzny ? " · uruchomiony poza Katalogatorem" : "");
-  $("podroze-stop").hidden = !(pod.d && pod.d.wlasny);
+  if (!pod.zaladowana) { r.src = adresPodrozy(); pod.zaladowana = true; }   // aplikacja zostaje załadowana między zakładkami
+  const d = pod.d;
+  $("podroze-opis").textContent = d && d.wyprawy ? `${d.wyprawy} wypraw · dane z ${dataCzas(d.zaimportowano)}` : "";
 }
 function pokazKonfiguracjePodrozy() {
-  $("podroze-ramka").hidden = true; $("podroze-konfig").hidden = false; $("podroze-stop").hidden = true;
-  $("podroze-opis").textContent = "ustawienia";
+  $("podroze-ramka").hidden = true; $("podroze-konfig").hidden = false;
+  $("podroze-opis").textContent = "dane i zdjęcia";
   const t = $("podroze-konfig-tresc"); t.replaceChildren();
   t.append(sekcjaPodrozy(pod.d, async () => { await odswiezPodroze(); pokazKonfiguracjePodrozy(); }));
 }
@@ -47,68 +46,66 @@ async function otworzPodroze() {
   if (!$("galeria-nakladka").hidden) { zamknijGalerie(); trybGalerii = false; }
   $("podroze-nakladka").hidden = false; trybPodroze = true; oznaczTryby();
   try { await odswiezPodroze(); } catch (e) { toast(e.message); return; }
-  const d = pod.d;
-  if (d.dziala) { pokazRamkePodrozy(d.adres); return; }
-  if (d.folder && !d.blad_folderu && d.node && d.auto) {      // start automatyczny
-    $("podroze-opis").textContent = "uruchamiam serwer…";
-    $("podroze-ramka").hidden = true; $("podroze-konfig").hidden = false;
-    $("podroze-konfig-tresc").replaceChildren(el("div", {className: "info", textContent: "⏳ Uruchamiam serwer Podróży z folderu projektu…"}));
-    try { pod.d = await api("/api/podroze", {akcja: "start"}); pokazRamkePodrozy(pod.d.adres); return; }
-    catch (e) { toast(e.message); await odswiezPodroze().catch(() => {}); }
-  }
-  pokazKonfiguracjePodrozy();
+  if (pod.d.ma_dane && !pod.d.import.trwa) pokazRamkePodrozy(); else pokazKonfiguracjePodrozy();
 }
 
-// Sekcja ustawień Podróży — w zakładce (gdy serwer nie działa) i w Ustawieniach.
+// Sekcja Podróży — w zakładce (gdy brak danych) i w Ustawieniach.
 function sekcjaPodrozy(d, odswiez) {
-  const s = sekcja("✈ Podróże — Google Timeline Travels");
+  const s = sekcja("✈ Podróże — dziennik wypraw");
   const zmien = async (dane, komunikat) => {
     try { pod.d = await api("/api/podroze", dane); if (komunikat) toast(komunikat); }
     catch (e) { toast(e.message); }
     odswiez();
   };
-  s.append(el("div", {className: "info", innerHTML: "Zakładka pokazuje Twoją aplikację <b>Google Timeline Travels</b> (wyprawy, trasy GPS, szczyty, zdjęcia). " +
-    "Katalogator uruchamia jej serwer (<code>node server.js</code>) z wybranego folderu. <b>Dane podróży zostają w tym folderze</b> — " +
-    "Katalogator ich nie kopiuje ani nie wysyła, a historia lokalizacji nie trafia do repozytorium programu."}));
+  s.append(el("div", {className: "info", innerHTML: "Wyprawy z osi czasu Google, trasy GPS, szczyty, rezerwacje i zdjęcia — <b>jako część Katalogatora</b>, bez osobnego programu. " +
+    "<b>Dane podróży zostają na tym komputerze</b> (folder danych programu) — Katalogator ich nie wysyła; zakładka nie jest dostępna przez most do domu ani przez telefon."}));
 
-  const folder = el("input", {type: "text", value: d.folder || "", placeholder: d.podpowiedz || "C:\\…\\google-timeline-travels", id: "podroze-folder"});
-  folder.onchange = () => zmien({folder: folder.value.trim()}, "Zapisano folder projektu.");
+  // 📥 dane
+  const imp = d.import || {};
+  s.append(el("h4", {textContent: "Dane podróży", style: "margin:6px 0 0"}));
+  s.append(wiersz(el("span", {className: d.ma_dane ? "ok" : "info", textContent: d.ma_dane
+    ? `✓ ${d.wyprawy} wypraw, ${d.rozmiar_mb} MB · zaimportowano ${dataCzas(d.zaimportowano)}` : "Brak danych — zaimportuj je z dotychczasowego folderu projektu."}),
+    d.ma_dane ? przyc("Otwórz Podróże", () => otworzPodroze(), "glowny") : null));
+  const folder = el("input", {type: "text", value: d.folder_importu || "", id: "podroze-folder",
+                              placeholder: d.podpowiedz || "C:\\…\\google-timeline-travels"});
+  folder.onchange = () => zmien({folder_importu: folder.value.trim()});
   s.append(wiersz(etyk("Folder projektu"), folder,
-    przyc("Wybierz…", () => otworzWyborFolderu("Folder projektu Google Timeline Travels", d.folder || "", f => zmien({folder: f}, "Zapisano folder projektu.")))));
-  if (!d.folder && d.podpowiedz)
+    przyc("Wybierz…", () => otworzWyborFolderu("Folder z danymi Timeline Travels (z plikiem sample-trips.json)", d.folder_importu || "",
+                                               f => zmien({folder_importu: f})))));
+  if (!d.folder_importu && d.podpowiedz)
     s.append(wiersz(el("span", {className: "info", textContent: "Znaleziono projekt: " + d.podpowiedz}),
-                    przyc("Użyj tego folderu", () => zmien({folder: d.podpowiedz}, "Zapisano folder projektu."), "glowny")));
-  if (d.blad_folderu) s.append(el("div", {className: "zle", textContent: d.blad_folderu}));
+                    przyc("Użyj tego folderu", () => zmien({folder_importu: d.podpowiedz}), "glowny")));
+  const pasek = imp.trwa ? el("div", {className: "info", textContent: `⏳ ${imp.komunikat} (${imp.zrobione} z ${imp.wszystkie})`}) : null;
+  s.append(wiersz(przyc(d.ma_dane ? "↻ Importuj ponownie" : "▶ Importuj dane", () => zmien({akcja: "importuj", folder_importu: folder.value.trim()}), d.ma_dane ? "" : "glowny",
+                       "Kopiuje sample-trips.json, zdjęcia dopasowane do wypraw i miniatury do folderu danych programu; oryginały zostają"),
+                  d.ma_dane ? przyc("Usuń dane", async () => {
+                    if (await oknoTak("Usunąć dane Podróży z Katalogatora?\n\nOryginalny folder projektu zostaje nietknięty — dane możesz zaimportować jeszcze raz.")) zmien({akcja: "usun-dane"}, "Usunięto dane Podróży.");
+                  }) : null, pasek));
+  if (imp.blad) s.append(el("div", {className: "zle", textContent: imp.blad}));
+  else if (!imp.trwa && imp.komunikat) s.append(el("div", {className: "ok", textContent: imp.komunikat}));
 
-  const port = el("input", {type: "number", value: d.port, min: 1024, max: 65535, style: "width:110px", id: "podroze-port"});
-  port.onchange = () => zmien({port: +port.value}, "Zapisano port.");
-  s.append(wiersz(etyk("Port serwera"), port,
-    el("span", {className: "info", textContent: d.node ? "Node.js: " + d.node : "⚠ Brak Node.js — zainstaluj go (nodejs.org), potrzebny do uruchomienia serwera."})));
-  s.append(pole("Uruchamiaj serwer automatycznie po wejściu w zakładkę Podróże", d.auto, v => zmien({auto: v})));
+  // 🖼 zdjęcia
+  s.append(el("h4", {textContent: "Zdjęcia", style: "margin:10px 0 0"}));
+  s.append(el("div", {className: "info", textContent: "Zakładka pokazuje zdjęcia tylko z tych folderów — to biblioteki Twoich projektów i foldery Przeglądarki. " +
+    "Zdjęcie spoza nich nie zostanie pokazane."}));
+  if (!d.korzenie.length) s.append(pustoEl("Brak folderów — ustaw bibliotekę w projekcie albo dodaj dysk w Przeglądarce."));
+  for (const k of d.korzenie) {
+    const dodatkowy = d.dodatkowe.includes(k);
+    s.append(wiersz(sciezkaEl(k), dodatkowy ? przyc("✕", () => zmien({korzenie: d.dodatkowe.filter(x => x !== k)}), "", "Usuń dodatkowy folder") : el("span", {className: "info", textContent: "z programu"})));
+  }
+  s.append(wiersz(przyc("+ Dodaj folder ze zdjęciami…", () => otworzWyborFolderu("Dodatkowy folder ze zdjęciami podróży", "", f => {
+    if (!d.dodatkowe.includes(f)) zmien({korzenie: [...d.dodatkowe, f]});
+  }))));
 
-  const gotowy = d.folder && !d.blad_folderu && d.node;
-  s.append(wiersz(
-    d.dziala ? el("span", {className: "ok", textContent: d.zewnetrzny ? "● Serwer działa (uruchomiony poza Katalogatorem)" : "● Serwer działa"})
-             : el("span", {className: "info", textContent: "○ Serwer zatrzymany"}),
-    d.dziala ? przyc("Otwórz zakładkę", () => otworzPodroze(), "glowny") : przyc("▶ Uruchom serwer", () => zmien({akcja: "start"}, "Serwer Podróży działa."), "glowny"),
-    d.wlasny ? przyc("⏹ Zatrzymaj", () => zmien({akcja: "stop"}, "Zatrzymano serwer Podróży.")) : null));
-  if (!gotowy && !d.dziala) s.lastChild.querySelector("button.glowny").disabled = true;
-
-  s.append(el("div", {className: "info", innerHTML: "<b>Adapter motywu</b> — jeden skrypt i styl dopisywane do projektu (z kopią <code>index.html.katalogator.bak</code>). " +
-    "Dzięki nim aplikacja w zakładce dostaje czcionkę, kolory i jasny / ciemny motyw Katalogatora (zmienne CSS <code>--kat-*</code>), " +
-    "a dalsze dopasowanie wyglądu kart i map robisz we własnym CSS projektu."}));
-  s.append(wiersz(
-    el("span", {className: d.adapter ? "ok" : "info", textContent: d.adapter ? "✓ Adapter zainstalowany w projekcie" : "Adapter nie jest zainstalowany"}),
-    d.adapter ? przyc("Usuń adapter", () => zmien({akcja: "adapter-usun"}, "Usunięto adapter z projektu."))
-              : przyc("Zainstaluj adapter motywu", () => zmien({akcja: "adapter"}, "Zainstalowano adapter — odśwież zakładkę."), "", "Dopisuje do index.html jedną linię (z kopią zapasową)")));
-  if (!d.folder || d.blad_folderu) s.lastChild.querySelectorAll("button").forEach(b => b.disabled = true);
+  if (imp.trwa && !pod.odpytuje) {   // postęp importu: odświeżaj, aż się skończy
+    pod.odpytuje = setInterval(async () => {
+      try { const n = await api("/api/podroze"); if (!n.import.trwa) { clearInterval(pod.odpytuje); pod.odpytuje = null; pod.zaladowana = false; pod.d = n; odswiez(); } else { pod.d = n; odswiez(); } }
+      catch (e) { clearInterval(pod.odpytuje); pod.odpytuje = null; }
+    }, 900);
+  }
   return s;
 }
 
-$("podroze-odswiez").onclick = () => { const r = $("podroze-ramka"); if (pod.ramkaAdres) r.src = r.src; };
-$("podroze-przegladarka").onclick = () => { if (pod.ramkaAdres) window.open(pod.ramkaAdres, "_blank"); };
+$("podroze-odswiez").onclick = () => { const r = $("podroze-ramka"); if (pod.zaladowana) r.src = adresPodrozy(); };
+$("podroze-przegladarka").onclick = () => window.open(adresPodrozy(), "_blank");
 $("podroze-ust").onclick = async () => { try { await odswiezPodroze(); } catch (e) { toast(e.message); } pokazKonfiguracjePodrozy(); };
-$("podroze-stop").onclick = async () => {
-  try { pod.d = await api("/api/podroze", {akcja: "stop"}); } catch (e) { toast(e.message); return; }
-  pod.ramkaAdres = ""; $("podroze-ramka").src = "about:blank"; pokazKonfiguracjePodrozy();
-};

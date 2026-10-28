@@ -1940,6 +1940,8 @@ class SerwerGalerii:
                 u = urlparse(self.path)
                 if u.path in self.ZABRONIONE:
                     return self._wyslij({"blad": "Tego nie da się zrobić z telefonu."}, kod=HTTPStatus.FORBIDDEN)
+                if u.path == "/podroze" or u.path.startswith("/podroze/"):  # historia lokalizacji — tylko na komputerze
+                    return self._wyslij({"blad": "Podróże są dostępne tylko na komputerze."}, kod=HTTPStatus.FORBIDDEN)
                 q = parse_qs(u.query, keep_blank_values=True)
                 q["t"] = [token]
                 adres = (sciezka_glowna or u.path) + "?" + urlencode(q, doseq=True)

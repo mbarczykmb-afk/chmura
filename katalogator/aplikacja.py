@@ -19,10 +19,11 @@ import sys
 import threading
 import time
 import webbrowser
+import http.cookies
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, most, naprawa, odzyskiwanie, pilot, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, twarze, usuwanie, wykonawca, wysylanie)
@@ -67,42 +68,56 @@ class Stan:
         d = aktualizacje._ustawienia(self.katalog).get("podroze")
         return d if isinstance(d, dict) else {}
 
+    def podroze_korzenie(self) -> list[str]:
+        """Foldery, z których zakładka Podróże może pokazywać zdjęcia: biblioteki projektów (miejsce docelowe),
+        foldery Przeglądarki i dodatkowe z ustawień. Nic spoza nich."""
+        korz: list[str] = []
+        try:
+            korz += [p["cel"] for p in self.projekty.lista() if p.get("cel")]
+        except OSError:
+            pass
+        korz += self.przegladarka.wszystkie_foldery()
+        korz += [str(k) for k in self.podroze_ust().get("korzenie") or []]
+        wynik: list[str] = []
+        for k in korz:
+            if k and k not in wynik:
+                wynik.append(k)
+        return wynik
+
+    def podroze_szukaj(self, nazwa: str) -> str | None:
+        """Plik o tej nazwie w bazie Przeglądarki (zdjęcia w danych podróży bywają zapisane samą nazwą)."""
+        n = nazwa.lower().replace("^", "^^").replace("%", "^%").replace("_", "^_")
+        db = self.przegladarka.galeria._db()
+        try:
+            r = db.execute("SELECT sciezka FROM pliki WHERE lower(wzgledna) = ? OR lower(wzgledna) LIKE ? ESCAPE '^' "
+                           "OR lower(wzgledna) LIKE ? ESCAPE '^' LIMIT 1", (nazwa.lower(), "%/" + n, "%\\" + n)).fetchone()
+        finally:
+            db.close()
+        return r[0] if r else None
+
     def podroze_info(self) -> dict:
-        return podroze.stan(self.podroze_ust())
+        return podroze.stan(self.katalog, self.podroze_ust(), self.podroze_korzenie())
 
     def podroze_akcja(self, dane: dict) -> dict:
-        """✈ Podróże: zapis ustawień (folder, port, start automatyczny), start / stop serwera, adapter motywu."""
+        """✈ Podróże: import danych z dotychczasowego folderu projektu, usunięcie danych, dodatkowe foldery ze zdjęciami."""
         ust = dict(self.podroze_ust())
-        if "folder" in dane:
-            folder = str(dane["folder"] or "").strip()
-            powod = podroze.sprawdz_folder(folder) if folder else None
-            if powod:
-                return {"blad": powod}
-            ust["folder"] = os.path.normpath(folder) if folder else ""
-        if "port" in dane:
-            port = podroze.port_poprawny(dane["port"])
-            if not port:
-                return {"blad": "Port musi być liczbą od 1024 do 65535."}
-            ust["port"] = port
-        if "auto" in dane:
-            ust["auto"] = bool(dane["auto"])
+        if "folder_importu" in dane:
+            ust["folder_importu"] = os.path.normpath(str(dane["folder_importu"]).strip()) if str(dane["folder_importu"]).strip() else ""
+        if "korzenie" in dane:
+            nowe = [os.path.normpath(str(k)) for k in dane["korzenie"] or [] if str(k).strip()]
+            zle = [k for k in nowe if not os.path.isdir(k)]
+            if zle:
+                return {"blad": "Nie ma takiego folderu: " + zle[0]}
+            ust["korzenie"] = nowe
         if ust != self.podroze_ust():
-            if podroze._wlasny_dziala() and ("folder" in dane or "port" in dane):
-                podroze.zatrzymaj()  # inny folder / port — stary serwer już nie pasuje
             aktualizacje.zapisz_ustawienia(self.katalog, podroze=ust)
         akcja = str(dane.get("akcja") or "")
-        if akcja == "start":
-            w = podroze.uruchom(ust)
+        if akcja == "importuj":
+            w = podroze.importuj(self.katalog, ust.get("folder_importu") or "")
             if "blad" in w:
                 return w
-        elif akcja == "stop":
-            podroze.zatrzymaj()
-        elif akcja == "adapter":
-            w = podroze.zainstaluj_adapter(ust.get("folder") or "")
-            if "blad" in w:
-                return w
-        elif akcja == "adapter-usun":
-            w = podroze.usun_adapter(ust.get("folder") or "")
+        elif akcja == "usun-dane":
+            w = podroze.usun_dane(self.katalog)
             if "blad" in w:
                 return w
         return self.podroze_info()
@@ -1374,7 +1389,7 @@ def _handler(stan: Stan, token: str, zamknij):
         def _ok_token(self, q) -> bool:
             return secrets.compare_digest(self.headers.get("X-Token") or q.get("t", [""])[0], token)
 
-        def _wyslij(self, tresc, typ="application/json; charset=utf-8", kod=HTTPStatus.OK):
+        def _wyslij(self, tresc, typ="application/json; charset=utf-8", kod=HTTPStatus.OK, dodatkowe=None):
             if not isinstance(tresc, (bytes, str)):
                 tresc = json.dumps(tresc, ensure_ascii=False)
             dane = tresc.encode("utf-8") if isinstance(tresc, str) else tresc
@@ -1384,8 +1399,52 @@ def _handler(stan: Stan, token: str, zamknij):
             self.send_header("Content-Type", typ)
             self.send_header("Content-Length", str(len(dane)))
             self.send_header("Cache-Control", "no-store")
+            for n, v in (dodatkowe or {}).items():
+                self.send_header(n, v)
             self.end_headers()
             self.wfile.write(dane)
+
+        def _podroze_dostep(self, q) -> bool:
+            """Token w adresie / nagłówku albo ciasteczko ustawione przy otwarciu strony Podróży (obrazy i skrypty
+            aplikacji nie mogą wysyłać własnych nagłówków)."""
+            try:
+                if self._ok_token(q):
+                    return True
+                c = http.cookies.SimpleCookie(self.headers.get("Cookie") or "")
+                return "kat_podroze" in c and secrets.compare_digest(c["kat_podroze"].value, token)
+            except (TypeError, http.cookies.CookieError):
+                return False
+
+        def _podroze_get(self, u, q):
+            if u.path == "/podroze":  # względne adresy aplikacji wymagają ukośnika na końcu
+                self.send_response(HTTPStatus.FOUND)
+                self.send_header("Location", "/podroze/" + (("?" + u.query) if u.query else ""))
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            if not self._podroze_dostep(q):
+                return self._wyslij("Brak dostępu", "text/plain; charset=utf-8", HTTPStatus.FORBIDDEN)
+            rel = unquote(u.path[len("/podroze/"):])
+            if rel in ("", "index.html"):
+                ciastko = {"Set-Cookie": f"kat_podroze={token}; Path=/podroze; HttpOnly; SameSite=Strict"}
+                return self._wyslij((podroze.UI_PODROZE / "index.html").read_bytes(), "text/html; charset=utf-8",
+                                    dodatkowe=ciastko)
+            w = podroze.odpowiedz_get(stan.katalog, rel, q, stan.podroze_korzenie(), stan.podroze_szukaj)
+            if w[0] == "plik":
+                return podroze.wyslij_plik(self, w[1], w[2], w[3])
+            if w[0] == "bajty":
+                return self._wyslij(w[1], w[2])
+            if w[0] == "json":
+                return self._wyslij(w[1], kod=w[2] if len(w) > 2 else HTTPStatus.OK)
+            if w[0] == "zabronione":
+                return self._wyslij("Zdjęcie spoza biblioteki", "text/plain; charset=utf-8", HTTPStatus.FORBIDDEN)
+            return self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
+
+        def _podroze_post(self, u):
+            if u.path == "/podroze/api/reindex":
+                # zdjęcia i dane podróży są odświeżane przez Katalogator (Przeglądarka, import) — tu tylko potwierdzenie
+                return self._wyslij({"success": True, "message": "Dane podróży wczytane ponownie."})
+            return self._wyslij(b"", "text/plain", HTTPStatus.NOT_FOUND)
 
         def _strumien(self, sciezka: str | None):
             """Wysyła film z obsługą zakresów (Range) — przeglądarka czyta tylko potrzebny fragment."""
@@ -1475,6 +1534,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 if motyw in ("dark", "light"):  # od razu właściwy motyw — bez mignięcia przy starcie
                     html = html.replace(b'<html lang="pl">', f'<html lang="pl" data-theme="{motyw}">'.encode(), 1)
                 return self._wyslij(html, "text/html; charset=utf-8")
+            if u.path == "/podroze" or u.path.startswith("/podroze/"):
+                return self._podroze_get(u, q)
             if not u.path.startswith("/ui/") and not self._ok_token(q):
                 return self._wyslij({"blad": "brak dostępu"}, kod=HTTPStatus.FORBIDDEN)
             if not u.path.startswith("/ui/"):
@@ -1673,6 +1734,10 @@ def _handler(stan: Stan, token: str, zamknij):
 
         def _post(self):
             u = urlparse(self.path)
+            if u.path.startswith("/podroze/api/"):
+                if not self._podroze_dostep(parse_qs(u.query)):
+                    return self._wyslij({"blad": "brak dostępu"}, kod=HTTPStatus.FORBIDDEN)
+                return self._podroze_post(u)
             if not self._ok_token(parse_qs(u.query)):
                 return self._wyslij({"blad": "brak dostępu"}, kod=HTTPStatus.FORBIDDEN)
             stan.ostatni_ping = time.time()
@@ -2168,7 +2233,6 @@ def main(otworz: bool = True) -> None:
     try:
         serwer.serve_forever()
     finally:
-        podroze.zatrzymaj()  # serwer Podróży uruchomiony przez Katalogator kończy się razem z nim
         serwer.server_close()
         try:
             if json.loads(plik_instancji.read_text(encoding="utf-8")).get("pid") == os.getpid():

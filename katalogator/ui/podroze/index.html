@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="pl" class="dark" data-podroze>
+<head>
+  <meta charset="UTF-8">
+  <base href="/podroze/">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#090d16">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Podróże</title>
+
+  <!-- Style (Tailwind zbudowany raz — działa bez internetu), mapa (Leaflet z programu), JSZip -->
+  <link rel="stylesheet" href="podroze.css">
+  <link rel="stylesheet" href="/ui/mapa/leaflet.css">
+  <script src="/ui/mapa/leaflet.js"></script>
+  <script src="jszip.min.js"></script>
+  <link rel="stylesheet" href="motyw.css">
+
+  <style>
+    body {
+      background-color: #090d16;
+      color: #f1f5f9;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    
+    #map {
+      height: 480px;
+      width: 100%;
+      border-radius: 1rem;
+      z-index: 10;
+      background-color: #e2e8f0;
+    }
+
+    #catalog-map {
+      height: 380px;
+      width: 100%;
+      border-radius: 1rem;
+      z-index: 10;
+      background-color: #e2e8f0;
+    }
+
+    .travel-card {
+      background: #111a2e;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.2s ease-in-out;
+    }
+    .travel-card:hover {
+      border-color: rgba(20, 184, 166, 0.4);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+    }
+
+    .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scroll::-webkit-scrollbar-track { background: #090d16; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #26354f; border-radius: 4px; }
+
+    /* Semantic Route Place Chips & Badges */
+    .chip-place {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.25rem 0.625rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    .chip-place:hover {
+      transform: translateY(-1px);
+    }
+    
+    /* [🏨 Nocleg / Hotel] */
+    .chip-lodging, .badge-lodging, .chip-place-lodging {
+      background: rgba(168, 85, 247, 0.16);
+      color: #e9d5ff;
+      border: 1px solid rgba(168, 85, 247, 0.45);
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.15);
+    }
+    .chip-lodging:hover, .badge-lodging:hover, .chip-place-lodging:hover {
+      background: rgba(168, 85, 247, 0.28);
+      border-color: rgba(168, 85, 247, 0.7);
+    }
+
+    /* [⛰️ Szczyt / Punkt widokowy] */
+    .chip-viewpoint, .badge-viewpoint, .chip-place-viewpoint {
+      background: rgba(14, 165, 233, 0.16);
+      color: #bae6fd;
+      border: 1px solid rgba(14, 165, 233, 0.45);
+      box-shadow: 0 0 12px rgba(14, 165, 233, 0.15);
+    }
+    .chip-viewpoint:hover, .badge-viewpoint:hover, .chip-place-viewpoint:hover {
+      background: rgba(14, 165, 233, 0.28);
+      border-color: rgba(14, 165, 233, 0.7);
+    }
+
+    /* [🍽️ Gastronomia] */
+    .chip-food, .badge-food, .chip-place-food {
+      background: rgba(244, 63, 94, 0.16);
+      color: #fecdd3;
+      border: 1px solid rgba(244, 63, 94, 0.45);
+      box-shadow: 0 0 12px rgba(244, 63, 94, 0.15);
+    }
+    .chip-food:hover, .badge-food:hover, .chip-place-food:hover {
+      background: rgba(244, 63, 94, 0.28);
+      border-color: rgba(244, 63, 94, 0.7);
+    }
+
+    /* [🌲 Atrakcja / Szlak] */
+    .chip-attraction, .badge-attraction, .chip-place-attraction {
+      background: rgba(16, 185, 129, 0.16);
+      color: #a7f3d0;
+      border: 1px solid rgba(16, 185, 129, 0.45);
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
+    }
+    .chip-attraction:hover, .badge-attraction:hover, .chip-place-attraction:hover {
+      background: rgba(16, 185, 129, 0.28);
+      border-color: rgba(16, 185, 129, 0.7);
+    }
+
+    /* GPS Mountain Trail, Glow & Pulsing Markers */
+    .gps-track-glow {
+      filter: drop-shadow(0 0 6px rgba(6, 182, 212, 0.8));
+    }
+    .gps-track-core {
+      filter: drop-shadow(0 0 3px rgba(16, 185, 129, 0.85));
+    }
+    .gps-trail-tooltip {
+      background: #090d16 !important;
+      border: 1px solid rgba(6, 182, 212, 0.6) !important;
+      color: #f1f5f9 !important;
+      border-radius: 8px !important;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6) !important;
+      padding: 5px 9px !important;
+    }
+    .gps-trail-tooltip .leaflet-tooltip-pane {
+      z-index: 1000;
+    }
+    @keyframes gps-ping-pulse {
+      0% { transform: scale(0.6); opacity: 0.95; }
+      100% { transform: scale(2.6); opacity: 0; }
+    }
+    .gps-pulsing-marker {
+      pointer-events: none !important;
+    }
+    .gps-pulsing-circle {
+      position: relative;
+      width: 14px;
+      height: 14px;
+      background: #00f0ff;
+      border: 2.5px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 12px #00f0ff, 0 0 24px #00f0ff;
+    }
+    .gps-pulsing-circle::before {
+      content: '';
+      position: absolute;
+      left: -9px;
+      top: -9px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(0, 240, 255, 0.5);
+      animation: gps-ping-pulse 1.3s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+
+    @media print {
+      header, footer, #catalog-view, #btn-back-to-catalog, #btn-copy-md, 
+      #btn-download-md, #btn-print-plan, #btn-edit-title, #map-container, 
+      #markdown-preview-box, #upload-card, #help-modal, #trip-day-filter-bar,
+      #photo-upload-modal, #booking-modal, #mobile-tab-bar, #photo-lightbox-modal,
+      .no-print {
+        display: none !important;
+      }
+      body {
+        background: white !important;
+        color: black !important;
+      }
+      #detail-view {
+        display: block !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans antialiased text-slate-200">
+
+  <!-- Header -->
+  <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <div id="header-brand" class="flex items-center space-x-3 cursor-pointer group">
+        <div class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-xl text-teal-400 group-hover:bg-teal-500/20 transition">
+          🧭
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-black text-slate-100 tracking-tight flex items-center gap-1.5">
+            <span>Google Timeline Travels</span>
+            <span id="header-trips-count-badge" class="text-3xs font-bold uppercase bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded-full">136 Podróży • 18 Państw</span>
+          </h1>
+          <p class="text-2xs sm:text-xs text-slate-400">Inteligentny organizer podróży, zdjęć z biblioteki i rezerwacji</p>
+        </div>
+      </div>
+
+      <!-- Header Action Buttons -->
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <button id="btn-reindex-all" class="px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-xl transition border border-amber-500/40 flex items-center gap-1.5 shadow-sm" title="Odśwież dane podróży">
+          <span>⚡</span> <span class="hidden lg:inline">Odśwież dane</span><span class="lg:hidden">Zdjęcia</span>
+        </button>
+        <button id="btn-load-demo" class="px-3 py-1.5 text-xs sm:text-sm font-bold bg-teal-600 hover:bg-teal-500 text-white rounded-xl shadow-sm transition flex items-center gap-1.5">
+          <span>✨</span> <span class="hidden sm:inline">Wycieczka</span> ITAKA
+        </button>
+        <button id="btn-help" class="px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition border border-slate-700 flex items-center gap-1">
+          <span>❓</span> <span class="hidden md:inline">Pomoc</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Wrapper -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full flex flex-col gap-6 pb-24 md:pb-8">
+
+    <!-- ======================================================== -->
+    <!-- VIEW 1: CATALOG / DASHBOARD (Lista / Siatka podróży)     -->
+    <!-- ======================================================== -->
+    <div id="catalog-view" class="flex flex-col gap-6">
+
+      <!-- Welcome / Upload Hero Card -->
+      <section id="upload-card" class="rounded-2xl p-6 sm:p-7 border-2 border-dashed border-slate-700 bg-slate-900/60 hover:border-teal-500/60 hover:bg-slate-900 transition text-center shadow-lg relative group cursor-pointer">
+        <input type="file" id="file-input" multiple accept=".json,.zip" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20">
+        <div class="flex flex-col items-center justify-center space-y-2.5">
+          <div class="w-12 h-12 bg-teal-500/10 border border-teal-500/30 rounded-2xl flex items-center justify-center text-teal-400 text-2xl group-hover:scale-105 transition">
+            📂
+          </div>
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-slate-100">Przeciągnij swój plik Google Timeline</h2>
+            <p class="text-xs sm:text-sm text-slate-400 mt-0.5">Obsługuje archiwa <b>.zip</b> z Google Takeout oraz pliki <b>.json</b> z telefonu (np. <code>Oś czasu.json</code> lub <code>Timeline.json</code>)</p>
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs">
+            <span class="bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1 rounded-full">🔒 100% lokalnie w przeglądarce</span>
+            <span class="bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1 rounded-full">⚡ Szybki parser dużych plików (95 MB)</span>
+            <span class="bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1 rounded-full">📸 Dopasowywanie zdjęć EXIF</span>
+            <span class="bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1 rounded-full">🗺️ Eksport Google KML & CSV</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Upload Loading Indicator Toast -->
+      <div id="upload-loading-indicator" class="hidden rounded-2xl p-5 bg-teal-950/70 border border-teal-500/40 text-center shadow-lg flex flex-col items-center justify-center gap-3">
+        <div class="flex items-center gap-3">
+          <span class="animate-spin text-2xl">⏳</span>
+          <span id="upload-loading-text" class="text-sm font-bold text-teal-200">Wczytywanie pliku... Proszę czekać...</span>
+        </div>
+        <div class="w-full max-w-md bg-slate-900 rounded-full h-2.5 overflow-hidden border border-teal-500/30">
+          <div id="upload-progress-bar" class="bg-gradient-to-r from-teal-500 to-cyan-400 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Global Stats Overview Bar -->
+      <section id="global-stats-bar" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 p-4 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-sm">
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-850 border border-slate-800">
+          <div class="w-10 h-10 rounded-xl bg-teal-500/10 text-teal-400 flex items-center justify-center text-xl shrink-0">🌍</div>
+          <div>
+            <div class="text-2xs text-slate-400 uppercase tracking-wider font-semibold">Podróże</div>
+            <div id="stat-total-trips" class="text-lg sm:text-xl font-black text-slate-100">0</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-850 border border-slate-800">
+          <div class="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center text-xl shrink-0">🗓️</div>
+          <div>
+            <div class="text-2xs text-slate-400 uppercase tracking-wider font-semibold">Dni w podróży</div>
+            <div id="stat-total-days" class="text-lg sm:text-xl font-black text-slate-100">0</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-850 border border-slate-800">
+          <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center text-xl shrink-0">📍</div>
+          <div>
+            <div class="text-2xs text-slate-400 uppercase tracking-wider font-semibold">Miejsca</div>
+            <div id="stat-total-places" class="text-lg sm:text-xl font-black text-slate-100">0</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-850 border border-slate-800">
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xl shrink-0">🥾</div>
+          <div>
+            <div class="text-2xs text-slate-400 uppercase tracking-wider font-semibold">Pieszo</div>
+            <div id="stat-total-walk" class="text-lg sm:text-xl font-black text-slate-100">0 km</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-850 border border-slate-800 col-span-2 sm:col-span-1">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-xl shrink-0">📸</div>
+          <div>
+            <div class="text-2xs text-slate-400 uppercase tracking-wider font-semibold">Zdjęcia z biblioteki</div>
+            <div id="stat-total-photos" class="text-lg sm:text-xl font-black text-amber-300">0</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Interactive Travels Map Section -->
+      <section id="catalog-map-section" class="rounded-2xl p-4 sm:p-5 bg-slate-900/80 border border-slate-800 shadow-md space-y-3">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">🗺️</span>
+            <div>
+              <h3 class="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-2">
+                <span>Interaktywna Mapa Wszystkich Podróży</span>
+                <span id="catalog-map-badge" class="bg-teal-500/20 text-teal-300 border border-teal-500/30 text-3xs font-bold px-2 py-0.5 rounded-full">Madera (ITAKA)</span>
+              </h3>
+              <p class="text-xs text-slate-400">Przeglądaj trasy na mapie świata — kliknij znacznik, aby otworzyć szczegóły</p>
+            </div>
+          </div>
+          <button id="btn-toggle-catalog-map" class="text-xs font-bold text-teal-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+            <span>🌐</span> <span id="text-toggle-map">Zwiń / Rozwiń mapę</span>
+          </button>
+        </div>
+
+        <div id="catalog-map-wrapper" class="relative rounded-2xl overflow-hidden">
+          <div id="catalog-map"></div>
+          <!-- Floating GPS Tracks Badge directly on Catalog Map -->
+          <div class="absolute top-3 left-14 z-[999] pointer-events-auto">
+            <button id="btn-catalog-gps-filter" class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-950/90 backdrop-blur-md border border-emerald-500 text-emerald-300 font-bold text-xs shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:bg-slate-900 hover:scale-105 active:scale-95 transition" title="Kliknij, aby przefiltrować podróże ze śladami GPS ze Strava / Intervals">
+              <span class="text-base">🥾</span>
+              <span id="catalog-gps-btn-text">Ślady GPS: 94 wgrane</span>
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Filter and Search Toolbar -->
+      <section class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-sm flex flex-col gap-3">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-3">
+          <div class="relative w-full md:w-96">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">🔍</span>
+            <input type="text" id="trip-search-input" placeholder="Szukaj podróży, miejsca, daty..." class="w-full pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-teal-500 transition">
+          </div>
+          <div class="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
+            <div id="year-filter-container" class="flex items-center gap-1.5 flex-wrap">
+              <button data-year="all" class="year-filter-btn px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-600 text-white">Wszystkie lata</button>
+            </div>
+            <select id="sort-selector" class="px-3 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-teal-500">
+              <option value="date-desc">Data: Najnowsze</option>
+              <option value="date-asc">Data: Najstarsze</option>
+              <option value="days-desc">Dni: Najwięcej</option>
+              <option value="walk-desc">Pieszo: Najwięcej</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Quick Destination Tags -->
+        <div id="quick-dest-bar" class="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scroll text-2xs pt-2 border-t border-slate-800/80">
+          <span class="text-slate-400 font-bold shrink-0">Kierunki:</span>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-teal-600 text-white font-bold transition" data-dest="all">Wszystkie</button>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="tatry">🏔️ Tatry & Zakopane</button>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="madera">🇵🇹 Madera</button>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="cabo verde">🇨🇻 Cabo Verde</button>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="maroko">🇲🇦 Maroko</button>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="turcja">🇹🇷 Turcja</button>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="cypr">🇨🇾 Cypr</button>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="bułgaria">🇧🇬 Bułgaria</button>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="albania">🇦🇱 Albania</button>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="francja">🇫🇷 Francja</button>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="czechy">🇨🇿 Czechy & Praga</button>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="niemcy">🇩🇪 Niemcy</button>
+          <button class="dest-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition" data-dest="holandia">🇳🇱 Holandia</button>
+        </div>
+      </section>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="hidden rounded-2xl p-12 text-center bg-slate-900/80 border border-slate-800 shadow-sm flex flex-col items-center justify-center space-y-4">
+        <div class="text-5xl">🧭</div>
+        <div>
+          <h3 class="text-lg font-bold text-slate-100">Brak załadowanych podróży</h3>
+          <p class="text-sm text-slate-400 max-w-md mx-auto mt-1">Przeciągnij swój plik Google Timeline lub kliknij poniżej, aby załadować wycieczkę z Itaką.</p>
+        </div>
+        <button id="btn-load-demo-hero" class="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-sm font-bold shadow-md transition flex items-center gap-2">
+          <span>✨</span> Wczytaj wycieczkę Madera (ITAKA)
+        </button>
+      </div>
+
+      <!-- Trips Grid -->
+      <div id="trips-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- VIEW 2: TRIP DETAIL VIEW (Szczegóły podróży)             -->
+    <!-- ======================================================== -->
+    <div id="detail-view" class="hidden flex flex-col gap-6">
+
+      <!-- Travel Storytelling Hero Cover (Widok Szczegółów Podróży) -->
+      <section id="trip-hero-cover" class="relative overflow-hidden rounded-3xl border border-slate-700/60 shadow-2xl bg-slate-950 min-h-[380px] flex flex-col justify-between group">
+        <!-- Hero Background Cover Image with Gradient Vignette -->
+        <div class="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+          <img id="trip-hero-img" src="" hidden alt="Trip Cover" class="w-full h-full object-cover object-center scale-105 group-hover:scale-100 transition-transform duration-700 opacity-40 filter brightness-90 saturate-110">
+          <!-- Dark gradient vignette for luxury magazine storytelling -->
+          <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-900/40"></div>
+          <div class="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/70 to-transparent"></div>
+          <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.15),transparent_60%)]"></div>
+        </div>
+
+        <!-- Luxury Action Bar (Top) -->
+        <div class="relative z-10 p-4 sm:p-6 pb-2 flex items-center justify-between flex-wrap gap-3 border-b border-white/5 backdrop-blur-xs">
+          <div class="flex items-center gap-2 text-sm text-slate-300">
+            <button id="btn-back-to-catalog" class="inline-flex items-center gap-2 font-bold text-teal-300 hover:text-white bg-slate-900/80 hover:bg-slate-800/90 backdrop-blur-md px-4 py-2 rounded-xl border border-teal-500/30 shadow-md transition transform active:scale-95">
+              <span>←</span> <span>Wróć do listy</span>
+            </button>
+            <span class="text-slate-600 hidden sm:inline">/</span>
+            <span id="breadcrumb-title" class="text-slate-300 font-semibold truncate max-w-xs sm:max-w-md hidden sm:inline">Madera - Grudzień 2025</span>
+          </div>
+
+          <div class="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+            <button id="btn-open-photo-matcher" class="px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 backdrop-blur-md rounded-xl transition shadow-md flex items-center gap-2 active:scale-95">
+              <span>📸</span> <span>Zdjęcia</span> <span id="badge-photo-count" class="bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full text-3xs font-black shadow-xs">0</span>
+            </button>
+
+            <button id="btn-open-booking-parser" class="px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-bold bg-blue-500/20 hover:bg-blue-500/30 text-blue-200 border border-blue-500/40 backdrop-blur-md rounded-xl transition shadow-md flex items-center gap-2 active:scale-95">
+              <span>📬</span> <span>Vouchery</span> <span id="badge-booking-count" class="bg-blue-400 text-slate-950 px-2 py-0.5 rounded-full text-3xs font-black shadow-xs">0</span>
+            </button>
+
+            <!-- Export Dropdown -->
+            <div class="relative inline-block text-left" id="export-dropdown-wrapper">
+              <button id="btn-export-dropdown" class="px-3.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold bg-teal-600 hover:bg-teal-500 text-white backdrop-blur-md rounded-xl shadow-lg shadow-teal-500/20 transition flex items-center gap-2 active:scale-95">
+                <span>📤</span> <span>Eksport</span> <span class="text-3xs">▼</span>
+              </button>
+              <div id="export-dropdown-menu" class="hidden absolute right-0 mt-2 w-64 rounded-2xl shadow-2xl bg-slate-900 border border-slate-700 divide-y divide-slate-800 z-50">
+                <div class="p-1.5">
+                  <button id="btn-export-kml" class="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 rounded-xl flex items-center gap-2.5 transition">
+                    <span class="text-base">🗺️</span>
+                    <div>
+                      <div class="font-bold">Google My Maps & Earth (.kml)</div>
+                      <div class="text-3xs text-slate-400">Warstwy dni, pinezki i trasy ze zdjęciami</div>
+                    </div>
+                  </button>
+                  <button id="btn-export-csv" class="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 rounded-xl flex items-center gap-2.5 transition">
+                    <span class="text-base">📊</span>
+                    <div>
+                      <div class="font-bold">Google Sheets & Excel (.csv)</div>
+                      <div class="text-3xs text-slate-400">Tabela z datami, miejscami i kosztami (UTF-8 BOM)</div>
+                    </div>
+                  </button>
+                  <button id="btn-export-ics" class="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 rounded-xl flex items-center gap-2.5 transition">
+                    <span class="text-base">📅</span>
+                    <div>
+                      <div class="font-bold">Kalendarz Google (.ics)</div>
+                      <div class="text-3xs text-slate-400">Wydarzenia lotów, dni i atrakcji do zaimportowania</div>
+                    </div>
+                  </button>
+                </div>
+                <div class="p-1.5">
+                  <button id="btn-download-md" class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 rounded-xl flex items-center gap-2.5 transition">
+                    <span>💾</span> <span class="font-medium">Pobierz plan Markdown (.md)</span>
+                  </button>
+                  <button id="btn-copy-md" class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 rounded-xl flex items-center gap-2.5 transition">
+                    <span>📋</span> <span class="font-medium">Kopiuj Markdown do schowka</span>
+                  </button>
+                  <button id="btn-print-plan" class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 rounded-xl flex items-center gap-2.5 transition">
+                    <span>🖨️</span> <span class="font-medium">Drukuj lub zapisz jako PDF</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hero Main Story Content -->
+        <div class="relative z-10 px-4 sm:px-8 py-5 sm:py-6 flex flex-col justify-end space-y-4">
+          <!-- Badges & Destination Info -->
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <span id="detail-icon" class="text-2xl sm:text-3xl filter drop-shadow">🌴</span>
+            <span id="detail-destination-badge" class="bg-teal-500/20 text-teal-300 border border-teal-500/40 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase shadow-sm">Madera • Portugalia</span>
+            <span id="detail-duration-badge" class="bg-slate-900/80 text-slate-200 border border-slate-700/80 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold">8 dni</span>
+            <span id="itaka-badge" style="display: none !important;" class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-xs font-bold px-3 py-1 rounded-full items-center gap-1 shadow-sm backdrop-blur-md">
+              <span>✈️</span> <span>Wycieczka ITAKA</span>
+            </span>
+            <div id="detail-enriched-badges" class="inline-flex items-center gap-1.5 flex-wrap"></div>
+          </div>
+
+          <!-- Trip Title with Inline Edit -->
+          <div>
+            <div class="flex items-center gap-3 flex-wrap">
+              <h2 id="detail-title" class="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight drop-shadow-md">
+                Szczegóły podróży
+              </h2>
+              <button id="btn-edit-title" title="Edytuj nazwę" class="p-1.5 text-slate-400 hover:text-teal-300 bg-slate-900/60 hover:bg-slate-800 rounded-xl border border-slate-700/60 backdrop-blur-sm transition text-sm">✏️</button>
+            </div>
+            <!-- Inline Title Edit Form -->
+            <div id="title-edit-form" class="hidden flex items-center gap-2 mt-2">
+              <input type="text" id="input-edit-title" class="px-3.5 py-2 text-sm font-bold text-slate-100 bg-slate-950/90 border border-teal-500 rounded-xl focus:outline-none w-full max-w-md shadow-xl">
+              <button id="btn-save-title" class="px-3.5 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold rounded-xl shadow transition">Zapisz</button>
+              <button id="btn-cancel-title" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition">Anuluj</button>
+            </div>
+            <p id="itaka-subtitle" style="display: none !important;" class="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl"></p>
+            <div class="flex items-center gap-2 text-xs text-slate-300 mt-1.5">
+              <span>🗓️</span>
+              <span id="detail-dates" class="font-semibold text-slate-200"></span>
+            </div>
+          </div>
+
+          <!-- Dynamic ITAKA cards container if active -->
+          <div id="itaka-card-container" style="display: none !important;" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs pt-1"></div>
+
+          <!-- Frosted-glass Stat Pills -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+            <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-900/60 backdrop-blur-md border border-white/10 hover:border-emerald-500/30 transition shadow-lg">
+              <div class="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-lg shrink-0">🥾</div>
+              <div>
+                <div class="text-3xs uppercase tracking-wider text-slate-400 font-bold">Pieszo</div>
+                <div id="detail-stat-walk" class="text-sm sm:text-base font-black text-slate-100">0 km</div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-900/60 backdrop-blur-md border border-white/10 hover:border-cyan-500/30 transition shadow-lg">
+              <div class="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center text-lg shrink-0">🚗</div>
+              <div>
+                <div class="text-3xs uppercase tracking-wider text-slate-400 font-bold">Autem</div>
+                <div id="detail-stat-drive" class="text-sm sm:text-base font-black text-slate-100">0 km</div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-900/60 backdrop-blur-md border border-white/10 hover:border-purple-500/30 transition shadow-lg">
+              <div class="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center text-lg shrink-0">📍</div>
+              <div>
+                <div class="text-3xs uppercase tracking-wider text-slate-400 font-bold">Miejsca</div>
+                <div id="detail-stat-places" class="text-sm sm:text-base font-black text-slate-100">0</div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-900/60 backdrop-blur-md border border-white/10 hover:border-amber-500/30 transition shadow-lg">
+              <div class="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center text-lg shrink-0">📸</div>
+              <div>
+                <div class="text-3xs uppercase tracking-wider text-amber-300 font-bold">Zdjęcia</div>
+                <div id="detail-stat-photos" class="text-sm sm:text-base font-black text-amber-300">0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Mobile-First Segmented Control / Tabs Bar -->
+      <nav id="mobile-tab-bar" class="sticky top-16 z-30 md:hidden bg-slate-900/95 backdrop-blur-xl p-1.5 rounded-2xl border border-slate-700/80 shadow-2xl flex items-center justify-between gap-1 transition-all duration-200">
+        <button id="mobile-tab-itinerary" data-target="detail-itinerary-col" class="mobile-tab-btn flex-1 py-2 px-2 text-xs font-bold rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 bg-teal-500 text-slate-950 shadow-md">
+          <span>📋</span> <span class="truncate">Plan podróży</span>
+        </button>
+        <button id="mobile-tab-map" data-target="map-container" class="mobile-tab-btn flex-1 py-2 px-2 text-xs font-bold rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 text-slate-300 hover:text-white hover:bg-slate-800/60">
+          <span>🗺️</span> <span class="truncate">Mapa</span>
+        </button>
+        <button id="mobile-tab-photos" data-target="user-photos-section" class="mobile-tab-btn flex-1 py-2 px-2 text-xs font-bold rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 text-slate-300 hover:text-white hover:bg-slate-800/60">
+          <span>📸</span> <span class="truncate">Galeria</span>
+        </button>
+      </nav>
+
+      <!-- Flights & Transfers Banner -->
+      <div id="flights-banner" class="hidden p-4 rounded-2xl bg-slate-900 border border-slate-700/80 text-xs text-slate-300 shadow-sm space-y-1"></div>
+
+      <!-- BOOKINGS SECTION -->
+      <section id="trip-bookings-section" class="hidden p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-sm space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+            <span>📬</span> <span>Rezerwacje i Vouchery</span>
+          </h3>
+          <button id="btn-add-another-booking" class="text-xs font-bold text-teal-300 bg-slate-800 px-3 py-1 rounded-xl border border-slate-700 transition">
+            + Dodaj / wklej kolejną
+          </button>
+        </div>
+        <div id="trip-bookings-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+      </section>
+
+      <!-- USER PHOTOS SECTION -->
+      <section id="user-photos-section" class="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-3">
+        <div class="flex items-center justify-between flex-wrap gap-2 border-b border-slate-800/80 pb-3">
+          <div>
+            <h3 class="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-2">
+              <span class="text-xl">📸</span>
+              <span>Galeria Zdjęć z Podróży</span>
+              <span id="trip-photos-count-badge" class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-xs font-bold px-2.5 py-0.5 rounded-full shadow-[0_0_10px_rgba(0,240,255,0.2)]">0 zdjęć</span>
+              <span id="trip-photo-source-badge" class="hidden bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-2xs px-2 py-0.5 rounded-full flex items-center gap-1"></span>
+            </h3>
+            <p id="trip-photo-source-desc" class="text-xs text-slate-400 mt-1"></p>
+          </div>
+          <div class="flex items-center flex-wrap gap-2">
+            <button id="btn-load-u-photos" class="px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs rounded-xl shadow-[0_0_12px_rgba(0,240,255,0.3)] transition flex items-center gap-1.5" title="Wczytaj autentyczne zdjęcia z dysku U:">
+              <span>⚡</span> <span>Wczytaj zdjęcia z biblioteki</span>
+            </button>
+            <label class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl border border-slate-700 shadow-sm cursor-pointer transition flex items-center gap-1.5" title="Wybierz inny katalog z dysku U: lub dysku lokalnego">
+              <span>📁</span> <span>Wybierz folder ze zdjęciami</span>
+              <input type="file" id="folder-photo-input" webkitdirectory directory multiple class="hidden">
+            </label>
+            <label class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl border border-slate-700 shadow-sm cursor-pointer transition flex items-center gap-1.5" title="Dodaj pojedyncze pliki zdjęć">
+              <span>🖼️</span> <span>Dodaj pliki</span>
+              <input type="file" id="direct-photo-input" multiple accept="image/*" class="hidden">
+            </label>
+            <button id="btn-toggle-gallery-grid" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-cyan-200 text-xs font-medium rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+              <span id="btn-toggle-gallery-grid-icon">⊞</span> <span id="btn-toggle-gallery-grid-text">Pokaż siatkę kafelków</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter bar: Days & Search -->
+        <div class="flex items-center justify-between flex-wrap gap-2 pt-1">
+          <div id="gallery-day-filters" class="flex items-center gap-1.5 overflow-x-auto custom-scroll pb-1">
+            <button data-day="all" class="gallery-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold bg-cyan-500 text-slate-950 shadow-[0_0_10px_rgba(0,240,255,0.4)] transition">Wszystkie</button>
+          </div>
+          <div class="relative min-w-[200px] max-w-xs w-full sm:w-auto">
+            <input type="text" id="gallery-search-input" placeholder="🔍 Szukaj miejsca (np. Fanal, Seixal, Plaża)..." class="w-full bg-slate-950/80 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-cyan-400 placeholder:text-slate-500">
+          </div>
+        </div>
+
+        <!-- Horizontal Quick Scroll Strip -->
+        <div id="trip-photos-thumbnails" class="flex gap-2.5 overflow-x-auto pb-2 custom-scroll items-center min-h-[70px]">
+          <div id="user-photos-empty-hint" class="text-xs text-slate-400 italic py-2 flex items-center gap-1.5">
+            <span>ℹ️</span> <span>Brak wczytanych zdjęć.</span>
+          </div>
+        </div>
+
+        <!-- Expandable Full Grid View (hidden by default) -->
+        <div id="trip-photos-grid-wrapper" class="hidden pt-2 border-t border-slate-800">
+          <div class="flex items-center justify-between pb-2 text-xs text-slate-400">
+            <span>Siatka wszystkich zdjęć z przypisanymi lokalizacjami GPS:</span>
+            <span id="grid-photos-count" class="font-bold text-cyan-300">0 wyświetlanych</span>
+          </div>
+          <div id="trip-photos-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3 max-h-[520px] overflow-y-auto custom-scroll p-2 bg-slate-950/80 rounded-xl border border-slate-800/80">
+            <!-- Dynamic grid items -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Detail 2-Column Grid: Days Itinerary (Left) & Map (Right) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- Left Column: Daily Itinerary Cards -->
+        <div id="detail-itinerary-col" class="lg:col-span-7 flex flex-col gap-4 print-full-width">
+          <div class="flex items-center justify-between pb-1">
+            <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+              <span>📅</span> <span id="detail-day-program-title">Program Dzień po Dniu</span>
+            </h3>
+            <span id="detail-days-count-badge" class="text-xs text-slate-400"></span>
+          </div>
+
+          <!-- Day Cards Container -->
+          <div id="days-container" class="flex flex-col gap-4"></div>
+        </div>
+
+        <!-- Right Column: Interactive Map & Tools -->
+        <div id="map-container" class="lg:col-span-5 flex flex-col gap-4 sticky top-20">
+          
+          <!-- Map Card -->
+          <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-md">
+            <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <h4 class="font-bold text-slate-100 text-sm flex items-center gap-1.5">
+                <span>🗺️</span> <span>MAPA TRASY (OPENSTREETMAP)</span>
+              </h4>
+              <div class="flex items-center gap-2">
+                <button id="btn-toggle-gps-tracks" class="text-2xs font-bold px-2.5 py-1 rounded-lg border transition flex items-center gap-1.5 bg-emerald-950/80 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/90 shadow-[0_0_12px_rgba(16,185,129,0.2)]" title="Włącz lub wyłącz widoczność śladów GPS ze Strava / Intervals.icu na mapie">
+                  <span>🥾</span> <span id="gps-track-toggle-text">Ślad GPS: Włączony</span>
+                </button>
+                <span id="map-subtitle" class="text-2xs text-teal-300 bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded-full font-medium">
+                  🌐 OpenMaps (100% bez API)
+                </span>
+              </div>
+            </div>
+
+            <!-- Day Filter for Map -->
+            <div id="trip-day-filter-bar" class="flex items-center gap-1.5 overflow-x-auto pb-2.5 pt-1 custom-scroll text-xs">
+              <button data-day="all" class="map-day-btn px-2.5 py-1 rounded-lg bg-teal-600 text-white font-bold whitespace-nowrap shadow-xs">Cała trasa</button>
+            </div>
+
+            <!-- Leaflet Map Container with Floating On-Map GPS Toggle -->
+            <div class="relative w-full rounded-2xl overflow-hidden shadow-md">
+              <div id="map"></div>
+              <!-- Floating On-Map GPS Track Button directly on the map next to zoom +/- -->
+              <div class="absolute top-3 left-14 z-[999] pointer-events-auto">
+                <button id="btn-floating-gps-toggle" class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-950/90 backdrop-blur-md border border-emerald-500 text-emerald-300 font-bold text-xs shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:bg-slate-900 hover:scale-105 active:scale-95 transition" title="Włącz lub wyłącz widoczność śladów GPS ze Strava / Intervals na mapie">
+                  <span class="text-base">🥾</span>
+                  <span id="floating-gps-toggle-text">Ślad GPS: Włączony</span>
+                  <span id="floating-gps-pulse-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Interactive Elevation Profile Widget -->
+            <div id="elevation-profile-card" class="mt-3 p-3 bg-slate-950/90 border border-slate-800 rounded-xl shadow-lg transition-all hidden">
+              <!-- Header with title, stats badges, and collapse button -->
+              <div class="flex items-center justify-between flex-wrap gap-2 mb-2 pb-2 border-b border-slate-800/80">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm">📈</span>
+                  <div class="flex items-center gap-1.5">
+                    <h5 class="text-xs font-bold text-slate-200 uppercase tracking-wider">Profil wysokości GPS</h5>
+                    <span id="elevation-track-name" class="text-3xs text-cyan-300 bg-cyan-950/70 border border-cyan-500/30 px-2 py-0.5 rounded-full font-mono max-w-[170px] truncate"></span>
+                  </div>
+                </div>
+
+                <!-- Toggle collapse / expand button -->
+                <button id="btn-toggle-elevation-chart" class="text-3xs text-slate-400 hover:text-slate-200 transition p-1 flex items-center gap-1 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800" title="Zwiń / Rozwiń profil wysokości">
+                  <span id="elevation-collapse-text">Zwiń</span>
+                  <svg id="elevation-collapse-icon" class="w-3.5 h-3.5 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+              </div>
+
+              <!-- Elevation Quick Stats -->
+              <div id="elevation-stats-bar" class="flex items-center gap-1.5 flex-wrap text-3xs font-mono mb-2">
+                <span class="px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-800" id="ele-stat-start" title="Wysokość początkowa">
+                  🚩 Start: <b class="text-emerald-400">-- m</b>
+                </span>
+                <span class="px-2 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-500/30 font-bold" id="ele-stat-max" title="Maksymalna wysokość">
+                  ⛰️ Szczyt: <b class="text-white">-- m</b>
+                </span>
+                <span class="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 font-bold" id="ele-stat-gain" title="Przewyższenie łączne">
+                  ↗️ W górę: <b class="text-white">-- m</b>
+                </span>
+                <span class="px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-800" id="ele-stat-dist" title="Dystans">
+                  📏 Dystans: <b class="text-slate-100">-- km</b>
+                </span>
+              </div>
+
+              <!-- Multi-track selector pills if day/trip has multiple tracks -->
+              <div id="elevation-track-selector" class="hidden flex items-center gap-1.5 overflow-x-auto pb-2 custom-scroll text-3xs"></div>
+
+              <!-- Canvas Chart Container -->
+              <div id="elevation-chart-wrapper" class="relative w-full h-[145px] select-none bg-slate-900/60 rounded-lg p-1 border border-slate-800/60">
+                <canvas id="elevation-canvas" class="w-full h-full block rounded cursor-crosshair"></canvas>
+                
+                <!-- Hover floating tooltip -->
+                <div id="elevation-tooltip" class="absolute pointer-events-none hidden bg-slate-950/95 border border-cyan-500/60 text-slate-100 text-3xs px-2 py-1 rounded-md shadow-xl backdrop-blur-sm z-30 font-mono transition-transform duration-75">
+                  <div class="flex items-center gap-2">
+                    <span class="text-cyan-400 font-bold" id="ele-tooltip-ele">⛰️ -- m</span>
+                    <span class="text-slate-300" id="ele-tooltip-dist">📏 -- km</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Semantic Route Place Badges Legend -->
+            <div class="mt-3 flex items-center justify-between text-3xs text-slate-300 flex-wrap gap-1.5 pt-2 border-t border-slate-800">
+              <span class="chip-place chip-attraction text-3xs py-0.5 px-2">🌲 Atrakcja / Szlak</span>
+              <span class="chip-place chip-viewpoint text-3xs py-0.5 px-2">⛰️ Szczyt / Widok</span>
+              <span class="chip-place chip-food text-3xs py-0.5 px-2">🍽️ Gastronomia</span>
+              <span class="chip-place chip-lodging text-3xs py-0.5 px-2">🏨 Nocleg / Hotel</span>
+              <span class="chip-place bg-amber-500/20 text-amber-300 border border-amber-500/40 text-3xs py-0.5 px-2">📷 Zdjęcia</span>
+            </div>
+
+            <!-- Markdown Preview Box -->
+            <div id="markdown-preview-box" class="mt-4 pt-4 border-t border-slate-800">
+              <div class="flex items-center justify-between mb-2">
+                <h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Dziennik w formacie Markdown</h5>
+                <button id="btn-toggle-raw" class="text-xs text-teal-400 hover:text-teal-300 font-semibold">Rozwiń podgląd</button>
+              </div>
+              <textarea id="raw-markdown-output" readonly rows="4" class="w-full text-xs font-mono bg-slate-950 text-emerald-400 p-3 rounded-xl border border-slate-800 custom-scroll focus:outline-none"></textarea>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Modals for Photo Matcher & Bookings -->
+    <div id="photo-upload-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span>📸</span> <span>Dopasowywanie Twoich Zdjęć (EXIF & GPS)</span>
+          </h3>
+          <button id="btn-close-photo-modal" class="text-slate-400 hover:text-white text-xl">&times;</button>
+        </div>
+        <p class="text-xs text-slate-400">
+          Wybierz zdjęcia z telefonu lub aparatu. System odczyta daty z metadanych EXIF i dopasuje je do odpowiednich dni wyjazdu.
+        </p>
+        <div class="border-2 border-dashed border-slate-700 p-6 rounded-xl text-center bg-slate-950/50">
+          <input type="file" id="modal-photo-file-input" multiple accept="image/*" class="hidden">
+          <button id="btn-modal-trigger-file" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-sm">
+            Wybierz pliki ze zdjęciami
+          </button>
+        </div>
+        <div id="photo-modal-list" class="max-h-60 overflow-y-auto space-y-2 custom-scroll"></div>
+        <div class="flex justify-end">
+          <button id="btn-close-photo-modal-2" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl">Zamknij</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="booking-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span>📬</span> <span>Wczytaj Voucher / Rezerwację ITAKA</span>
+          </h3>
+          <button id="btn-close-booking-modal" class="text-slate-400 hover:text-white text-xl">&times;</button>
+        </div>
+        <div class="space-y-2">
+          <label class="text-xs font-medium text-slate-300">Wklej treść e-maila lub dokumentu od ITAKI:</label>
+          <textarea id="booking-input-text" rows="6" placeholder="Wklej treść potwierdzenia z biura podróży ITAKA, hotelu lub wypożyczalni..." class="w-full text-xs bg-slate-950 text-slate-200 p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-teal-500"></textarea>
+        </div>
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button class="btn-sample-booking text-3xs font-semibold px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700" data-template="itaka_madera">
+              🌴 Wzorzec: ITAKA Madera
+            </button>
+            <button class="btn-sample-booking text-3xs font-semibold px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700" data-template="sixt_madera">
+              🚗 Wzorzec: Wynajem auta
+            </button>
+          </div>
+          <button id="btn-parse-and-attach-booking" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-xl shadow-sm">
+            Rozpoznaj i dołącz do podróży
+          </button>
+        </div>
+        <div id="booking-parsed-preview" class="hidden p-3 rounded-xl bg-teal-950/40 border border-teal-500/30 text-xs"></div>
+      </div>
+    </div>
+
+    <!-- Help & Guide Modal -->
+    <div id="help-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span>ℹ️</span> <span>Jak korzystać z aplikacji?</span>
+          </h3>
+          <button id="btn-close-help" class="text-slate-400 hover:text-white text-xl">&times;</button>
+        </div>
+        <div class="text-xs text-slate-300 space-y-3 leading-relaxed">
+          <p>
+            <b>1. Dane z Google Timeline:</b> Pobierz historię lokalizacji z Google Takeout w formacie JSON i upuść plik w sekcji wczytywania lub kliknij <i>Wczytaj dane demonstracyjne</i>.
+          </p>
+          <p>
+            <b>2. Pakiet ITAKA i Vouchery:</b> Wklej treść potwierdzenia z biura podróży lub rezerwacji hotelu i auta – aplikacja automatycznie zintegruje je z dniami podróży.
+          </p>
+          <p>
+            <b>3. Twoje zdjęcia z telefonu:</b> Wybierz zdjęcia z wakacji – system odczyta daty i współrzędne GPS z metadanych EXIF i przypisze zdjęcia do odpowiednich punktów na mapie.
+          </p>
+        </div>
+        <div class="flex justify-end pt-2">
+          <button id="btn-close-help-2" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl">Zamknij</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Encrypted Google Timeline Guidance Modal (Triggered when user drops 2024/2025/2026 Takeout archive) -->
+    <div id="encrypted-timeline-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-slate-900 border border-teal-500/40 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">📱</span>
+            <div>
+              <h3 class="text-base font-bold text-slate-100">Wykryto nową Oś czasu Google</h3>
+              <p class="text-2xs text-teal-300 font-semibold" id="detected-device-label">Telefon: Samsung Galaxy S23 (SM-S911B)</p>
+            </div>
+          </div>
+          <button id="btn-close-encrypted-modal" class="text-slate-400 hover:text-white text-xl">&times;</button>
+        </div>
+
+        <div class="p-3 rounded-xl bg-teal-950/30 border border-teal-500/30 text-xs text-slate-300 space-y-2">
+          <div class="font-bold text-teal-200 flex items-center gap-1.5">
+            <span>🔒</span> <span>Dlaczego archiwum z komputera zawiera tylko kopię zapasową?</span>
+          </div>
+          <p class="text-2xs leading-relaxed text-slate-300">
+            Google zmieniło Oś czasu — Twoja pełna historia lokalizacji jest teraz szyfrowana i przechowywana <b>bezpośrednio w pamięci Twojego telefonu Samsung</b> (nie w chmurze na komputerze).
+          </p>
+        </div>
+
+        <div class="space-y-2.5 text-xs text-slate-200">
+          <div class="font-bold text-slate-100 flex items-center gap-1.5">
+            <span>📋</span> <span>Jak w 30 sekund wyeksportować pełne dane z telefonu:</span>
+          </div>
+          <ol class="space-y-2 text-2xs text-slate-300 list-decimal list-inside bg-slate-950 p-3.5 rounded-xl border border-slate-800 leading-relaxed">
+            <li>Otwórz aplikację <b>Mapy Google</b> na telefonie Samsung.</li>
+            <li>Dotknij swojego <b>zdjęcia profilowego</b> w prawym górnym rogu ➔ wybierz <b>Twoja Oś czasu</b>.</li>
+            <li>Dotknij <b>trzech kropek (⋮)</b> w prawym górnym rogu ➔ wybierz <b>Ustawienia i prywatność</b>.</li>
+            <li>Wybierz <b>„Eksportuj dane Osi czasu”</b> (zapisze plik JSON w folderze Pobrane).</li>
+            <li>Przeciągnij ten plik JSON tutaj do aplikacji!</li>
+          </ol>
+        </div>
+
+        <div class="flex items-center justify-between gap-3 pt-2 border-t border-slate-800 flex-wrap">
+          <button id="btn-open-madeira-from-modal" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5">
+            <span>🌴</span> <span>Otwórz wycieczkę Madera (ITAKA)</span>
+          </button>
+          <button id="btn-close-encrypted-modal-2" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl">
+            Rozumiem, zamknij
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Enhanced Glassmorphic Photo Lightbox Modal -->
+    <div id="photo-lightbox-modal" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl hidden flex flex-col items-center justify-between p-3 sm:p-6 select-none transition-all duration-300">
+      
+      <!-- Top Action / Status Bar -->
+      <div class="w-full max-w-6xl flex items-center justify-between px-2 py-1.5 z-50">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xl">📸</span>
+          <span id="lightbox-counter" class="text-xs font-bold text-slate-200 bg-slate-900/90 backdrop-blur-md px-3 py-1 rounded-full border border-slate-700/80 shadow-md">1 / 1</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="lightbox-btn-locate" class="px-3.5 py-1.5 bg-cyan-600/90 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-500/20 transition flex items-center gap-1.5 border border-cyan-400/40 active:scale-95" title="Namierz na mapie i wycentruj">
+            <span>📍</span> <span>Namierz na mapie</span>
+          </button>
+          <button id="btn-lightbox-fullscreen" class="p-2 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition" title="Pełny ekran (F)">
+            <span class="text-sm">⛶</span>
+          </button>
+          <button id="btn-close-lightbox" class="p-2 bg-rose-900/70 hover:bg-rose-600 text-white rounded-xl border border-rose-500/40 transition" title="Zamknij (Esc)">
+            <span class="text-sm font-bold px-1">&times;</span>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Main Image Display with Left / Right Floating Navigation Arrows -->
+      <div class="relative w-full max-w-6xl flex-1 flex items-center justify-center min-h-[50vh] max-h-[72vh] overflow-hidden my-2">
+        <button id="lightbox-prev" class="absolute left-2 sm:left-4 text-white text-2xl hover:text-cyan-300 z-50 transition p-3 bg-slate-950/80 hover:bg-slate-900 rounded-full w-12 h-12 flex items-center justify-center border border-slate-700 shadow-2xl backdrop-blur-md active:scale-95" title="Poprzednie zdjęcie (Strzałka w lewo)">
+          <span>&larr;</span>
+        </button>
+        <button id="lightbox-next" class="absolute right-2 sm:right-4 text-white text-2xl hover:text-cyan-300 z-50 transition p-3 bg-slate-950/80 hover:bg-slate-900 rounded-full w-12 h-12 flex items-center justify-center border border-slate-700 shadow-2xl backdrop-blur-md active:scale-95" title="Następne zdjęcie (Strzałka w prawo)">
+          <span>&rarr;</span>
+        </button>
+
+        <img id="lightbox-img" src="" alt="Podgląd zdjęcia" class="max-w-full max-h-[70vh] object-contain rounded-2xl shadow-2xl transition-all duration-300 ring-1 ring-slate-700/60" />
+      </div>
+
+      <!-- Bottom Meta Overlay & Thumbnail Strip -->
+      <div class="w-full max-w-6xl flex flex-col gap-2.5 z-50">
+        <div class="w-full px-4 py-3 bg-slate-900/90 backdrop-blur-xl rounded-2xl text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-slate-700/80 shadow-2xl">
+          <div class="min-w-0 flex-1 space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h4 id="lightbox-title" class="text-sm sm:text-base font-bold text-cyan-300 truncate">Tytuł zdjęcia</h4>
+              <span id="lightbox-location" class="chip-place chip-viewpoint text-3xs py-0.5 px-2.5">
+                📍 Lokalizacja GPS
+              </span>
+            </div>
+            <p id="lightbox-meta" class="text-2xs sm:text-xs text-slate-400 truncate">Metadane pliku, data i czas wykonania</p>
+          </div>
+          <div id="lightbox-badges" class="flex flex-wrap items-center gap-1.5 text-2xs shrink-0">
+            <!-- Dynamic badges injected here -->
+          </div>
+        </div>
+
+        <!-- Bottom Thumbnails Strip -->
+        <div id="lightbox-thumbs-strip" class="flex gap-2 overflow-x-auto py-1 px-1 custom-scroll items-center max-h-[64px]">
+          <!-- Dynamic thumbnails -->
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Scripts -->
+  <script src="katalogator-motyw.js"></script>
+  <script src="user-photos-index.js?v=20261027_02"></script>
+  <script src="sample-data.js?v=20261027_02"></script>
+  <script src="photo-matcher.js?v=20261027_02"></script>
+  <script src="booking-parser.js?v=20261027_02"></script>
+  <script src="export-manager.js?v=20261027_02"></script>
+  <script src="app.js?v=20261027_02"></script>
+
+  <!-- Mobile Segmented Control & Lightbox Enhanced Interactivity -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Mobile-First Segmented Control / Tabs switching
+      const mobileTabs = document.querySelectorAll('.mobile-tab-btn');
+      mobileTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          mobileTabs.forEach(t => {
+            t.classList.remove('bg-teal-500', 'text-slate-950', 'shadow-md');
+            t.classList.add('text-slate-300', 'hover:text-white', 'hover:bg-slate-800/60');
+          });
+          tab.classList.remove('text-slate-300', 'hover:text-white', 'hover:bg-slate-800/60');
+          tab.classList.add('bg-teal-500', 'text-slate-950', 'shadow-md');
+
+          const targetId = tab.getAttribute('data-target');
+          const targetEl = document.getElementById(targetId);
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (targetId === 'map-container' && window.map) {
+              setTimeout(() => {
+                window.map.invalidateSize();
+              }, 300);
+            }
+          }
+        });
+      });
+    });
+  </script>
+
+</body>
+</html>
