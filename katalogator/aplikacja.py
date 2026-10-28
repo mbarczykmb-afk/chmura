@@ -27,7 +27,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, most, naprawa, odzyskiwanie, pilot, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, twarze, usuwanie, wykonawca, wysylanie)
-from . import podroze
+from . import podroze, slady
 from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
@@ -96,7 +96,7 @@ class Stan:
         return r[0] if r else None
 
     def podroze_info(self) -> dict:
-        return podroze.stan(self.katalog, self.podroze_ust(), self.podroze_korzenie())
+        return {**podroze.stan(self.katalog, self.podroze_ust(), self.podroze_korzenie()), "slady": slady.stan(self.katalog)}
 
     def podroze_akcja(self, dane: dict) -> dict:
         """✈ Podróże: import danych z dotychczasowego folderu projektu, usunięcie danych, dodatkowe foldery ze zdjęciami."""
@@ -111,6 +111,11 @@ class Stan:
             ust["korzenie"] = nowe
         if ust != self.podroze_ust():
             aktualizacje.zapisz_ustawienia(self.katalog, podroze=ust)
+        sl = dane.get("slady")
+        if isinstance(sl, dict):   # ślady GPS: klucze (nie wracają do panelu), pobieranie, usunięcie
+            w = self._slady_akcja(sl)
+            if "blad" in w:
+                return w
         akcja = str(dane.get("akcja") or "")
         if akcja == "importuj":
             w = podroze.importuj(self.katalog, ust.get("folder_importu") or "")
@@ -121,6 +126,24 @@ class Stan:
             if "blad" in w:
                 return w
         return self.podroze_info()
+
+    def _slady_akcja(self, d: dict) -> dict:
+        if isinstance(d.get("klucze"), dict):
+            slady.zapisz_klucze(self.katalog, d["klucze"])
+        akcja = str(d.get("akcja") or "")
+        if akcja == "klucze-z-kopii":
+            return slady.klucze_z_kopii(self.katalog, str(d.get("plik") or ""))
+        if akcja == "pobierz":
+            return slady.pobierz(self.katalog)
+        if akcja == "przerwij":
+            slady.przerwij()
+        elif akcja == "usun":
+            return slady.usun(self.katalog)
+        elif akcja == "usun-klucze":
+            slady.zapisz_klucze(self.katalog, {n: "" for n in slady.POLA_KLUCZY})
+        elif akcja == "zloz":
+            slady.zloz(self.katalog)
+        return {}
 
     def twarze_silnik_info(self) -> dict:
         return {"silnik": twarze.SILNIK, "stan": twarze.stan(self.przegladarka.galeria.baza),

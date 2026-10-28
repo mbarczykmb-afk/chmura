@@ -150,6 +150,7 @@
 
   fetch('kraje.json').then(r => r.json()).then(d => {
     przygotuj(d);
+    wszystkie = null;   // wyprawy mogły się wczytać wcześniej niż granice — przelicz państwa od nowa
     if (typeof renderCatalogGrid === 'function' && typeof detectedTrips !== 'undefined' && detectedTrips.length) renderCatalogGrid();
   }).catch(() => { const o = $('kraje-opis'); if (o) o.textContent = 'Nie udało się wczytać granic państw'; });
 })();

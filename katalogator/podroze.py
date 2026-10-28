@@ -123,6 +123,11 @@ def _kopiuj(katalog: Path, pliki: list[Path], mini: list[Path]) -> None:
             with _blokada:
                 _import.update(zrobione=i, komunikat=f"Kopiuję: {z.name}")
         _licznik.clear()
+        try:   # świeżo zaimportowane wyprawy dostają zapamiętane ślady GPS (bez sieci)
+            from . import slady
+            slady.zloz(katalog)
+        except Exception:  # noqa: BLE001 — brak śladów nie może psuć importu
+            LOG.exception("Podróże: składanie śladów po imporcie")
         with _blokada:
             _import.update(trwa=False, koniec=time.time(), komunikat=f"Gotowe — skopiowano {len(kolejka)} plików.")
     except OSError as e:
@@ -147,6 +152,9 @@ def plik_danych(katalog, nazwa: str) -> Path | None:
     d = folder_danych(katalog)
     if nazwa in DANE_PLIKI:
         p = d / nazwa
+    elif nazwa.startswith("slady/") and nazwa.count("/") == 1:   # ślady GPS wyprawy (Strava / Intervals.icu)
+        from . import slady
+        return slady.plik_wyprawy(katalog, nazwa[6:])
     elif nazwa.startswith("thumbnails/") and nazwa.count("/") == 1 and Path(nazwa).suffix.lower() in ZDJECIA \
             and ".." not in nazwa and "\\" not in nazwa:
         p = d / nazwa

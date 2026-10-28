@@ -1924,7 +1924,7 @@ class SerwerGalerii:
                 self.end_headers()
 
             # --- 🖥 pełny program z telefonu: zapytania przekazywane do programu na komputerze -------------
-            ZABRONIONE = ("/api/zamknij", "/api/aktualizacja/instaluj")  # nie z telefonu
+            ZABRONIONE = ("/api/zamknij", "/api/aktualizacja/instaluj", "/api/podroze")  # nie z telefonu (Podróże: klucze i dane lokalizacji)
 
             def _pelny(self):
                 return s.pilot.pelny() if s.pilot is not None else None

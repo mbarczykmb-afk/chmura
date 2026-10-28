@@ -97,13 +97,58 @@ function sekcjaPodrozy(d, odswiez) {
     if (!d.dodatkowe.includes(f)) zmien({korzenie: [...d.dodatkowe, f]});
   }))));
 
-  if (imp.trwa && !pod.odpytuje) {   // postęp importu: odświeżaj, aż się skończy
+  s.append(...sekcjaSlady(d, zmien));
+
+  const sl = d.slady || {pobieranie: {}};
+  if ((imp.trwa || sl.pobieranie.trwa) && !pod.odpytuje) {   // postęp importu i pobierania śladów: odświeżaj, aż się skończy
     pod.odpytuje = setInterval(async () => {
-      try { const n = await api("/api/podroze"); if (!n.import.trwa) { clearInterval(pod.odpytuje); pod.odpytuje = null; pod.zaladowana = false; pod.d = n; odswiez(); } else { pod.d = n; odswiez(); } }
-      catch (e) { clearInterval(pod.odpytuje); pod.odpytuje = null; }
+      try {
+        const n = await api("/api/podroze"), trwa = n.import.trwa || (n.slady && n.slady.pobieranie.trwa);
+        if (!trwa) { clearInterval(pod.odpytuje); pod.odpytuje = null; pod.zaladowana = false; }
+        pod.d = n; odswiez();
+      } catch (e) { clearInterval(pod.odpytuje); pod.odpytuje = null; }
     }, 900);
   }
   return s;
+}
+
+// 🥾 Ślady GPS wypraw ze Stravy i Intervals.icu — zamiast prostych kresek tam, gdzie Google zapisał tylko początek i koniec.
+function sekcjaSlady(d, zmien) {
+  const sl = d.slady || {klucze: {}, pobieranie: {}}, p = sl.pobieranie || {}, wyniki = [];
+  const pole = (etykieta, nazwa, ustawione, podpowiedz, haslo) => {
+    const i = el("input", {type: haslo ? "password" : "text", autocomplete: "off", placeholder: ustawione ? "zapisany — wpisz, aby zmienić" : podpowiedz});
+    i.onchange = () => { if (i.value.trim()) zmien({slady: {klucze: {[nazwa]: i.value.trim()}}}, "Zapisano na tym komputerze."); };
+    return wiersz(etyk(etykieta), i);
+  };
+  wyniki.push(el("h4", {textContent: "Ślady GPS (Strava / Intervals.icu)", style: "margin:10px 0 0"}));
+  wyniki.push(el("div", {className: "info", innerHTML: "Prawdziwy ślad z aktywności z dni wypraw — na mapie zamiast prostych kresek. " +
+    "<b>Klucze zostają tylko na tym komputerze</b>; program łączy się wyłącznie ze strava.com i intervals.icu. Najpierw próbuje Intervals.icu (klucz się nie zmienia), Stravę — gdy tam śladu nie ma."}));
+  wyniki.push(pole("Intervals.icu — identyfikator", "intervals_athlete_id", sl.klucze.intervals, "np. i123456", false));
+  wyniki.push(pole("Intervals.icu — klucz API", "intervals_api_key", sl.klucze.intervals, "Ustawienia → Developer Settings", true));
+  wyniki.push(pole("Strava — Client ID", "strava_client_id", sl.klucze.strava, "z aplikacji API Stravy", false));
+  wyniki.push(pole("Strava — Client Secret", "strava_client_secret", sl.klucze.strava, "", true));
+  wyniki.push(pole("Strava — Refresh Token", "strava_refresh_token", sl.klucze.strava, "", true));
+  const kopia = el("input", {type: "text", id: "slady-kopia", placeholder: "C:\\…\\kopia-szczyty.json — kopia zapasowa aplikacji Szczyty"});
+  wyniki.push(wiersz(etyk("Wczytaj klucze z kopii"), kopia,
+    przyc("Wczytaj", () => { if (kopia.value.trim()) zmien({slady: {akcja: "klucze-z-kopii", plik: kopia.value.trim()}}, "Wczytano klucze z kopii."); },
+          "", "Kopiuje klucze Stravy i Intervals.icu z pliku kopii aplikacji Szczyty; nic nie jest pokazywane ani wysyłane")));
+  const stanKluczy = `${sl.klucze.intervals ? "Intervals.icu ✓" : "Intervals.icu —"}  ·  ${sl.klucze.strava ? "Strava ✓" : "Strava —"}`;
+  wyniki.push(wiersz(el("span", {className: "info", textContent: stanKluczy}),
+    (sl.klucze.intervals || sl.klucze.strava) ? przyc("Usuń klucze", async () => {
+      if (await oknoTak("Usunąć zapisane klucze Stravy i Intervals.icu z tego komputera?")) zmien({slady: {akcja: "usun-klucze"}}, "Usunięto klucze.");
+    }) : null));
+  wyniki.push(wiersz(
+    p.trwa ? przyc("■ Przerwij", () => zmien({slady: {akcja: "przerwij"}})) :
+      przyc(sl.ze_sladem ? "↻ Pobierz nowe ślady" : "⬇ Pobierz ślady wypraw", () => zmien({slady: {akcja: "pobierz"}}), sl.ze_sladem ? "" : "glowny",
+            "Pobiera ślady aktywności z dni wypraw i zapamiętuje je na komputerze; można przerwać i wznowić"),
+    sl.aktywnosci ? el("span", {className: "info", textContent: `${sl.ze_sladem} śladów z ${sl.aktywnosci} aktywności · ${sl.rozmiar_mb} MB`}) : null,
+    sl.aktywnosci && !p.trwa ? przyc("Usuń ślady", async () => {
+      if (await oknoTak("Usunąć pobrane ślady GPS? Klucze zostają, ślady można pobrać jeszcze raz.")) zmien({slady: {akcja: "usun"}}, "Usunięto ślady.");
+    }) : null));
+  if (p.trwa) wyniki.push(el("div", {className: "info", textContent: `⏳ ${p.komunikat}${p.wszystkie ? ` (${p.zrobione} z ${p.wszystkie})` : ""}`}));
+  else if (p.blad) wyniki.push(el("div", {className: "zle", textContent: p.blad}));
+  else if (p.komunikat) wyniki.push(el("div", {className: "ok", textContent: p.komunikat}));
+  return wyniki;
 }
 
 $("podroze-odswiez").onclick = () => { const r = $("podroze-ramka"); if (pod.zaladowana) r.src = adresPodrozy(); };

@@ -212,3 +212,22 @@ def test_podroze_nie_przez_serwer_telefonu(tmp_path):
     finally:
         s.stop()
         serwer.shutdown()
+
+
+def test_slady_gps_przez_serwer_i_klucze_nie_wyplywaja(program):
+    from katalogator import slady
+    g, t, stan = program["get"], program["token"], program["stan"]
+    c = f"kat_podroze={t}"
+    slady.zapisz_klucze(stan.katalog, {"intervals_api_key": "TAJNY-KLUCZ-123", "intervals_athlete_id": "i7"})
+    cel = podroze.folder_danych(stan.katalog) / "slady"
+    cel.mkdir()
+    (cel / "t1.json").write_text(json.dumps({"tripId": "t1", "aktywnosci": []}), encoding="utf-8")
+    kod, tresc, nag = g("/podroze/slady/t1.json", c)
+    assert kod == 200 and json.loads(tresc)["tripId"] == "t1" and "json" in nag["Content-Type"]
+    assert g("/podroze/slady/t1.json")[0] == 403                      # bez dostępu
+    assert g("/podroze/slady/nie-ma.json", c)[0] == 404
+    assert g("/podroze/slady/../sample-trips.json", c)[0] == 404 and g("/podroze/slady/..%2Fsample-trips.json", c)[0] == 404
+    # panel pokazuje tylko, czy klucze są ustawione — nigdy ich wartości
+    kod, tresc, _ = g("/api/podroze?t=" + t)
+    assert kod == 200 and b"TAJNY-KLUCZ-123" not in tresc and json.loads(tresc)["slady"]["klucze"]["intervals"] is True
+    assert slady.klucze(stan.katalog)["intervals_api_key"] == "TAJNY-KLUCZ-123"

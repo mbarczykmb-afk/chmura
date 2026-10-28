@@ -6,7 +6,11 @@
 (function () {
   const PROG_LUKI_KM = 1.5, PROG_LOTU_KM = 150, MAKS_DROG = 60;
   const ZGODA = 'podroze_drogi_zgoda', PAMIEC = 'podroze_drogi:';
-  let warstwy = [], kontrolka = null, luki = [], droga = [];
+  let warstwy = [], kontrolka = null, luki = [], droga = [], licznikRysunku = 0, jestSlad = false;
+  const slady = new Map();   // id wyprawy → obietnica z śladami Strava / Intervals.icu (slady.py)
+  const nazwaPliku = (id) => String(id).replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 100);
+  const KOLORY = { rower: '#facc15', narty: '#e0f2fe', plyw: '#38bdf8', inne: '#fb923c' };
+  const rodzaj = (typ) => /ride|bike|cycl|rower/i.test(typ) ? 'rower' : /ski|snow/i.test(typ) ? 'narty' : /swim|kayak|row|paddle/i.test(typ) ? 'plyw' : 'inne';
 
   const km = (a, b) => {
     const r = Math.PI / 180, dLat = (b[0] - a[0]) * r, dLon = (b[1] - a[1]) * r;
@@ -51,7 +55,7 @@
 
   function czysc(mapa) {
     warstwy.forEach(w => { if (mapa) mapa.removeLayer(w); });
-    warstwy = []; luki = []; droga = [];
+    warstwy = []; luki = []; droga = []; jestSlad = false;
     if (kontrolka && mapa) { mapa.removeControl(kontrolka); }
     kontrolka = null;
   }
@@ -81,6 +85,7 @@
         `<div><span class="np-lin" style="border-color:#00f0ff"></span>ślad GPS</div>` +
         `<div><span class="np-lin" style="border-top-style:dashed;border-color:#94a3b8"></span>brak śladu (linia prosta)</div>` +
         (luki.some(l => l.lot) ? `<div><span class="np-lin" style="border-top-style:dotted;border-color:#a78bfa"></span>przelot</div>` : '') +
+        (jestSlad ? `<div><span class="np-lin" style="border-color:#fb923c"></span>ślad ze Stravy / Intervals.icu</div>` : '') +
         (luki.some(l => !l.lot && zapamietana(l)) ? `<div><span class="np-lin" style="border-color:#38bdf8"></span>trasa po drogach (szacunek)</div>` : '') +
         (doDrog ? `<button type="button" id="np-drogi">🛣 Wyznacz drogi (${Math.min(doDrog, MAKS_DROG)})</button><small>Pyta publiczny router OpenStreetMap o drogę między końcami luk — wysyła tylko te współrzędne.</small>` : '');
       const b = d.querySelector('#np-drogi'); if (b) b.addEventListener('click', () => wyznacz(mapa, b));
@@ -128,20 +133,63 @@
     if (bledy && typeof showToast === 'function') showToast(`🛣 Nie udało się wyznaczyć ${bledy} z ${lista.length} odcinków (brak sieci lub drogi).`);
   }
 
-  // Rysuje trasę wyprawy (lub jednego dnia). Zwraca false, gdy wyprawa nie ma śladu z dni — wtedy rysuje stara metoda.
+  function odlegloscDoSladu(pt, tracks) {
+    let naj = Infinity;
+    for (const t of tracks) for (const p of t.pts) { const d = km(pt, p); if (d < naj) naj = d; if (naj < 0.05) return naj; }
+    return naj;
+  }
+
+  // Ślady ze Stravy / Intervals.icu: rysowane na wierzchu; luka, której oba końce leżą przy takim śladzie, przestaje być „linią prostą”.
+  function dolozSlady(mapa, trip, dzien, numer) {
+    if (!trip || trip.id === undefined) return;
+    if (!slady.has(trip.id)) {
+      slady.set(trip.id, fetch('slady/' + encodeURIComponent(nazwaPliku(trip.id)) + '.json', { cache: 'no-cache' })
+        .then(r => r.ok ? r.json() : null).then(d => (d && Array.isArray(d.aktywnosci)) ? d.aktywnosci : null).catch(() => null));
+    }
+    slady.get(trip.id).then((akt) => {
+      if (numer !== licznikRysunku || !akt || !akt.length) return;   // użytkownik przeszedł już dalej
+      const d = dzien === 'all' ? null : (trip.days || []).find(x => x.dayNumber === parseInt(dzien, 10));
+      const wybrane = akt.filter(a => !d || String(a.start || '').slice(0, 10) === String(d.date || '').slice(0, 10));
+      if (!wybrane.length) return;
+      for (const a of wybrane) {
+        const pts = (a.pts || []).map(p => [p[0], p[1]]);
+        if (pts.length < 2) continue;
+        const kolor = KOLORY[rodzaj(a.typ)];
+        const obrys = L.polyline(pts, { color: '#020617', weight: 7, opacity: 0.5, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(mapa);
+        const linia = L.polyline(pts, { color: kolor, weight: 3.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(mapa);
+        const nazwa = String(a.nazwa || 'Aktywność').replace(/</g, '&lt;');
+        linia.bindTooltip(`${nazwa} · ${a.typ || ''} · ${a.km || 0} km<br><small>${a.zrodlo === 'strava' ? 'Strava' : 'Intervals.icu'}</small>`, { sticky: true });
+        obrys._np = linia._np = 'aktywnosc'; warstwy.push(obrys, linia);
+      }
+      jestSlad = true;
+      const przed = luki.length;
+      luki = luki.filter(l => l.lot || !(odlegloscDoSladu(l.a, wybrane) < 0.3 && odlegloscDoSladu(l.b, wybrane) < 0.3));
+      if (kontrolka) { mapa.removeControl(kontrolka); kontrolka = null; }
+      if (luki.length !== przed) rysujPrzerwy(mapa);
+      legenda(mapa);
+    });
+  }
+
+  // Rysuje trasę wyprawy (lub jednego dnia). Zwraca false, gdy wyprawa nie ma śladu z dni — wtedy rysuje stara metoda
+  // (ślady ze Stravy / Intervals.icu i tak zostaną dołożone, jeśli są pobrane).
   function rysuj(mapa, trip, dzien) {
     czysc(mapa);
+    const numer = ++licznikRysunku;
     const pkt = punkty(trip, dzien);
-    if (pkt.length < 2) return false;
-    const { slady, przerwy } = podziel(pkt);
-    luki = przerwy;
-    for (const s of slady) {
-      const w = L.polyline(s, { color: '#00f0ff', weight: 3.5, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }).addTo(mapa);
-      w._np = 'slad'; warstwy.push(w);
+    let narysowano = false;
+    if (pkt.length >= 2) {
+      const { slady: sl, przerwy } = podziel(pkt);
+      luki = przerwy;
+      for (const s of sl) {
+        const w = L.polyline(s, { color: '#00f0ff', weight: 3.5, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }).addTo(mapa);
+        w._np = 'slad'; warstwy.push(w);
+      }
+      rysujPrzerwy(mapa);
+      legenda(mapa);
+      narysowano = true;
     }
-    rysujPrzerwy(mapa);
-    legenda(mapa);
-    return true;
+    dolozSlady(mapa, trip, dzien, numer);
+    return narysowano;
   }
   window.trasaPodrozy = { rysuj, czysc, _podziel: podziel, _punkty: punkty };
 })();
