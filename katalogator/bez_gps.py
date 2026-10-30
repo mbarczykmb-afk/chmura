@@ -431,7 +431,8 @@ def _segment(a: dict, od: dt.datetime, do: dt.datetime) -> list[list[float]]:
 
 def _grupa_json(gr: list[dict], typ: str, opis: str, pewnosc: str, punkty: list, extra: dict | None = None) -> dict:
     klucz = hashlib.sha1((typ + "|" + gr[0]["sciezka"] + "|" + str(len(gr))).encode()).hexdigest()[:16]
-    return {"klucz": klucz, "typ": typ, "opis": opis, "pewnosc": pewnosc, "n": len(gr), "ids": [z["id"] for z in gr],
+    pliki = [{"id": z["id"], "nazwa": os.path.basename(z["sciezka"]), "data": z["t"].isoformat(), "rodzaj": "zdjecie"} for z in gr]
+    return {"klucz": klucz, "typ": typ, "opis": opis, "pewnosc": pewnosc, "n": len(gr), "ids": [z["id"] for z in gr], "pliki": pliki,
             "od": gr[0]["t"].isoformat(), "do": gr[-1]["t"].isoformat(), "punkty": punkty, **(extra or {})}
 
 
@@ -525,7 +526,8 @@ def _usun_z_wynikow(g, ids: set) -> None:
             if len(zostaje) == len(x["ids"]):
                 nowe.append(x)
             elif zostaje:
-                x = {**x, "ids": zostaje, "n": len(zostaje), "punkty": [p for p in x["punkty"] if p[0] not in ids]}
+                x = {**x, "ids": zostaje, "n": len(zostaje), "punkty": [p for p in x["punkty"] if p[0] not in ids],
+                     "pliki": [f for f in x.get("pliki", []) if f["id"] not in ids]}
                 nowe.append(x)
         w["grupy"] = nowe
 

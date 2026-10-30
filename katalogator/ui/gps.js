@@ -9,7 +9,7 @@ const GPS_ZRODLA = {slad: "🥾 Ślad", sasiad: "📷 Zdjęcie obok", wizyta: "�
 (function stylGps() {
   const s = document.createElement("style");
   s.textContent = `
-  .gps-uklad{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,1fr);gap:14px;align-items:start}
+  .gps-uklad{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr);gap:14px;align-items:start}
   .gps-lewa{display:flex;flex-direction:column;gap:10px;min-width:0}
   .gps-prawa{position:sticky;top:0;height:calc(100vh - 150px);min-height:360px;border:1px solid var(--lin);border-radius:10px;overflow:hidden}
   #gps-mapa{width:100%;height:100%}
@@ -26,9 +26,10 @@ const GPS_ZRODLA = {slad: "🥾 Ślad", sasiad: "📷 Zdjęcie obok", wizyta: "�
   .gps-gr .m{color:var(--mut,#888);font-size:12px}
   .gps-pew{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid currentColor}
   .gps-pew.wysoka{color:#30a46c}.gps-pew.średnia{color:#d4a017}.gps-pew.niska,.gps-pew.przybliżona{color:#e5484d}
-  .gps-min{display:flex;gap:4px;margin:8px 0;overflow:hidden}
-  .gps-min img{width:64px;height:64px;object-fit:cover;border-radius:6px;flex:none;background:var(--lin)}
-  .gps-min span{display:flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:6px;background:var(--lin);font-size:13px;flex:none}
+  .gps-min{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--kafel,200px),1fr));gap:8px;margin:10px 0}
+  .gps-min img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:var(--lin);cursor:zoom-in;display:block}
+  .gps-min img:hover{outline:2px solid var(--neon-c);outline-offset:1px}
+  .gps-wiecej{grid-column:1/-1;justify-self:start}
   .gps-akcje{display:flex;gap:8px;flex-wrap:wrap}
   .gps-zrodla{display:flex;gap:6px;flex-wrap:wrap}
   @media (max-width:900px){.gps-uklad{grid-template-columns:1fr}.gps-prawa{position:relative;height:320px}}`;
@@ -154,11 +155,18 @@ function kartaGps(x) {
     gpsEl("span", {className: "gps-pew " + x.pewnosc, textContent: x.pewnosc})));
   k.append(gpsEl("div", {className: "m", textContent: `${gpsZdjec(x.n)} · ${gpsData(x.od)}${x.do !== x.od ? " – " + gpsData(x.do) : ""}`}));
   const m = gpsEl("div", {className: "gps-min"});
-  for (const id of x.ids.slice(0, 8)) {
-    const im = new Image(); im.loading = "lazy"; im.alt = ""; im.src = miniatura(id, false);
-    m.append(im);
-  }
-  if (x.n > 8) m.append(gpsEl("span", {textContent: "+" + (x.n - 8)}));
+  const pliki = x.pliki && x.pliki.length ? x.pliki : x.ids.map(id => ({id, nazwa: "", data: x.od, rodzaj: "zdjecie"}));
+  const rysujMin = wszystkie => {   // rozmiar miniatur = suwak u góry (--kafel); klik → pełny ekran z powiększaniem jak w Przeglądarce
+    m.replaceChildren();
+    pliki.slice(0, wszystkie ? pliki.length : 6).forEach((f, i) => {
+      const im = new Image(); im.loading = "lazy"; im.alt = f.nazwa || ""; im.title = f.nazwa ? `${f.nazwa} — kliknij, aby powiększyć` : "Kliknij, aby powiększyć";
+      im.src = miniatura(f.id, true);
+      im.onclick = e => { e.stopPropagation(); pokazPelny(pliki, i); };
+      m.append(im);
+    });
+    if (!wszystkie && pliki.length > 6) m.append(przycisk(`Pokaż wszystkie (${pliki.length})`, e => { e.stopPropagation(); rysujMin(true); }, "", "gps-wiecej"));
+  };
+  rysujMin(false);
   k.append(m);
   const a = gpsEl("div", {className: "gps-akcje"});
   a.append(przycisk(`✓ Dodaj lokalizację (${x.n})`, e => { e.stopPropagation(); przyjmijGps(x); }, "Zapisuje propozycję w zdjęciach (JPEG — EXIF, inne — .xmp obok); można cofnąć", "akt"));
