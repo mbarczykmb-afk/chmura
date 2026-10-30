@@ -431,8 +431,14 @@ def _segment(a: dict, od: dt.datetime, do: dt.datetime) -> list[list[float]]:
 
 def _grupa_json(gr: list[dict], typ: str, opis: str, pewnosc: str, punkty: list, extra: dict | None = None) -> dict:
     klucz = hashlib.sha1((typ + "|" + gr[0]["sciezka"] + "|" + str(len(gr))).encode()).hexdigest()[:16]
+    from . import miejsca   # nazwa miejsca bez internetu: miejscowość w Polsce albo kraj — podpis przy propozycji
+    try:
+        etyk = miejsca.etykieta(punkty[0][1], punkty[0][2])
+        miejsce = miejsca.fraza(etyk) if etyk.startswith("@") else etyk
+    except Exception:  # noqa: BLE001 — brak danych miejsc nie może zepsuć przeglądu
+        miejsce = ""
     pliki = [{"id": z["id"], "nazwa": os.path.basename(z["sciezka"]), "data": z["t"].isoformat(), "rodzaj": "zdjecie"} for z in gr]
-    return {"klucz": klucz, "typ": typ, "opis": opis, "pewnosc": pewnosc, "n": len(gr), "ids": [z["id"] for z in gr], "pliki": pliki,
+    return {"klucz": klucz, "typ": typ, "opis": opis, "pewnosc": pewnosc, "n": len(gr), "ids": [z["id"] for z in gr], "pliki": pliki, "miejsce": miejsce,
             "od": gr[0]["t"].isoformat(), "do": gr[-1]["t"].isoformat(), "punkty": punkty, **(extra or {})}
 
 

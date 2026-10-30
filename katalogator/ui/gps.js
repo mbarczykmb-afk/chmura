@@ -31,6 +31,13 @@ const GPS_ZRODLA = {slad: "🥾 Ślad", sasiad: "📷 Zdjęcie obok", wizyta: "�
   .gps-min img:hover{outline:2px solid var(--neon-c);outline-offset:1px}
   .gps-wiecej{grid-column:1/-1;justify-self:start}
   .gps-akcje{display:flex;gap:8px;flex-wrap:wrap}
+  .gps-adres{background:var(--panel);color:var(--fg);border:1px solid var(--lin);border-radius:10px;padding:8px 12px;font-size:13px;
+    line-height:1.35;max-width:min(340px,70vw);box-shadow:var(--cien)}
+  .gps-adres b{display:block;font-size:14px;font-weight:650}
+  .gps-adres small{display:block;color:var(--mut);font-size:12px}
+  .gps-adres .gps-ad-wiersz+.gps-ad-wiersz{margin-top:6px;padding-top:6px;border-top:1px solid var(--lin)}
+  .gps-etyk{background:var(--panel);color:var(--fg);border:1px solid var(--lin);border-radius:8px;font-size:12px;font-weight:600;padding:3px 8px;box-shadow:var(--cien)}
+  .gps-mp{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--mut)}
   .gps-zrodla{display:flex;gap:6px;flex-wrap:wrap}
   @media (max-width:900px){.gps-uklad{grid-template-columns:1fr}.gps-prawa{position:relative;height:320px}}`;
   document.head.append(s);
@@ -91,7 +98,7 @@ function rysujGpsPanel() {
                       }, "Przegląda zdjęcia bez GPS i szuka dla nich miejsca w śladach, zdjęciach obok i osi czasu", "akt"));
   const lc = gpsEl("label", {className: "menu-cb", title: "Dla zdjęć bez żadnego tropu — rozpoznanie miejsca z samego obrazu (przybliżone)"});
   const cb = gpsEl("input", {type: "checkbox", checked: !!u.geoclip, disabled: !model.pobrany});
-  cb.onchange = async () => { try { gps.d = await post("/api/g/gps/ustawienia", {geoclip: cb.checked}); } catch (e) { toastG(e.message); } rysujGpsPanel(); };
+  cb.onchange = async () => { try { await post("/api/g/gps/ustawienia", {geoclip: cb.checked}); gps.d = await api("/api/g/gps"); } catch (e) { toastG(e.message); } rysujGpsPanel(); };
   lc.append(cb, " 🧠 GeoCLIP dla reszty");
   pas.append(lc);
   if (!model.pobrany) pas.append(model.trwa ? gpsEl("span", {className: "info", textContent: `⏳ model: ${model.zrobione || 0} z ${model.wszystkie || "?"} MB`})
@@ -110,10 +117,10 @@ function rysujGpsPanel() {
   } else pas.append(gpsEl("span", {className: "info", textContent: "Strava / Intervals.icu: klucze wpisz w programie — Ustawienia → Podróże → Ślady GPS."}));
   // 📁 GPX
   const gpx = gpsEl("input", {type: "text", value: u.folder_gpx || "", placeholder: "Folder z plikami GPX (np. eksport Sports Trackera)"});
-  gpx.onchange = async () => { try { gps.d = await post("/api/g/gps/ustawienia", {folder_gpx: gpx.value.trim()}); toastG("Zapisano folder GPX."); } catch (e) { toastG(e.message); } };
+  gpx.onchange = async () => { try { await post("/api/g/gps/ustawienia", {folder_gpx: gpx.value.trim()}); gps.d = await api("/api/g/gps"); rysujGpsPanel(); toastG("Zapisano folder GPX."); } catch (e) { toastG(e.message); } };
   pas.append(gpsEl("span", {className: "info", textContent: "📁 GPX:"}), gpx);
   if (d.podpowiedz_gpx) pas.append(przycisk("Użyj: " + d.podpowiedz_gpx, async () => {
-    try { gps.d = await post("/api/g/gps/ustawienia", {folder_gpx: d.podpowiedz_gpx}); rysujGpsPanel(); toastG("Zapisano folder GPX."); } catch (e) { toastG(e.message); }
+    try { await post("/api/g/gps/ustawienia", {folder_gpx: d.podpowiedz_gpx}); gps.d = await api("/api/g/gps"); rysujGpsPanel(); toastG("Zapisano folder GPX."); } catch (e) { toastG(e.message); }
   }, "Folder z eksportem Sports Trackera (projekt Szczyty)"));
   // stan
   if (d.trwa || d.komunikat || d.blad) {
@@ -153,6 +160,7 @@ function kartaGps(x) {
   k.append(gpsEl("div", {className: "gl"},
     gpsEl("b", {textContent: GPS_ZRODLA[x.typ] || x.typ}), gpsEl("span", {textContent: x.opis}),
     gpsEl("span", {className: "gps-pew " + x.pewnosc, textContent: x.pewnosc})));
+  if (x.miejsce) k.append(gpsEl("div", {className: "m", textContent: "📍 " + (x.miejsce.startsWith("w ") || x.miejsce.startsWith("we ") || x.miejsce.startsWith("na ") ? x.miejsce : "okolice: " + x.miejsce)}));
   k.append(gpsEl("div", {className: "m", textContent: `${gpsZdjec(x.n)} · ${gpsData(x.od)}${x.do !== x.od ? " – " + gpsData(x.do) : ""}`}));
   const m = gpsEl("div", {className: "gps-min"});
   const pliki = x.pliki && x.pliki.length ? x.pliki : x.ids.map(id => ({id, nazwa: "", data: x.od, rodzaj: "zdjecie"}));
@@ -178,6 +186,70 @@ function kartaGps(x) {
   return k;
 }
 
+// ---------- adres punktu na mapie: z OpenStreetMap (Nominatim, po zgodzie) albo z nazw miejsc bez internetu ----------
+const gpsAdresy = {pam: new Map(), ostatnie: 0, kolejka: Promise.resolve()};
+const gpsAdresWl = () => { try { return localStorage.getItem("kat_gps_adres") !== "0"; } catch (e) { return true; } };
+function gpsAdres(lat, lon) {   // → {glowna, reszta} albo null (brak internetu / wyłączone)
+  const k = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+  if (gpsAdresy.pam.has(k)) return Promise.resolve(gpsAdresy.pam.get(k));
+  gpsAdresy.kolejka = gpsAdresy.kolejka.then(async () => {
+    if (gpsAdresy.pam.has(k)) return gpsAdresy.pam.get(k);
+    const czekaj = 1100 - (Date.now() - gpsAdresy.ostatnie);   // zasady Nominatim: najwyżej 1 zapytanie na sekundę
+    if (czekaj > 0) await new Promise(r => setTimeout(r, czekaj));
+    gpsAdresy.ostatnie = Date.now();
+    let w = null;
+    try {
+      const ac = new AbortController(), t = setTimeout(() => ac.abort(), 8000);
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=17&addressdetails=1&accept-language=pl&lat=${lat}&lon=${lon}`,
+                            {signal: ac.signal, headers: {Accept: "application/json"}});
+      clearTimeout(t);
+      if (r.ok) {
+        const a = (await r.json()).address || {};
+        const ulica = [a.road || a.pedestrian || a.footway || a.path, a.house_number].filter(Boolean).join(" ");
+        const miasto = a.city || a.town || a.village || a.municipality || a.hamlet || a.suburb || a.city_district || "";
+        const reg = [a.county, a.state].filter(x => x && x !== miasto)[0] || "";
+        w = {glowna: [miasto, a.country].filter(Boolean).join(", ") || (a.country || ""), reszta: [ulica, reg].filter(Boolean).join(" · ")};
+        if (!w.glowna && !w.reszta) w = null;
+      }
+    } catch (e) { w = null; }
+    gpsAdresy.pam.set(k, w);
+    return w;
+  });
+  return gpsAdresy.kolejka;
+}
+async function gpsPokazAdres(x, numer) {
+  if (!gps.mapa) return;
+  if (gps.adresKontrolka) { gps.mapa.removeControl(gps.adresKontrolka); gps.adresKontrolka = null; }
+  const pkt = x.punkty.map(p => [p[1], p[2]]);
+  const a = pkt[0], b = pkt[pkt.length - 1];
+  const dalekie = pkt.length > 1 && Math.hypot((a[0] - b[0]) * 111, (a[1] - b[1]) * 70) > 3;   // początek i koniec w różnych miejscach
+  const wiersze = [[a, dalekie ? "Początek" : ""]].concat(dalekie ? [[b, "Koniec"]] : []);
+  const kon = L.control({position: "topright"});
+  kon.onAdd = () => {
+    const d = L.DomUtil.create("div", "gps-adres"); L.DomEvent.disableClickPropagation(d);
+    for (const [, et] of wiersze) {
+      const w = gpsEl("div", {className: "gps-ad-wiersz"}, gpsEl("b", {textContent: (et ? et + ": " : "") + (x.miejsce || "…")}), gpsEl("small", {textContent: "szukam adresu…"}));
+      d.append(w);
+    }
+    const mp = gpsEl("label", {className: "gps-mp", title: "Współrzędne pokazanego punktu są wysyłane do nominatim.openstreetmap.org (ta sama usługa OpenStreetMap, z której jest podkład mapy). Wyłącz, jeśli wolisz tylko nazwy z programu."});
+    const cb = gpsEl("input", {type: "checkbox", checked: gpsAdresWl()});
+    cb.onchange = () => { try { localStorage.setItem("kat_gps_adres", cb.checked ? "1" : "0"); } catch (e) { /* bez pamięci */ } gpsPokazAdres(x); };
+    mp.append(cb, "adres z internetu (OSM)"); d.append(mp);
+    kon._d = d; return d;
+  };
+  kon.addTo(gps.mapa); gps.adresKontrolka = kon;
+  const wiersz = i => kon._d.querySelectorAll(".gps-ad-wiersz")[i];
+  if (!gpsAdresWl()) { kon._d.querySelectorAll("small").forEach(s => { s.textContent = "adres z internetu wyłączony"; }); return; }
+  for (let i = 0; i < wiersze.length; i++) {
+    const w = await gpsAdres(wiersze[i][0][0], wiersze[i][0][1]);
+    if (gps.wybrana !== x || gps.adresKontrolka !== kon) return;   // użytkownik wybrał już inną grupę
+    const el = wiersz(i); if (!el) continue;
+    if (w && i === 0 && gps.etykieta && w.glowna) gps.etykieta.setTooltipContent(w.glowna);
+    if (w) { el.querySelector("b").textContent = (wiersze[i][1] ? wiersze[i][1] + ": " : "") + (w.glowna || el.querySelector("b").textContent); el.querySelector("small").textContent = w.reszta || ""; }
+    else el.querySelector("small").textContent = "brak adresu (bez internetu?)";
+  }
+}
+
 function gpsMapa() {
   if (gps.mapa) { setTimeout(() => gps.mapa.invalidateSize(), 50); return; }
   gps.mapa = L.map("gps-mapa", {worldCopyJump: true}).setView([52, 19], 5);
@@ -188,7 +260,7 @@ function gpsMapa() {
 }
 
 function wybierzGps(x) {
-  gps.wybrana = x; gps.punkt = null;
+  gps.wybrana = x; gps.punkt = null; gps.pierwszy = null; gps.etykieta = null;
   document.querySelectorAll(".gps-gr").forEach(e => e.classList.remove("wyb"));
   const i = gps.grupy.indexOf(x), karty = document.querySelectorAll(".gps-gr");
   if (karty[i]) karty[i].classList.add("wyb");
@@ -215,12 +287,18 @@ function wybierzGps(x) {
     granice.push([la, lo]);
   } else {
     for (const [id, la, lo] of x.punkty) {
-      L.circleMarker([la, lo], {radius: 6, color: "#fff", weight: 2, fillColor: "#7354f0", fillOpacity: 1})
+      const c = L.circleMarker([la, lo], {radius: 6, color: "#fff", weight: 2, fillColor: "#7354f0", fillOpacity: 1})
         .bindTooltip(`<img src="${miniatura(id, false)}" style="width:120px;height:90px;object-fit:cover;border-radius:6px">`, {direction: "top"})
         .addTo(gps.warstwy);
+      if (!gps.pierwszy) gps.pierwszy = c;
       granice.push([la, lo]);
     }
+    if (gps.pierwszy && x.miejsce) {   // nazwa miejsca stale przy punkcie — mapa bez podpisów nic nie mówi
+      const e = L.marker(gps.pierwszy.getLatLng(), {interactive: false, icon: L.divIcon({className: "", iconSize: [0, 0]})}).addTo(gps.warstwy);
+      e.bindTooltip(x.miejsce, {permanent: true, direction: "bottom", offset: [0, 10], className: "gps-etyk"}); gps.etykieta = e;
+    }
   }
+  gpsPokazAdres(x);
   if (granice.length) gps.mapa.fitBounds(L.latLngBounds(granice).pad(0.25), {maxZoom: x.typ === "geoclip" ? 9 : 16});
 }
 

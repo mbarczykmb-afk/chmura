@@ -142,8 +142,8 @@ def test_skan_przeglad_i_decyzje(biblioteka):
 def test_ustawienia_folder_gpx(biblioteka, tmp_path):
     g = biblioteka
     assert "blad" in galeria.obsluz_post(g, "/api/g/gps/ustawienia", {"folder_gpx": str(tmp_path / "nie-ma")})
-    s = galeria.obsluz_post(g, "/api/g/gps/ustawienia", {"folder_gpx": str(tmp_path), "geoclip": True})
-    assert s["ustawienia"] == {"folder_gpx": str(tmp_path), "geoclip": True}
+    assert galeria.obsluz_post(g, "/api/g/gps/ustawienia", {"folder_gpx": str(tmp_path), "geoclip": True}) == {"ok": True}
+    assert bez_gps.stan(g)["ustawienia"] == {"folder_gpx": str(tmp_path), "geoclip": True}
 
 
 def test_slad_z_czasem_w_pamieci(tmp_path, monkeypatch):
@@ -175,3 +175,31 @@ def test_gpx_przerzedzenie_i_pamiec_na_dysku(tmp_path, monkeypatch):
     bez_gps._GPX.clear()
     c = bez_gps._gpx_plik(p)[0]                                              # z pamięci na dysku
     assert c["pts"] == b["pts"] and c["start"] == b["start"] and len(list((tmp_path / "dane" / "gpx-pamiec").glob("*.json"))) == 1
+
+
+def test_http_zapis_ustawien_nie_zwraca_400(tmp_path):
+    """Regresja: odpowiedź z kluczem „blad” (nawet pustym) serwer traktuje jak błąd 400 — „Bad Request” w oknie."""
+    import http.client
+    import threading
+    from katalogator import aktualizacje, aplikacja
+    (tmp_path / "dane").mkdir()
+    aktualizacje.zapisz_ustawienia(tmp_path / "dane", powitanie_widziane=True)
+    serwer, url, _ = aplikacja.uruchom_serwer(tmp_path / "dane")
+    threading.Thread(target=serwer.serve_forever, daemon=True).start()
+    try:
+        host, port = url.split("//")[1].split("/")[0].split(":")
+        token = url.split("?t=")[1]
+
+        def zapytanie(metoda, sciezka, dane=None):
+            c = http.client.HTTPConnection(host, int(port), timeout=10)
+            c.request(metoda, sciezka + f"?z=przegladarka&t={token}", body=json.dumps(dane) if dane is not None else None,
+                      headers={"Content-Type": "application/json", "X-Token": token})
+            r = c.getresponse()
+            return r.status, json.loads(r.read() or b"{}")
+        kod, w = zapytanie("POST", "/api/g/gps/ustawienia", {"folder_gpx": str(tmp_path), "geoclip": False})
+        assert kod == 200 and w == {"ok": True}
+        kod, w = zapytanie("GET", "/api/g/gps")
+        assert kod == 200 and w["ustawienia"]["folder_gpx"] == str(tmp_path)
+        assert zapytanie("POST", "/api/g/gps/ustawienia", {"folder_gpx": str(tmp_path / "nie-ma")})[0] == 400
+    finally:
+        serwer.shutdown()

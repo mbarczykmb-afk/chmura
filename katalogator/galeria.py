@@ -80,6 +80,9 @@ def _nazwa_miejsca(etyk: str) -> str:
     return miejsca.fraza(etyk)
 
 
+_BLOKADA_SCHEMATU = threading.RLock()
+
+
 class Galeria:
     """Dane dla osi czasu i mapy z bazy skanu. korzenie() -> lista folderów (None = wszystko w bazie)."""
 
@@ -97,16 +100,19 @@ class Galeria:
         db = skaner.otworz_baze(self.baza)
         db.create_function("pl_lower", 1, lambda s: s.lower() if s else s, deterministic=True)  # SQLite: Ł, Ź…
         if not getattr(self, "_schemat", False):
-            db.executescript(SCHEMAT_KOLEKCJI)
-            if "ukryty" not in {r[1] for r in db.execute("PRAGMA table_info(g_albumy)")}:  # od 1.35: 🙈 ukryte albumy
-                db.execute("ALTER TABLE g_albumy ADD COLUMN ukryty INTEGER NOT NULL DEFAULT 0")
-            db.execute("CREATE TABLE IF NOT EXISTS g_ustawienia (klucz TEXT PRIMARY KEY, wartosc TEXT)")
-            db.execute("CREATE TABLE IF NOT EXISTS decyzje_dok (sciezka TEXT PRIMARY KEY, dokument INTEGER NOT NULL)")
-            for t in ("g_ulubione", "g_album_pliki"):  # od 1.9.3: nazwa|rozmiar|data — odnajdywanie po przeniesieniu
-                if "klucz" not in {r[1] for r in db.execute(f"PRAGMA table_info({t})")}:
-                    db.execute(f"ALTER TABLE {t} ADD COLUMN klucz TEXT")
-            db.commit()
-            self._schemat = True
+            with _BLOKADA_SCHEMATU:   # dwa wątki naraz (żądanie + skan w tle) nie mogą jednocześnie dodawać kolumny
+                if getattr(self, "_schemat", False):
+                    return db
+                db.executescript(SCHEMAT_KOLEKCJI)
+                if "ukryty" not in {r[1] for r in db.execute("PRAGMA table_info(g_albumy)")}:  # od 1.35: 🙈 ukryte albumy
+                    db.execute("ALTER TABLE g_albumy ADD COLUMN ukryty INTEGER NOT NULL DEFAULT 0")
+                db.execute("CREATE TABLE IF NOT EXISTS g_ustawienia (klucz TEXT PRIMARY KEY, wartosc TEXT)")
+                db.execute("CREATE TABLE IF NOT EXISTS decyzje_dok (sciezka TEXT PRIMARY KEY, dokument INTEGER NOT NULL)")
+                for t in ("g_ulubione", "g_album_pliki"):  # od 1.9.3: nazwa|rozmiar|data — odnajdywanie po przeniesieniu
+                    if "klucz" not in {r[1] for r in db.execute(f"PRAGMA table_info({t})")}:
+                        db.execute(f"ALTER TABLE {t} ADD COLUMN klucz TEXT")
+                db.commit()
+                self._schemat = True
         return db
 
     def _ma_ocr(self) -> bool:
@@ -1732,7 +1738,7 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
             return bez_gps.przyjete(g, ids)
         if sciezka == "/api/g/gps/ustawienia":
             w = bez_gps.zapisz_ustawienia(g, dane)
-            return w if "blad" in w else bez_gps.stan(g)
+            return w if "blad" in w else {"ok": True}   # stan (z pustym polem „blad”) zwraca GET /api/g/gps — obecność klucza „blad” to dla serwera błąd 400
         if sciezka == "/api/g/gps/model":
             if not bez_gps.KATALOG:
                 return {"blad": "brak folderu danych"}
