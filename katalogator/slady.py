@@ -400,7 +400,8 @@ def plik_wyprawy(katalog, nazwa: str) -> Path | None:
 def stan(katalog) -> dict:
     k, ind = klucze(katalog), _indeks(katalog)
     f = folder_sladow(katalog)
-    mb = sum(p.stat().st_size for p in f.glob("*") if p.is_file()) / 1048576 if f.is_dir() else 0
+    from .podroze import _rozmiar
+    mb = _rozmiar(f) / 1048576
     with _blokada:
         s = dict(_stan)
     return {"klucze": {"strava": all(k.get(n) for n in ("strava_client_id", "strava_client_secret", "strava_refresh_token")),

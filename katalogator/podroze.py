@@ -77,11 +77,24 @@ _import = {"trwa": False, "zrobione": 0, "wszystkie": 0, "komunikat": "", "blad"
 _blokada = threading.Lock()
 
 
+def _rozmiar(d: Path) -> int:
+    """Rozmiar folderu; plik może zniknąć w trakcie liczenia (import podmienia pliki .nowy) — wtedy go pomijamy."""
+    razem = 0
+    if d.is_dir():
+        for f in d.rglob("*"):
+            try:
+                if f.is_file():
+                    razem += f.stat().st_size
+            except OSError:
+                pass
+    return razem
+
+
 def stan(katalog, ust: dict, korzenie: list[str]) -> dict:
     d = folder_danych(katalog)
     plik = d / "sample-trips.json"
     ma = plik.is_file()
-    mb = sum(f.stat().st_size for f in d.rglob("*") if f.is_file()) / 1048576 if d.is_dir() else 0
+    mb = _rozmiar(d) / 1048576
     with _blokada:
         imp = dict(_import)
     return {"ma_dane": ma, "wyprawy": liczba_wypraw(plik) if ma else 0, "rozmiar_mb": round(mb, 1),
