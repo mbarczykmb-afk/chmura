@@ -433,7 +433,7 @@ class PhotoMatcher {
 
       const popupHtml = `
         <div style="width:230px; font-family:sans-serif;" class="text-slate-800">
-          <div style="height:140px; border-radius:8px; overflow:hidden; margin-bottom:8px;" class="bg-slate-100 shadow-inner">
+          <div style="height:140px; border-radius:8px; overflow:hidden; margin-bottom:8px;" class="bg-slate-800">
             <img src="${rep.thumbnailUrl || rep.url}" alt="${rep.name || rep.filename}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" onclick="window.photoMatcher.openLightbox('${rep.id}')" />
           </div>
           <div class="text-xs font-bold text-slate-900 leading-tight mb-1">${rep.matchedPlace || rep.filename}</div>

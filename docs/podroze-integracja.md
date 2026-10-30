@@ -41,3 +41,12 @@ Katalogatora, z paskiem postępu; klucze z ustawień programu; bez zaszytych dan
   z jej miejsc, bez lotnisk).
 - **Ślad GPS** (`trasa.js`): linia ciągła tam, gdzie jest ślad; przerywana tam, gdzie Google zapisał tylko początek i koniec
   odcinka. „Wyznacz drogi” pyta `routing.openstreetmap.de` (tylko współrzędne końców luki, po zgodzie; wynik w `localStorage`).
+
+## Szata graficzna (1.53.1)
+
+Podróże używają tej samej szaty co reszta programu („ciemnia”): grafit zamiast granatu, fioletowy akcent, neon tylko przy stanie
+aktywnym w ciemnym motywie, ikony liniowe (`/ui/ikony.js` + `ikony-podroze.js` zamieniają emoji na początku przycisków i nagłówków),
+czcionka Instrument Sans, jasny i ciemny motyw. Klasy Tailwind (`slate`, `teal`, `emerald`…) czytają kolory ze zmiennych `--p-*`
+(`paleta.css`, generowane przez `narzedzia/podroze-css/paleta.js`), więc motyw przełącza się bez zmiany znaczników. Warstwa
+`szata.css` ustawia promienie, cienie i okna Leaflet. Przebudowa: `cd narzedzia/podroze-css && npm i tailwindcss@3.4.17 &&
+node paleta.js > ../../katalogator/ui/podroze/paleta.css && npx tailwindcss -c tailwind.config.js -i wejscie.css -o ../../katalogator/ui/podroze/podroze.css --minify`.

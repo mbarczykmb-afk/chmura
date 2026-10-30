@@ -615,7 +615,7 @@ function setupEventListeners() {
       document.querySelectorAll('.gallery-filter-btn').forEach(b => {
         b.className = 'gallery-filter-btn px-2 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition';
       });
-      btn.className = 'gallery-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold bg-cyan-500 text-slate-950 shadow-[0_0_10px_rgba(0,240,255,0.4)] transition';
+      btn.className = 'gallery-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold bg-cyan-500 text-slate-950 transition';
       currentGalleryDayFilter = btn.getAttribute('data-day') || 'all';
       const trip = detectedTrips[currentTripIndex];
       if (trip) {
@@ -1416,107 +1416,107 @@ function getDestinationMeta(title) {
   
   // International destinations
   if (lower.includes('cabo verde') || lower.includes('zieloneg') || lower.includes('sal') || lower.includes('santa maria')) {
-    return { icon: '🇨🇻', badge: 'Cabo Verde • Sal', country: 'Wyspy Zielonego Przylądka', gradient: 'from-amber-500 to-teal-700' };
+    return { icon: '🇨🇻', badge: 'Cabo Verde • Sal', country: 'Wyspy Zielonego Przylądka', gradient: '' };
   }
   if (lower.includes('mader') || lower.includes('funchal') || lower.includes('portugal')) {
-    return { icon: '🇵🇹', badge: 'Madera • Portugalia', country: 'Portugalia', gradient: 'from-teal-600 to-emerald-700' };
+    return { icon: '🇵🇹', badge: 'Madera • Portugalia', country: 'Portugalia', gradient: '' };
   }
   if (lower.includes('marok') || lower.includes('agadir')) {
-    return { icon: '🇲🇦', badge: 'Agadir & Maroko', country: 'Maroko', gradient: 'from-orange-600 to-red-700' };
+    return { icon: '🇲🇦', badge: 'Agadir & Maroko', country: 'Maroko', gradient: '' };
   }
   if (lower.includes('cypr')) {
-    return { icon: '🇨🇾', badge: 'Cypr (Morze Śródziemne)', country: 'Cypr', gradient: 'from-amber-600 to-yellow-700' };
+    return { icon: '🇨🇾', badge: 'Cypr (Morze Śródziemne)', country: 'Cypr', gradient: '' };
   }
   if (lower.includes('turcj')) {
-    return { icon: '🇹🇷', badge: 'Turcja (Riwiera)', country: 'Turcja', gradient: 'from-red-600 to-rose-700' };
+    return { icon: '🇹🇷', badge: 'Turcja (Riwiera)', country: 'Turcja', gradient: '' };
   }
   if (lower.includes('bułgar') || lower.includes('burgas') || lower.includes('słoneczn')) {
-    return { icon: '🇧🇬', badge: 'Bułgaria (Riwiera Morza Czarnego)', country: 'Bułgaria', gradient: 'from-emerald-600 to-teal-700' };
+    return { icon: '🇧🇬', badge: 'Bułgaria (Riwiera Morza Czarnego)', country: 'Bułgaria', gradient: '' };
   }
   if (lower.includes('alban') || lower.includes('tiran') || lower.includes('durres')) {
-    return { icon: '🇦🇱', badge: 'Albania (Riwiera Bałkańska)', country: 'Albania', gradient: 'from-red-700 to-slate-900' };
+    return { icon: '🇦🇱', badge: 'Albania (Riwiera Bałkańska)', country: 'Albania', gradient: '' };
   }
   if (lower.includes('grecj') || lower.includes('korfu') || lower.includes('rodos') || lower.includes('kret')) {
-    return { icon: '🇬🇷', badge: 'Grecja & Wyspy', country: 'Grecja', gradient: 'from-sky-600 to-blue-700' };
+    return { icon: '🇬🇷', badge: 'Grecja & Wyspy', country: 'Grecja', gradient: '' };
   }
   if (lower.includes('paryż') || lower.includes('francj')) {
-    return { icon: '🇫🇷', badge: 'Francja & Paryż', country: 'Francja', gradient: 'from-blue-600 to-indigo-700' };
+    return { icon: '🇫🇷', badge: 'Francja & Paryż', country: 'Francja', gradient: '' };
   }
   if (lower.includes('szwajcar') || lower.includes('alpy')) {
-    return { icon: '🇨🇭', badge: 'Szwajcaria & Alpy', country: 'Szwajcaria', gradient: 'from-red-600 to-rose-800' };
+    return { icon: '🇨🇭', badge: 'Szwajcaria & Alpy', country: 'Szwajcaria', gradient: '' };
   }
   if (lower.includes('niemc') || lower.includes('berlin') || lower.includes('drezno')) {
-    return { icon: '🇩🇪', badge: 'Niemcy', country: 'Niemcy', gradient: 'from-amber-600 to-slate-800' };
+    return { icon: '🇩🇪', badge: 'Niemcy', country: 'Niemcy', gradient: '' };
   }
   if (lower.includes('holand') || lower.includes('amsterdam')) {
-    return { icon: '🇳🇱', badge: 'Holandia & Amsterdam', country: 'Holandia', gradient: 'from-orange-500 to-amber-700' };
+    return { icon: '🇳🇱', badge: 'Holandia & Amsterdam', country: 'Holandia', gradient: '' };
   }
   if (lower.includes('belgi') || lower.includes('namur') || lower.includes('waloni') || lower.includes('bruksel')) {
-    return { icon: '🇧🇪', badge: 'Belgia (Namur & Walonia)', country: 'Belgia', gradient: 'from-yellow-600 to-red-800' };
+    return { icon: '🇧🇪', badge: 'Belgia (Namur & Walonia)', country: 'Belgia', gradient: '' };
   }
   if (lower.includes('czech') || lower.includes('prag')) {
-    return { icon: '🇨🇿', badge: 'Czechy & Praga', country: 'Czechy', gradient: 'from-blue-600 to-red-700' };
+    return { icon: '🇨🇿', badge: 'Czechy & Praga', country: 'Czechy', gradient: '' };
   }
   if (lower.includes('chorwacj') || lower.includes('dalmacj') || lower.includes('split')) {
-    return { icon: '🇭🇷', badge: 'Chorwacja (Adriatyk)', country: 'Chorwacja', gradient: 'from-sky-500 to-indigo-700' };
+    return { icon: '🇭🇷', badge: 'Chorwacja (Adriatyk)', country: 'Chorwacja', gradient: '' };
   }
   if (lower.includes('rzym') || lower.includes('watykan') || lower.includes('włoch')) {
-    return { icon: '🇮🇹', badge: 'Włochy & Rzym', country: 'Włochy', gradient: 'from-emerald-600 to-red-600' };
+    return { icon: '🇮🇹', badge: 'Włochy & Rzym', country: 'Włochy', gradient: '' };
   }
   if (lower.includes('chin') || lower.includes('pekin')) {
-    return { icon: '🇨🇳', badge: 'Chiny (Azja)', country: 'Chiny', gradient: 'from-red-600 to-yellow-600' };
+    return { icon: '🇨🇳', badge: 'Chiny (Azja)', country: 'Chiny', gradient: '' };
   }
   if (lower.includes('korea')) {
-    return { icon: '🇰🇷', badge: 'Korea Południowa', country: 'Korea Południowa', gradient: 'from-blue-600 to-rose-600' };
+    return { icon: '🇰🇷', badge: 'Korea Południowa', country: 'Korea Południowa', gradient: '' };
   }
 
   // Poland regional destinations
   if (lower.includes('tatry') || lower.includes('zakopan') || lower.includes('kościelisk') || lower.includes('bukowin')) {
-    return { icon: '🏔️', badge: 'Tatry & Zakopane (Polska)', country: 'Polska', gradient: 'from-blue-600 to-indigo-700' };
+    return { icon: '🏔️', badge: 'Tatry & Zakopane (Polska)', country: 'Polska', gradient: '' };
   }
   if (lower.includes('pienin') || lower.includes('szczawnic')) {
-    return { icon: '⛰️', badge: 'Pieniny & Szczawnica (Polska)', country: 'Polska', gradient: 'from-teal-600 to-emerald-700' };
+    return { icon: '⛰️', badge: 'Pieniny & Szczawnica (Polska)', country: 'Polska', gradient: '' };
   }
   if (lower.includes('bieszczad') || lower.includes('solin')) {
-    return { icon: '🌲', badge: 'Bieszczady & Solina (Polska)', country: 'Polska', gradient: 'from-emerald-700 to-green-900' };
+    return { icon: '🌲', badge: 'Bieszczady & Solina (Polska)', country: 'Polska', gradient: '' };
   }
   if (lower.includes('karpacz') || lower.includes('karkonosz') || lower.includes('szklarsk')) {
-    return { icon: '🏔️', badge: 'Karkonosze & Karpacz (Polska)', country: 'Polska', gradient: 'from-indigo-600 to-blue-800' };
+    return { icon: '🏔️', badge: 'Karkonosze & Karpacz (Polska)', country: 'Polska', gradient: '' };
   }
   if (lower.includes('mazur') || lower.includes('ostród') || lower.includes('mikołajk')) {
-    return { icon: '⛵', badge: 'Mazury & Pojezierze (Polska)', country: 'Polska', gradient: 'from-cyan-600 to-blue-700' };
+    return { icon: '⛵', badge: 'Mazury & Pojezierze (Polska)', country: 'Polska', gradient: '' };
   }
   if (lower.includes('bałtyk') || lower.includes('gdańsk') || lower.includes('sopot') || lower.includes('mielno') || lower.includes('morze')) {
-    return { icon: '🌊', badge: 'Bałtyk & Pomorze (Polska)', country: 'Polska', gradient: 'from-blue-500 to-cyan-700' };
+    return { icon: '🌊', badge: 'Bałtyk & Pomorze (Polska)', country: 'Polska', gradient: '' };
   }
   if (lower.includes('poznań')) {
-    return { icon: '🏛️', badge: 'Poznań & Wielkopolska (Polska)', country: 'Polska', gradient: 'from-amber-600 to-emerald-700' };
+    return { icon: '🏛️', badge: 'Poznań & Wielkopolska (Polska)', country: 'Polska', gradient: '' };
   }
   if (lower.includes('wrocław')) {
-    return { icon: '🏰', badge: 'Wrocław & Dolny Śląsk (Polska)', country: 'Polska', gradient: 'from-rose-600 to-purple-700' };
+    return { icon: '🏰', badge: 'Wrocław & Dolny Śląsk (Polska)', country: 'Polska', gradient: '' };
   }
   if (lower.includes('sobótk') || lower.includes('ślęż')) {
-    return { icon: '⛰️', badge: 'Sobótka (Masyw Ślęży)', country: 'Polska', gradient: 'from-stone-600 to-emerald-700' };
+    return { icon: '⛰️', badge: 'Sobótka (Masyw Ślęży)', country: 'Polska', gradient: '' };
   }
   if (lower.includes('gniezno')) {
-    return { icon: '🦅', badge: 'Gniezno (Pierwsza Stolica Polski)', country: 'Polska', gradient: 'from-red-600 to-slate-800' };
+    return { icon: '🦅', badge: 'Gniezno (Pierwsza Stolica Polski)', country: 'Polska', gradient: '' };
   }
   if (lower.includes('przemyśl') || lower.includes('krasiczyn')) {
-    return { icon: '🏰', badge: 'Przemyśl & Zamek Krasiczyn', country: 'Polska', gradient: 'from-purple-600 to-indigo-800' };
+    return { icon: '🏰', badge: 'Przemyśl & Zamek Krasiczyn', country: 'Polska', gradient: '' };
   }
   if (lower.includes('kraków') || lower.includes('wieliczk')) {
-    return { icon: '👑', badge: 'Kraków & Małopolska (Polska)', country: 'Polska', gradient: 'from-amber-500 to-red-700' };
+    return { icon: '👑', badge: 'Kraków & Małopolska (Polska)', country: 'Polska', gradient: '' };
   }
   if (lower.includes('warszaw')) {
-    return { icon: '🏙️', badge: 'Warszawa (Mazowsze)', country: 'Polska', gradient: 'from-sky-600 to-indigo-800' };
+    return { icon: '🏙️', badge: 'Warszawa (Mazowsze)', country: 'Polska', gradient: '' };
   }
   if (lower.includes('jur') || lower.includes('ogrodzieniec') || lower.includes('olkusz') || lower.includes('bolesław')) {
-    return { icon: '🏰', badge: 'Jura & Szlak Orlich Gniazd', country: 'Polska', gradient: 'from-amber-600 to-stone-700' };
+    return { icon: '🏰', badge: 'Jura & Szlak Orlich Gniazd', country: 'Polska', gradient: '' };
   }
 
   // Clean fallback: Extract city name from title
   const cleanTitle = (title || 'Podróż').split('(')[0].trim();
-  return { icon: '🧭', badge: `${cleanTitle} (Polska)`, country: 'Polska', gradient: 'from-slate-700 to-teal-900' };
+  return { icon: '🧭', badge: `${cleanTitle} (Polska)`, country: 'Polska', gradient: '' };
 }
 
 // Trip Clustering Algorithm with Smart Away-From-Home & Vacation Detection
@@ -1654,25 +1654,25 @@ function buildTripFromCluster(clusterEvents) {
     avgLon = clusterEvents[0].lon || 0;
   }
 
-  let meta = { title: 'Wyprawa', icon: '🗺️', badge: 'Podróż', gradient: 'from-slate-700 to-slate-900' };
+  let meta = { title: 'Wyprawa', icon: '🗺️', badge: 'Podróż', gradient: '' };
   if (avgLat >= 32.3 && avgLat <= 33.3 && avgLon >= -17.6 && avgLon <= -16.4) {
-    meta = { title: 'Madera (Portugalia)', icon: '🌴', badge: 'Madera • Portugalia', gradient: 'from-teal-600 to-emerald-700' };
+    meta = { title: 'Madera (Portugalia)', icon: '🌴', badge: 'Madera • Portugalia', gradient: '' };
   } else if (avgLat >= 30.0 && avgLat <= 32.0 && avgLon >= -10.5 && avgLon <= -8.0) {
-    meta = { title: 'Agadir i Maroko', icon: '🐪', badge: 'Maroko • Afryka', gradient: 'from-amber-600 to-orange-700' };
+    meta = { title: 'Agadir i Maroko', icon: '🐪', badge: 'Maroko • Afryka', gradient: '' };
   } else if (avgLat >= 42.0 && avgLat <= 43.5 && avgLon >= 27.0 && avgLon <= 28.5) {
-    meta = { title: 'Burgas i Wybrzeże Morza Czarnego', icon: '🏖️', badge: 'Bułgaria • Morze Czarne', gradient: 'from-blue-600 to-cyan-700' };
+    meta = { title: 'Burgas i Wybrzeże Morza Czarnego', icon: '🏖️', badge: 'Bułgaria • Morze Czarne', gradient: '' };
   } else if (avgLat >= 40.5 && avgLat <= 42.5 && avgLon >= 19.0 && avgLon <= 21.0) {
-    meta = { title: 'Albania (Tirana i Wybrzeże)', icon: '🇦🇱', badge: 'Albania • Bałkany', gradient: 'from-red-600 to-rose-700' };
+    meta = { title: 'Albania (Tirana i Wybrzeże)', icon: '🇦🇱', badge: 'Albania • Bałkany', gradient: '' };
   } else if (avgLat >= 36.5 && avgLat <= 37.5 && avgLon >= 30.0 && avgLon <= 32.0) {
-    meta = { title: 'Antalya i Riwiera Turecka', icon: '☀️', badge: 'Turcja • Riwiera', gradient: 'from-amber-500 to-yellow-600' };
+    meta = { title: 'Antalya i Riwiera Turecka', icon: '☀️', badge: 'Turcja • Riwiera', gradient: '' };
   } else if (avgLat >= 39.3 && avgLat <= 40.0 && avgLon >= 19.6 && avgLon <= 20.2) {
-    meta = { title: 'Korfu (Grecja)', icon: '🇬🇷', badge: 'Korfu • Grecja', gradient: 'from-sky-600 to-indigo-700' };
+    meta = { title: 'Korfu (Grecja)', icon: '🇬🇷', badge: 'Korfu • Grecja', gradient: '' };
   } else if (avgLat >= 48.7 && avgLat <= 49.3 && avgLon >= 2.1 && avgLon <= 2.6) {
-    meta = { title: 'Paryż i Francja', icon: '🗼', badge: 'Paryż • Francja', gradient: 'from-purple-600 to-pink-700' };
+    meta = { title: 'Paryż i Francja', icon: '🗼', badge: 'Paryż • Francja', gradient: '' };
   } else if (avgLat >= 49.1 && avgLat <= 49.4 && avgLon >= 19.8 && avgLon <= 20.3) {
-    meta = { title: 'Tatry i Zakopane', icon: '⛰️', badge: 'Tatry • Zakopane', gradient: 'from-emerald-600 to-teal-700' };
+    meta = { title: 'Tatry i Zakopane', icon: '⛰️', badge: 'Tatry • Zakopane', gradient: '' };
   } else if (avgLat >= 54.2 && avgLat <= 54.8 && avgLon >= 18.3 && avgLon <= 19.0) {
-    meta = { title: 'Bałtyk i Trójmiasto', icon: '🌊', badge: 'Bałtyk • Pomorze', gradient: 'from-blue-500 to-slate-700' };
+    meta = { title: 'Bałtyk i Trójmiasto', icon: '🌊', badge: 'Bałtyk • Pomorze', gradient: '' };
   }
 
   const monthName = startDate.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
@@ -2006,11 +2006,11 @@ function renderYearFilters() {
 
   const years = Array.from(new Set(detectedTrips.map(t => t.year))).sort((a, b) => b - a);
 
-  let html = `<button data-year="all" class="year-filter-btn px-3 py-1.5 text-xs font-semibold rounded-lg transition ${selectedYearFilter === 'all' ? 'bg-emerald-600 text-white shadow-2xs' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}">Wszystkie</button>`;
+  let html = `<button data-year="all" class="year-filter-btn px-3 py-1.5 text-xs font-semibold rounded-lg transition ${selectedYearFilter === 'all' ? 'bg-teal-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}">Wszystkie</button>`;
 
   years.forEach(yr => {
     const isActive = selectedYearFilter === yr.toString();
-    html += `<button data-year="${yr}" class="year-filter-btn px-3 py-1.5 text-xs font-semibold rounded-lg transition ${isActive ? 'bg-emerald-600 text-white shadow-2xs' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}">${yr}</button>`;
+    html += `<button data-year="${yr}" class="year-filter-btn px-3 py-1.5 text-xs font-semibold rounded-lg transition ${isActive ? 'bg-teal-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}">${yr}</button>`;
   });
 
   container.innerHTML = html;
@@ -2095,11 +2095,11 @@ function renderCatalogGrid() {
     });
 
     const gpsBadge = gpsCount > 0
-      ? `<span class="bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 px-2.5 py-0.5 rounded-md font-bold text-xs flex items-center gap-1 shadow-[0_0_10px_rgba(16,185,129,0.35)]"><span>🥾</span> <span>${gpsCount} ${gpsCount === 1 ? 'ślad GPS' : 'ślady GPS'}</span></span>`
+      ? `<span class="bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 px-2.5 py-0.5 rounded-md font-bold text-xs flex items-center gap-1"><span>🥾</span> <span>${gpsCount} ${gpsCount === 1 ? 'ślad GPS' : 'ślady GPS'}</span></span>`
       : '';
 
     const peakBadge = (trip.highestElevation && trip.highestElevation > 0)
-      ? `<span class="bg-cyan-950/90 text-cyan-300 border border-cyan-500/50 px-2.5 py-0.5 rounded-md font-bold text-xs flex items-center gap-1 shadow-[0_0_10px_rgba(6,182,212,0.25)]"><span>⛰️</span> <span>${trip.peaksCount || 1} szczytów (max ${Math.round(trip.highestElevation)}m)</span></span>`
+      ? `<span class="bg-cyan-950/90 text-cyan-300 border border-cyan-500/50 px-2.5 py-0.5 rounded-md font-bold text-xs flex items-center gap-1"><span>⛰️</span> <span>${trip.peaksCount || 1} szczytów (max ${Math.round(trip.highestElevation)}m)</span></span>`
       : '';
 
     const bookingBadge = (trip.bookings && trip.bookings.length > 0)
@@ -2107,12 +2107,12 @@ function renderCatalogGrid() {
       : '';
 
     const topBanner = `
-      <div class="p-5 pb-4 border-b border-slate-800 flex items-start justify-between gap-3 bg-gradient-to-r ${meta.gradient || 'from-slate-850 to-slate-900'} bg-opacity-20 backdrop-blur-xs">
+      <div class="p-5 pb-4 border-b border-slate-800 flex items-start justify-between gap-3">
         <div class="flex items-start gap-3.5">
-          <span class="text-3xl p-2.5 bg-slate-900/80 border border-slate-700/80 rounded-2xl shrink-0 shadow-inner">${meta.icon}</span>
+          <span class="text-3xl p-2.5 bg-slate-950 border border-slate-800 rounded-lg shrink-0">${meta.icon}</span>
           <div>
             <div class="flex items-center gap-2 flex-wrap mb-1">
-              <span class="inline-block text-3xs uppercase tracking-wider font-bold text-teal-300 bg-teal-500/20 px-2 py-0.5 rounded-full border border-teal-500/30">
+              <span class="inline-block text-3xs uppercase tracking-wider font-bold text-slate-400 px-2 py-0.5 rounded-full border border-slate-800">
                 ${meta.badge}
               </span>
               ${meta.country ? `<span class="text-3xs font-semibold text-slate-300 bg-slate-800/90 px-2 py-0.5 rounded-full border border-slate-700">🌍 ${meta.country}</span>` : ''}
@@ -2226,7 +2226,7 @@ function renderCatalogMap() {
     if (flights.length > 0 || avgLon < 14 || avgLat < 48) {
       allPoints.push(homePoint);
       const flightLine = L.polyline([homePoint, [avgLat, avgLon]], {
-        color: '#00f0ff',
+        color: '#22d3ee',
         weight: 2.5,
         opacity: 0.8,
         dashArray: '8, 8'
@@ -2235,13 +2235,11 @@ function renderCatalogMap() {
     }
 
     const isDomestic = trip.title.toLowerCase().includes('tatry') || trip.title.toLowerCase().includes('zakopane') || trip.title.toLowerCase().includes('polska');
-    const borderColor = isDomestic ? '#10b981' : '#00f0ff';
-    const glowColor = isDomestic ? 'rgba(16,185,129,0.5)' : 'rgba(0,240,255,0.5)';
+    const borderColor = isDomestic ? 'var(--ok,#34d399)' : 'var(--neon-c,#22d3ee)';
 
     const iconHtml = `
       <div style="position:relative; width:42px; height:42px; display:flex; align-items:center; justify-content:center; cursor:pointer;">
-        <span style="position:absolute; width:100%; height:100%; border-radius:50%; background:${glowColor}; opacity:0.3; transform:scale(1.2); filter:blur(4px);"></span>
-        <span style="width:34px; height:34px; border-radius:12px; background:#0c1322; border:2px solid ${borderColor}; box-shadow:0 0 14px ${glowColor}; display:flex; align-items:center; justify-content:center; font-size:16px;">
+        <span style="width:34px; height:34px; border-radius:12px; background:var(--kat-panel,#1b1c1f); border:2px solid ${borderColor}; display:flex; align-items:center; justify-content:center; font-size:16px;">
           ${meta.icon}
         </span>
       </div>
@@ -2258,18 +2256,18 @@ function renderCatalogMap() {
     const marker = L.marker([avgLat, avgLon], { icon: markerIcon }).addTo(catalogMap);
 
     const popupHtml = `
-      <div style="font-size:12px; font-family:sans-serif; min-width:210px; background:#0c1322; color:#f1f5f9; padding:12px; border-radius:12px; border:1px solid ${borderColor}; box-shadow:0 6px 25px rgba(0,0,0,0.7);">
-        <span style="display:inline-block; font-size:10px; font-weight:800; text-transform:uppercase; background:rgba(0,240,255,0.15); color:${borderColor}; padding:2px 8px; border-radius:10px; margin-bottom:5px; border:1px solid ${borderColor};">
+      <div style="font-size:12px; font-family:sans-serif; min-width:210px; background:var(--kat-panel,#1b1c1f); color:var(--kat-fg,#ececee); padding:12px; border-radius:12px; border:1px solid ${borderColor};">
+        <span style="display:inline-block; font-size:10px; font-weight:800; text-transform:uppercase; background:color-mix(in srgb,var(--kat-akc,#7354f0) 18%,transparent); color:${borderColor}; padding:2px 8px; border-radius:10px; margin-bottom:5px; border:1px solid ${borderColor};">
           ${meta.badge}
         </span><br>
-        <b style="color:#ffffff; font-size:14px; line-height:1.2;">${trip.title}</b><br>
-        <span style="color:#94a3b8; font-size:11px;">📅 ${startStr} – ${endStr} (${trip.stats.days} dni)</span><br>
-        <div style="margin-top:8px; display:flex; gap:8px; font-size:11px; color:#cbd5e1; border-top:1px solid #1e293b; padding-top:6px;">
+        <b style="color:var(--kat-fg,#ececee); font-size:14px; line-height:1.2;">${trip.title}</b><br>
+        <span style="color:var(--kat-mut,#a2a5ad); font-size:11px;">📅 ${startStr} – ${endStr} (${trip.stats.days} dni)</span><br>
+        <div style="margin-top:8px; display:flex; gap:8px; font-size:11px; color:var(--kat-mut,#a2a5ad); border-top:1px solid var(--kat-lin,#2c2e33); padding-top:6px;">
           <span>🥾 <b>${trip.stats.walkKm.toFixed(1)} km</b></span>
           <span>📍 <b>${trip.stats.placesCount}</b> miejsc</span>
           <span>📷 <b>${(trip.photos || []).length}</b> zdjęć</span>
         </div>
-        <button onclick="showDetailView(${idx})" style="margin-top:10px; width:100%; padding:7px 10px; font-size:11px; font-weight:800; background:linear-gradient(to right, #00f0ff, #10b981); color:#070b14; border:none; border-radius:8px; cursor:pointer; box-shadow:0 0 10px rgba(0,240,255,0.4);">
+        <button onclick="showDetailView(${idx})" style="margin-top:10px; width:100%; padding:7px 10px; font-size:11px; font-weight:800; background:var(--kat-akc,#7354f0); color:var(--kat-akc-fg,#fff); border:none; border-radius:8px; cursor:pointer;">
           Zobacz szczegóły wyprawy →
         </button>
       </div>
@@ -2649,7 +2647,7 @@ function renderTripDetail(trip) {
           <div>
             <b>Dojazdy i trasy:</b>
             <div class="flex flex-wrap gap-1.5 mt-1">
-              ${moves.map(m => `<span class="bg-[#0f172a] text-cyan-300 text-xs px-2.5 py-0.5 rounded-lg border border-cyan-500/30 shadow-xs">${m.icon} ${m.text}</span>`).join('')}
+              ${moves.map(m => `<span class="bg-slate-900 text-cyan-300 text-xs px-2.5 py-0.5 rounded-lg border border-cyan-500/30 shadow-xs">${m.icon} ${m.text}</span>`).join('')}
             </div>
           </div>
         </div>
@@ -2660,7 +2658,7 @@ function renderTripDetail(trip) {
       cardBody += `
         <div class="flex items-start gap-2.5">
           <span class="text-base shrink-0">🚶</span>
-          <div><b>Pieszo łącznie:</b> <span class="font-bold text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]">${dayWalkKm.toFixed(1)} km</span></div>
+          <div><b>Pieszo łącznie:</b> <span class="font-bold text-emerald-400">${dayWalkKm.toFixed(1)} km</span></div>
         </div>
       `;
     }
@@ -2672,7 +2670,7 @@ function renderTripDetail(trip) {
           ${day.mountainTracks.map((tr, trIdx) => {
             const hasPoly = tr.polyline && tr.polyline.length > 0;
             return `
-            <div class="mountain-track-card p-3 bg-gradient-to-r from-emerald-950/60 via-slate-900/80 to-cyan-950/50 border border-emerald-500/30 hover:border-cyan-400/60 rounded-xl space-y-2 shadow-[0_0_15px_rgba(16,185,129,0.1)] transition group ${hasPoly ? 'cursor-pointer hover:shadow-[0_0_20px_rgba(6,182,212,0.2)]' : ''}" data-day="${dayNumber}" data-track-index="${trIdx}">
+            <div class="mountain-track-card p-3 bg-slate-900/60 border border-emerald-500/20 hover:border-emerald-500/50 rounded-xl space-y-2 transition group ${hasPoly ? 'cursor-pointer ' : ''}" data-day="${dayNumber}" data-track-index="${trIdx}">
               <div class="flex items-center justify-between text-xs text-emerald-300 flex-wrap gap-2">
                 <span class="font-bold flex items-center gap-1.5 text-emerald-200 group-hover:text-cyan-300 transition">
                   <span>🥾</span> <span>${tr.name || 'Wędrówka górska / Trening'}</span>
@@ -2724,7 +2722,7 @@ function renderTripDetail(trip) {
                 const photoSnippet = matchedPhotos.length > 0
                   ? `<div class="flex gap-1.5 mt-1">
                       ${matchedPhotos.map(mp => `
-                        <img src="${mp.url}" alt="${mp.name}" title="${mp.name} (kliknij aby powiększyć)" class="w-10 h-10 object-cover rounded-md ring-1 ring-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.4)] cursor-pointer hover:scale-105 transition" onclick="window.photoMatcher.openLightbox('${mp.id}')" />
+                        <img src="${mp.url}" alt="${mp.name}" title="${mp.name} (kliknij aby powiększyć)" class="w-10 h-10 object-cover rounded-md ring-1 ring-cyan-400 cursor-pointer hover:scale-105 transition" onclick="window.photoMatcher.openLightbox('${mp.id}')" />
                       `).join('')}
                      </div>`
                   : '';
@@ -2734,7 +2732,7 @@ function renderTripDetail(trip) {
                 const timeSnippet = pk.timeLabel ? `<span class="text-cyan-400 font-mono text-3xs">Godz. ${pk.timeLabel}</span>` : (pk.start ? `<span class="text-cyan-400 font-mono text-3xs">${pk.start.toLocaleTimeString('pl-PL', {hour:'2-digit', minute:'2-digit'})}</span>` : '');
 
                 return `
-                  <li class="p-2.5 rounded-xl bg-cyan-950/40 border border-cyan-500/40 space-y-1 hover:border-cyan-400 transition shadow-[0_0_12px_rgba(6,182,212,0.1)]">
+                  <li class="p-2.5 rounded-xl bg-cyan-950/40 border border-cyan-500/40 space-y-1 hover:border-cyan-400 transition">
                     <div class="flex items-center justify-between flex-wrap gap-2">
                       <div class="flex items-center gap-2 flex-wrap">
                         <span class="chip-place chip-viewpoint text-3xs py-0.5 px-2 font-bold shrink-0">⛰️ Szczyt</span>
@@ -2775,13 +2773,13 @@ function renderTripDetail(trip) {
                 const photoSnippet = matchedPhotos.length > 0
                   ? `<div class="flex gap-1.5 mt-1">
                       ${matchedPhotos.map(mp => `
-                        <img src="${mp.url}" alt="${mp.name}" title="${mp.name} (kliknij aby powiększyć)" class="w-10 h-10 object-cover rounded-md ring-1 ring-cyan-500 shadow-[0_0_8px_rgba(0,240,255,0.3)] cursor-pointer hover:scale-105 transition" onclick="window.photoMatcher.openLightbox('${mp.id}')" />
+                        <img src="${mp.url}" alt="${mp.name}" title="${mp.name} (kliknij aby powiększyć)" class="w-10 h-10 object-cover rounded-md ring-1 ring-cyan-500 cursor-pointer hover:scale-105 transition" onclick="window.photoMatcher.openLightbox('${mp.id}')" />
                       `).join('')}
                      </div>`
                   : '';
 
                 return `
-                  <li class="p-2.5 rounded-xl bg-[#0f172a]/90 border border-slate-800 space-y-1 hover:border-slate-700 transition">
+                  <li class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1 hover:border-slate-700 transition">
                     <div class="flex items-center justify-between flex-wrap gap-2">
                       <div class="flex items-center gap-2 flex-wrap">
                         ${chipHtml}
@@ -2812,13 +2810,13 @@ function renderTripDetail(trip) {
                 const photoSnippet = matchedPhotos.length > 0
                   ? `<div class="flex gap-1.5 mt-1">
                       ${matchedPhotos.map(mp => `
-                        <img src="${mp.url}" alt="${mp.name}" class="w-10 h-10 object-cover rounded-md ring-1 ring-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.3)] cursor-pointer hover:scale-105 transition" onclick="window.photoMatcher.openLightbox('${mp.id}')" />
+                        <img src="${mp.url}" alt="${mp.name}" class="w-10 h-10 object-cover rounded-md ring-1 ring-rose-500 cursor-pointer hover:scale-105 transition" onclick="window.photoMatcher.openLightbox('${mp.id}')" />
                       `).join('')}
                      </div>`
                   : '';
 
                 return `
-                  <li class="p-2.5 rounded-xl bg-[#0f172a]/90 border border-rose-500/30 hover:border-rose-500/50 transition">
+                  <li class="p-2.5 rounded-xl bg-slate-900/90 border border-rose-500/30 hover:border-rose-500/50 transition">
                     <div class="flex items-center justify-between flex-wrap gap-2">
                       <div class="flex items-center gap-2">
                         <span class="chip-place chip-food text-3xs py-0.5 px-1.5">🍽️</span>
@@ -2979,11 +2977,11 @@ function setupScrollytelling(trip, allMapPoints) {
       if (filterBar) {
         filterBar.querySelectorAll('.map-day-btn').forEach(btn => {
           if (btn.dataset.day === String(dayNum)) {
-            btn.className = 'map-day-btn px-2.5 py-1 rounded-lg bg-cyan-500 text-slate-950 font-black whitespace-nowrap shadow-[0_0_10px_rgba(0,240,255,0.4)]';
+            btn.className = 'map-day-btn px-2.5 py-1 rounded-lg bg-cyan-500 text-slate-950 font-black whitespace-nowrap';
             // Scroll ONLY the inner horizontal container without affecting the webpage window scroll
             filterBar.scrollLeft = btn.offsetLeft - (filterBar.clientWidth / 2) + (btn.clientWidth / 2);
           } else {
-            btn.className = 'map-day-btn px-2.5 py-1 rounded-lg bg-[#0f172a] hover:bg-[#1a263e] text-slate-400 hover:text-cyan-300 font-semibold border border-slate-800 whitespace-nowrap';
+            btn.className = 'map-day-btn px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 font-semibold border border-slate-800 whitespace-nowrap';
           }
         });
       }
@@ -3083,7 +3081,7 @@ function renderBookingsSection(trip) {
       </div>
       ${extraDetails}
       <div class="flex items-center justify-between pt-1 border-t border-slate-800 text-3xs text-slate-400">
-        <span>Nr: <code class="font-mono font-bold text-cyan-300 bg-[#070b14] px-1.5 py-0.5 rounded border border-cyan-500/30">${b.bookingNumber}</code></span>
+        <span>Nr: <code class="font-mono font-bold text-cyan-300 bg-slate-950 px-1.5 py-0.5 rounded border border-cyan-500/30">${b.bookingNumber}</code></span>
         <button class="text-cyan-400 hover:text-cyan-300 font-bold btn-copy-booking" data-booking="${b.bookingNumber}">Kopiuj nr</button>
       </div>
     `;
@@ -3117,7 +3115,7 @@ function renderPhotoGalleryStrip(trip) {
   // Dynamically render Day Filter Buttons based on trip.days
   const filterContainer = document.getElementById('gallery-day-filters');
   if (filterContainer) {
-    let filterHtml = `<button data-day="all" class="gallery-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold ${currentGalleryDayFilter === 'all' ? 'bg-cyan-500 text-slate-950 shadow-[0_0_10px_rgba(0,240,255,0.4)]' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'} transition whitespace-nowrap">Wszystkie (${allPhotos.length})</button>`;
+    let filterHtml = `<button data-day="all" class="gallery-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold ${currentGalleryDayFilter === 'all' ? 'bg-cyan-500 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'} transition whitespace-nowrap">Wszystkie (${allPhotos.length})</button>`;
     
     (trip.days || []).forEach((day, dIdx) => {
       const dayNum = dIdx + 1;
@@ -3127,7 +3125,7 @@ function renderPhotoGalleryStrip(trip) {
       const label = rawTitle.length > 18 ? rawTitle.slice(0, 16) + '...' : rawTitle;
       
       filterHtml += `
-        <button data-day="${dayNum}" class="gallery-filter-btn px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${isSelected ? 'bg-cyan-500 text-slate-950 font-bold shadow-[0_0_10px_rgba(0,240,255,0.4)]' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'} transition">
+        <button data-day="${dayNum}" class="gallery-filter-btn px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap ${isSelected ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'} transition">
           D${dayNum}: ${label} ${count > 0 ? `(${count})` : ''}
         </button>
       `;
@@ -3141,7 +3139,7 @@ function renderPhotoGalleryStrip(trip) {
         filterContainer.querySelectorAll('.gallery-filter-btn').forEach(b => {
           b.className = 'gallery-filter-btn px-2 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap';
         });
-        btn.className = 'gallery-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold bg-cyan-500 text-slate-950 shadow-[0_0_10px_rgba(0,240,255,0.4)] transition whitespace-nowrap';
+        btn.className = 'gallery-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold bg-cyan-500 text-slate-950 transition whitespace-nowrap';
         currentGalleryDayFilter = btn.getAttribute('data-day') || 'all';
         renderPhotoGalleryStrip(trip);
         if (window.photoMatcher && window.map) {
@@ -3279,7 +3277,7 @@ function renderPhotoMatcherModalList() {
   }
 
   listEl.innerHTML = photos.slice(0, 50).map(p => `
-    <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-xs gap-3">
+    <div class="flex items-center justify-between p-2 rounded-xl bg-slate-850 border border-slate-800 text-xs gap-3">
       <div class="flex items-center gap-2.5 overflow-hidden">
         <img src="${p.url}" alt="${p.name}" class="w-10 h-10 object-cover rounded-lg shrink-0" />
         <div class="truncate">
@@ -3372,10 +3370,10 @@ function setupMapDayFilter(trip, allMapPoints) {
   const container = document.getElementById('trip-day-filter-bar');
   if (!container) return;
 
-  let html = `<button data-day="all" class="map-day-btn px-2.5 py-1 rounded-lg bg-cyan-500 text-slate-950 font-black whitespace-nowrap shadow-[0_0_10px_rgba(0,240,255,0.4)]">Cała trasa</button>`;
+  let html = `<button data-day="all" class="map-day-btn px-2.5 py-1 rounded-lg bg-cyan-500 text-slate-950 font-black whitespace-nowrap">Cała trasa</button>`;
   trip.days.forEach((day, index) => {
     const dayNum = index + 1;
-    html += `<button data-day="${dayNum}" class="map-day-btn px-2.5 py-1 rounded-lg bg-[#0f172a] hover:bg-[#1a263e] text-slate-400 hover:text-cyan-300 font-semibold border border-slate-800 whitespace-nowrap">Dzień ${dayNum}</button>`;
+    html += `<button data-day="${dayNum}" class="map-day-btn px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 font-semibold border border-slate-800 whitespace-nowrap">Dzień ${dayNum}</button>`;
   });
 
   container.innerHTML = html;
@@ -3396,9 +3394,9 @@ function filterMapByDay(day, allPoints) {
   if (container) {
     container.querySelectorAll('.map-day-btn').forEach(b => {
       if (b.dataset.day === day.toString()) {
-        b.className = 'map-day-btn px-2.5 py-1 rounded-lg bg-cyan-500 text-slate-950 font-black whitespace-nowrap shadow-[0_0_10px_rgba(0,240,255,0.4)]';
+        b.className = 'map-day-btn px-2.5 py-1 rounded-lg bg-cyan-500 text-slate-950 font-black whitespace-nowrap';
       } else {
-        b.className = 'map-day-btn px-2.5 py-1 rounded-lg bg-[#0f172a] hover:bg-[#1a263e] text-slate-400 hover:text-cyan-300 font-semibold border border-slate-800 whitespace-nowrap';
+        b.className = 'map-day-btn px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 font-semibold border border-slate-800 whitespace-nowrap';
       }
     });
   }
@@ -3496,31 +3494,31 @@ function renderMapPoints(points, photos = []) {
   points.forEach((pt) => {
     latlngs.push([pt.lat, pt.lon]);
 
-    let color = '#38bdf8';
-    if (pt.category === 'peak') color = '#06b6d4'; // Cyan for mountain summits & viewpoints
-    else if (pt.category === 'food') color = '#f43f5e';
-    else if (pt.category === 'lodging') color = '#a855f7';
-    else if (pt.category === 'attraction') color = '#10b981';
+    let color = '#94a3b8';
+    if (pt.category === 'peak') color = '#22d3ee'; // Cyan for mountain summits & viewpoints
+    else if (pt.category === 'food') color = '#f87171';
+    else if (pt.category === 'lodging') color = '#a78bfa';
+    else if (pt.category === 'attraction') color = '#34d399';
     else if (pt.category === 'airport') color = '#fbbf24';
 
     const circleMarker = L.circleMarker([pt.lat, pt.lon], {
       radius: 8,
       fillColor: color,
-      color: '#070b14',
+      color: '#131416',
       weight: 2,
       opacity: 1,
       fillOpacity: 0.95
     }).addTo(map);
 
     const catLabel = pt.categoryLabel || (pt.category === 'peak' ? 'Zdobyty szczyt / Punkt widokowy' : pt.category);
-    const eleSnippet = pt.elevation ? `<div style="margin-top:3px; color:#38bdf8; font-weight:bold; font-size:11px;">⛰️ Wysokość: ${Math.round(pt.elevation)} m n.p.m.</div>` : '';
+    const eleSnippet = pt.elevation ? `<div style="margin-top:3px; color:var(--neon-c,#22d3ee); font-weight:bold; font-size:11px;">⛰️ Wysokość: ${Math.round(pt.elevation)} m n.p.m.</div>` : '';
     circleMarker.bindPopup(`
-      <div style="font-size:12px; font-family:sans-serif; min-width:140px; background:#0c1322; color:#f1f5f9; padding:8px; border-radius:8px; border:1px solid rgba(0,240,255,0.3);">
-        <span style="display:inline-block; font-size:10px; font-weight:bold; background:#082f49; color:#38bdf8; padding:2px 6px; border-radius:4px; margin-bottom:4px; border:1px solid rgba(56,189,248,0.3);">
+      <div style="font-size:12px; font-family:sans-serif; min-width:140px; background:var(--kat-panel,#1b1c1f); color:var(--kat-fg,#ececee); padding:8px; border-radius:8px; border:1px solid var(--kat-lin,#2c2e33);">
+        <span style="display:inline-block; font-size:10px; font-weight:bold; background:color-mix(in srgb,var(--kat-akc,#7354f0) 18%,transparent); color:var(--neon-c,#22d3ee); padding:2px 6px; border-radius:4px; margin-bottom:4px; border:1px solid var(--kat-lin,#2c2e33);">
           Dzień ${pt.day} &bull; ${pt.time || ''}
         </span><br>
-        <b style="color:#ffffff; font-size:13px;">${pt.name}</b><br>
-        <span style="color:#94a3b8; font-size:11px;">Kategoria: ${catLabel}</span>
+        <b style="color:var(--kat-fg,#ececee); font-size:13px;">${pt.name}</b><br>
+        <span style="color:var(--kat-mut,#a2a5ad); font-size:11px;">Kategoria: ${catLabel}</span>
         ${eleSnippet}
       </div>
     `);
@@ -3558,7 +3556,7 @@ function renderMapPoints(points, photos = []) {
   // Draw connecting path
   if (!rysowanoSlad && routeToDraw.length > 1) {
     mapRouteLine = L.polyline(routeToDraw, {
-      color: '#00f0ff',
+      color: '#22d3ee',
       weight: 3.5,
       opacity: 0.85,
       lineCap: 'round',
@@ -3644,11 +3642,11 @@ function createGpsFlagMarker(type, pt, trackName) {
   const isStart = type === 'start';
   const label = isStart ? '🚩 START' : '🏁 META';
   const bg = isStart 
-    ? 'background:#10b981; color:#022c22; border:1.5px solid #ffffff;' 
-    : 'background:#f43f5e; color:#ffffff; border:1.5px solid #ffffff;';
+    ? 'background:var(--ok,#34d399); color:#022c22; border:2px solid var(--kat-fg,#ececee);' 
+    : 'background:var(--blad,#f87171); color:#1a0505; border:2px solid var(--kat-fg,#ececee);';
   const eleStr = pt.ele ? `${Math.round(pt.ele)}m` : '';
   const html = `
-    <div style="display:inline-flex; align-items:center; gap:4px; ${bg} font-weight:800; font-size:10px; font-family:sans-serif; padding:2px 7px; border-radius:9999px; box-shadow:0 0 12px rgba(0,0,0,0.6); transform:translate(-50%, -100%); white-space:nowrap; cursor:pointer;">
+    <div style="display:inline-flex; align-items:center; gap:4px; ${bg} font-weight:800; font-size:10px; font-family:sans-serif; padding:2px 7px; border-radius:9999px; transform:translate(-50%, -100%); white-space:nowrap; cursor:pointer;">
       <span>${label}</span>
       ${eleStr ? `<span style="opacity:0.85; font-size:9px;">${eleStr}</span>` : ''}
     </div>
@@ -3660,9 +3658,9 @@ function createGpsFlagMarker(type, pt, trackName) {
   });
   const marker = L.marker([pt.lat, pt.lon], { icon, zIndexOffset: 500 });
   marker.bindPopup(`
-    <div style="font-family:sans-serif; font-size:12px; background:#0c1322; color:#f1f5f9; padding:8px; border-radius:8px; border:1px solid rgba(0,240,255,0.3); min-width:140px;">
-      <b style="color:${isStart ? '#34d399' : '#f87171'};">${label} &bull; ${trackName || 'Ślad GPS'}</b><br>
-      <div style="margin-top:4px; color:#cbd5e1; font-size:11px;">
+    <div style="font-family:sans-serif; font-size:12px; background:var(--kat-panel,#1b1c1f); color:var(--kat-fg,#ececee); padding:8px; border-radius:8px; border:1px solid var(--kat-lin,#2c2e33); min-width:140px;">
+      <b style="color:${isStart ? 'var(--ok,#34d399)' : 'var(--blad,#f87171)'};">${label} &bull; ${trackName || 'Ślad GPS'}</b><br>
+      <div style="margin-top:4px; color:var(--kat-mut,#a2a5ad); font-size:11px;">
         ⛰️ Wysokość: <b>${pt.ele ? Math.round(pt.ele) + ' m n.p.m.' : 'Brak danych'}</b><br>
         📍 Koordynaty: ${pt.lat.toFixed(5)}, ${pt.lon.toFixed(5)}
       </div>
@@ -3715,7 +3713,7 @@ function renderGpsTracksOnMap(trip, latlngs) {
       toggleText.textContent = 'Ślad GPS: Brak';
       toggleBtn.title = 'Brak śladów GPS dla wybranego dnia';
     } else if (showGpsTracks) {
-      toggleBtn.className = 'text-2xs font-bold px-2.5 py-1 rounded-lg border transition flex items-center gap-1.5 bg-emerald-950/80 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/90 shadow-[0_0_12px_rgba(16,185,129,0.25)]';
+      toggleBtn.className = 'text-2xs font-bold px-2.5 py-1 rounded-lg border transition flex items-center gap-1.5 bg-emerald-950/80 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/90';
       toggleText.textContent = 'Ślad GPS: Włączony';
       toggleBtn.title = 'Ślady GPS ze Strava / Intervals są włączone. Kliknij, aby wyłączyć.';
     } else {
@@ -3731,10 +3729,10 @@ function renderGpsTracksOnMap(trip, latlngs) {
     } else {
       floatingBtn.style.display = 'flex';
       if (showGpsTracks) {
-        floatingBtn.className = 'flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-950/90 backdrop-blur-md border border-emerald-500 text-emerald-300 font-bold text-xs shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:bg-slate-900 hover:scale-105 active:scale-95 transition';
+        floatingBtn.className = 'flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-950/90 backdrop-blur-md border border-emerald-500 text-emerald-300 font-bold text-xs hover:bg-slate-900 hover:scale-105 active:scale-95 transition';
         floatingText.textContent = 'Ślad GPS: Włączony';
         if (floatingPulse) {
-          floatingPulse.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]';
+          floatingPulse.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
           floatingPulse.style.display = 'inline-block';
         }
       } else {
@@ -3763,9 +3761,9 @@ function renderGpsTracksOnMap(trip, latlngs) {
 
     const polyPoints = tr.polyline.map(p => [p.lat, p.lon]);
 
-    // 1. High-contrast outer glow line (cyan #06b6d4)
+    // 1. Outer halo line (cyan)
     const glowLine = L.polyline(polyPoints, {
-      color: '#06b6d4',
+      color: '#22d3ee',
       weight: 8,
       opacity: 0.38,
       lineCap: 'round',
@@ -3774,9 +3772,9 @@ function renderGpsTracksOnMap(trip, latlngs) {
     }).addTo(map);
     mapGpsTrackLayers.push(glowLine);
 
-    // 2. High-contrast core mountain polyline (emerald #10b981)
+    // 2. High-contrast core mountain polyline (emerald)
     const coreLine = L.polyline(polyPoints, {
-      color: '#10b981',
+      color: '#34d399',
       weight: 4,
       opacity: 0.95,
       lineCap: 'round',
@@ -3807,11 +3805,11 @@ function renderGpsTracksOnMap(trip, latlngs) {
       if (closest) {
         const tipHtml = `
           <div style="font-size:11px; font-family:sans-serif; min-width:130px;">
-            <div style="font-weight:800; color:#00f0ff; margin-bottom:3px; display:flex; align-items:center; gap:4px;">
+            <div style="font-weight:800; color:var(--neon-c,#22d3ee); margin-bottom:3px; display:flex; align-items:center; gap:4px;">
               <span>🥾</span> <span>${tr.name || 'Ślad górski GPS'}</span>
             </div>
-            <div style="color:#cbd5e1; font-size:10.5px;">📏 Dystans: <b style="color:#ffffff;">${((closest.dist || 0) / 1000).toFixed(2)} km</b></div>
-            <div style="color:#cbd5e1; font-size:10.5px;">⛰️ Wysokość: <b style="color:#34d399;">${Math.round(closest.ele || 0)} m n.p.m.</b></div>
+            <div style="color:var(--kat-mut,#a2a5ad); font-size:10.5px;">📏 Dystans: <b style="color:var(--kat-fg,#ececee);">${((closest.dist || 0) / 1000).toFixed(2)} km</b></div>
+            <div style="color:var(--kat-mut,#a2a5ad); font-size:10.5px;">⛰️ Wysokość: <b style="color:var(--ok,#34d399);">${Math.round(closest.ele || 0)} m n.p.m.</b></div>
           </div>
         `;
         coreLine.setTooltipContent(tipHtml);
@@ -3936,7 +3934,7 @@ function renderElevationProfile() {
         const tr = item.track || item;
         const isActive = idx === activeElevationTrackIndex;
         const activeClass = isActive
-          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60 shadow-[0_0_8px_rgba(6,182,212,0.3)] font-bold'
+          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60 font-bold'
           : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200';
         const distStr = tr.distanceKm ? `${tr.distanceKm} km` : (tr.polyline ? `${((tr.polyline[tr.polyline.length - 1].dist || 0) / 1000).toFixed(1)} km` : '');
         return `
@@ -4057,6 +4055,19 @@ function renderElevationProfile() {
     return mt + chartH - ((eleM - yMin) / (yMax - yMin)) * chartH;
   }
 
+  // Colours resolved at draw time so the chart follows the active theme
+  const cssVar = (name, fb) => (getComputedStyle(document.documentElement).getPropertyValue(name) || '').trim() || fb;
+  const cMut = cssVar('--kat-mut', '#a2a5ad');
+  const cNeon = cssVar('--neon-c', '#22d3ee');
+  const cLin = cssVar('--kat-lin', '#2c2e33');
+  const cFg = cssVar('--kat-fg', '#ececee');
+  const withAlpha = (col, a) => {
+    const m = /^#([0-9a-f]{6})$/i.exec(col);
+    if (!m) return col;
+    const n = parseInt(m[1], 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+  };
+
   // Draw Horizontal Gridlines & Y Labels
   const ySteps = 3;
   ctx.font = '10px monospace';
@@ -4066,13 +4077,13 @@ function renderElevationProfile() {
     const val = yMin + ((yMax - yMin) / ySteps) * s;
     const yPos = getY(val);
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.strokeStyle = cLin;
     ctx.lineWidth = 1;
     ctx.moveTo(ml, yPos);
     ctx.lineTo(ml + chartW, yPos);
     ctx.stroke();
 
-    ctx.fillStyle = '#64748b';
+    ctx.fillStyle = cMut;
     ctx.fillText(`${Math.round(val)}m`, ml - 6, yPos);
   }
 
@@ -4085,21 +4096,20 @@ function renderElevationProfile() {
     const xPos = getX(k * 1000);
     if (xPos > ml + chartW) break;
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.strokeStyle = cLin;
     ctx.lineWidth = 1;
     ctx.moveTo(xPos, mt);
     ctx.lineTo(xPos, mt + chartH);
     ctx.stroke();
 
-    ctx.fillStyle = '#64748b';
+    ctx.fillStyle = cMut;
     ctx.fillText(`${k % 1 === 0 ? k : k.toFixed(1)}k`, xPos, mt + chartH + 5);
   }
 
   // Area Fill with Smooth Cyan-Emerald Gradient
   const grad = ctx.createLinearGradient(0, mt, 0, mt + chartH);
-  grad.addColorStop(0, 'rgba(6, 182, 212, 0.45)');
-  grad.addColorStop(0.5, 'rgba(16, 185, 129, 0.22)');
-  grad.addColorStop(1, 'rgba(15, 23, 42, 0.04)');
+  grad.addColorStop(0, withAlpha(cNeon, 0.30));
+  grad.addColorStop(1, withAlpha(cNeon, 0.02));
 
   ctx.beginPath();
   ctx.moveTo(ml, mt + chartH);
@@ -4119,7 +4129,7 @@ function renderElevationProfile() {
     if (i === 0) ctx.moveTo(px, py);
     else ctx.lineTo(px, py);
   }
-  ctx.strokeStyle = '#06b6d4';
+  ctx.strokeStyle = cNeon;
   ctx.lineWidth = 2.4;
   ctx.stroke();
 
@@ -4129,15 +4139,15 @@ function renderElevationProfile() {
   const peakY = getY(peakPt.ele);
   ctx.beginPath();
   ctx.arc(peakX, peakY, 4, 0, Math.PI * 2);
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = cFg;
   ctx.fill();
-  ctx.strokeStyle = '#06b6d4';
+  ctx.strokeStyle = cNeon;
   ctx.lineWidth = 2;
   ctx.stroke();
 
   ctx.font = 'bold 9px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#38bdf8';
+  ctx.fillStyle = cNeon;
   ctx.fillText(`⛰️ ${Math.round(maxEle)}m`, peakX, Math.max(10, peakY - 8));
 
   // If hovering: draw guide line and glowing dot
@@ -4147,7 +4157,7 @@ function renderElevationProfile() {
 
     ctx.save();
     ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.85)';
+    ctx.strokeStyle = cNeon;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
     ctx.moveTo(hx, mt);
@@ -4157,9 +4167,9 @@ function renderElevationProfile() {
 
     ctx.beginPath();
     ctx.arc(hx, hy, 5, 0, Math.PI * 2);
-    ctx.fillStyle = '#00f0ff';
+    ctx.fillStyle = cNeon;
     ctx.fill();
-    ctx.strokeStyle = '#ffffff';
+    ctx.strokeStyle = cFg;
     ctx.lineWidth = 2;
     ctx.stroke();
   }

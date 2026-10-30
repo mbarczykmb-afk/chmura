@@ -1,0 +1,60 @@
+/* Podróże: szata „ciemnia” jak w reszcie Katalogatora — grafit zamiast granatu, jeden fioletowy akcent, neon tylko przy stanie
+   aktywnym (ciemny motyw), płaskie karty z cienką linią, zdjęcia jako bohaterowie. Kolory (slate, teal, emerald…) pochodzą ze
+   zmiennych --p-* (paleta.css), więc jasny i ciemny motyw działają bez zmiany znaczników. Ładowane po podroze.css. */
+html[data-podroze] :focus-visible{outline:2px solid var(--neon-c);outline-offset:2px}
+html[data-podroze] ::selection{background:color-mix(in srgb,var(--kat-akc) 35%,transparent)}
+html[data-podroze] body{font-feature-settings:"kern";-webkit-font-smoothing:antialiased}
+
+/* typografia: Instrument Sans kończy się na 700; ciężkie „black” robi się przy małych napisach zbyt krzykliwe */
+.font-black,.font-extrabold{font-weight:700}
+h1,h2,h3{letter-spacing:-.012em}
+.tracking-wider,.tracking-widest{letter-spacing:.04em}
+
+/* kształt: promienie jak w programie (10 / 8 px), cienie tylko tam, gdzie warstwa się unosi */
+.rounded-3xl,.rounded-2xl{border-radius:12px}
+.rounded-xl{border-radius:10px}
+.rounded-lg{border-radius:8px}
+.shadow-xs,.shadow-sm,.shadow-md,.shadow{box-shadow:none}
+.shadow-lg,.shadow-xl,.shadow-2xl{box-shadow:var(--cien)}
+[class*="shadow-[0_0"],[class*="shadow-[0_4px"]{box-shadow:none!important}   /* poświaty neonowe z oryginalnej aplikacji */
+.backdrop-blur-md,.backdrop-blur-xl,.backdrop-blur-xs{backdrop-filter:none}
+header.sticky{backdrop-filter:blur(8px);background:color-mix(in srgb,var(--kat-panel) 88%,transparent)}
+header.sticky::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;opacity:.85;pointer-events:none;
+  background:linear-gradient(90deg,transparent,var(--neon-c) 18%,var(--neon-v) 50%,var(--neon-m) 82%,transparent)}
+:root:not([data-katalogator-motyw="dark"]) header.sticky::after{opacity:.35}
+
+/* sekcje i karty: grafitowy panel + linia; hover tylko podświetla obwódkę */
+section,.travel-card{background-color:var(--kat-panel)}
+.travel-card{border-radius:12px;overflow:hidden}
+.travel-card img{border-radius:0}
+input[type=text],input[type=search],input:not([type]),select,textarea{border-radius:8px}
+
+/* aktywny/zaznaczony przycisk: wypełnienie akcentem, w ciemnym motywie z delikatną poświatą */
+button.bg-teal-600,button.bg-teal-500,a.bg-teal-600{background-color:var(--kat-akc);color:var(--kat-akc-fg);border-color:transparent}
+button.bg-cyan-500,button.bg-cyan-600,button[class*="from-cyan-500"]{background-color:var(--kat-akc);background-image:none;color:var(--kat-akc-fg);border-color:transparent;box-shadow:none}
+button.bg-teal-600:hover,button.bg-teal-500:hover,button.bg-cyan-500:hover,button.bg-cyan-600:hover{filter:brightness(1.1)}
+:root[data-katalogator-motyw="dark"] button.bg-teal-600,:root[data-katalogator-motyw="dark"] button.bg-teal-500{
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--neon-c) 40%,transparent),0 0 14px color-mix(in srgb,var(--neon-v) 35%,transparent)}
+button:disabled{opacity:.5;cursor:default}
+
+/* ikony liniowe zamiast emoji (ikony.js + ikony-podroze.js) */
+.ikl{color:currentColor}
+:root[data-katalogator-motyw="dark"] .ikl svg{filter:drop-shadow(0 0 2.5px color-mix(in srgb,currentColor 55%,transparent))}
+
+/* Leaflet: okna i kontrolki w barwach programu */
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--kat-panel);color:var(--kat-fg);box-shadow:var(--cien)}
+.leaflet-popup-content-wrapper{border-radius:10px;border:1px solid var(--kat-lin)}
+.leaflet-container a.leaflet-popup-close-button{color:var(--kat-mut)}
+.leaflet-tooltip{background:var(--kat-panel);color:var(--kat-fg);border:1px solid var(--kat-lin);border-radius:8px;box-shadow:var(--cien)}
+.leaflet-tooltip-top:before{border-top-color:var(--kat-lin)}
+.leaflet-bar a,.leaflet-bar a:hover{background-color:var(--kat-panel);color:var(--kat-fg);border-bottom-color:var(--kat-lin)}
+.leaflet-bar{border:1px solid var(--kat-lin);box-shadow:none;border-radius:8px;overflow:hidden}
+.leaflet-control-layers,.leaflet-control-attribution{background:color-mix(in srgb,var(--kat-panel) 88%,transparent)!important;color:var(--kat-mut)}
+.leaflet-control-attribution a{color:var(--kat-mut)}
+.np-trasa-leg,.np-menu-lista{background:var(--kat-panel);border-color:var(--kat-lin);color:var(--kat-fg)}
+
+/* jasny motyw: napisy białe na jasnym tle (nagłówki, tytuły) mają być ciemne; wypełnienia i przyciski zostają z białym tekstem */
+:root[data-katalogator-motyw="light"] h1.text-white,:root[data-katalogator-motyw="light"] h2.text-white,
+:root[data-katalogator-motyw="light"] h3.text-white,:root[data-katalogator-motyw="light"] .text-white:not(button *):not([class*="bg-"]){color:var(--kat-fg)}
+
+@media print{.travel-card,section{background:#fff!important}}

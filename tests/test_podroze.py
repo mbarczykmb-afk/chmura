@@ -151,7 +151,7 @@ def test_zasoby_i_dane_przez_ciasteczko(program):
     for plik, typ in (("app.js", "javascript"), ("podroze.css", "text/css"), ("jszip.min.js", "javascript"),
                       ("motyw.css", "text/css"), ("katalogator-motyw.js", "javascript"), ("nowe.css", "text/css"),
                       ("nowe.js", "javascript"), ("os-czasu.js", "javascript"), ("kraje.js", "javascript"), ("trasa.js", "javascript"),
-                      ("kraje.json", "json")):
+                      ("kraje.json", "json"), ("paleta.css", "text/css"), ("szata.css", "text/css"), ("ikony-podroze.js", "javascript")):
         kod, tresc, nag = g("/podroze/" + plik, c)
         assert kod == 200 and typ in nag["Content-Type"] and len(tresc) > 100, plik
     granice = json.loads(g("/podroze/kraje.json", c)[1])["features"]   # granice państw do mapy i rozpoznawania państwa wyprawy

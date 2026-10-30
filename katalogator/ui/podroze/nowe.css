@@ -2,36 +2,36 @@
    Własne klasy (np-*), bo podroze.css jest zbudowane jednorazowo z klas użytych w index.html/app.js. */
 .np-menu{position:relative}
 .np-menu-lista{position:absolute;right:0;top:calc(100% + 8px);width:min(340px,86vw);z-index:60;padding:6px;border-radius:14px;
-  background:#0f172a;border:1px solid #334155;box-shadow:0 18px 40px rgba(0,0,0,.5)}
+  background:var(--kat-panel);border:1px solid var(--kat-lin);box-shadow:var(--cien)}
 .np-menu-lista[hidden]{display:none}
-.np-poz{display:flex;align-items:flex-start;gap:10px;width:100%;padding:9px 10px;border-radius:10px;text-align:left;color:#e2e8f0;
+.np-poz{display:flex;align-items:flex-start;gap:10px;width:100%;padding:9px 10px;border-radius:10px;text-align:left;color:var(--kat-fg);
   background:transparent;border:0;cursor:pointer;font:inherit}
-.np-poz:hover,.np-poz:focus-visible{background:#1e293b}
+.np-poz:hover,.np-poz:focus-visible{background:var(--kat-lin)}
 .np-poz b{display:block;font-size:13px}
-.np-poz small{display:block;font-size:11px;color:#94a3b8;margin-top:1px}
+.np-poz small{display:block;font-size:11px;color:var(--kat-mut);margin-top:1px}
 .np-poz .np-ik{font-size:18px;line-height:1.2}
-.np-modal{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,23,.75);backdrop-filter:blur(6px)}
+.np-modal{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(4,8,22,.62);backdrop-filter:blur(6px)}
 .np-modal[hidden]{display:none}
 .np-modal-karta{position:relative;width:min(760px,100%)}
-.np-x{position:absolute;right:10px;top:10px;z-index:30;width:30px;height:30px;border-radius:9px;border:1px solid #334155;background:#0f172a;color:#cbd5e1;cursor:pointer}
-.np-x:hover{background:#1e293b;color:#fff}
+.np-x{position:absolute;right:10px;top:10px;z-index:30;width:30px;height:30px;border-radius:9px;border:1px solid var(--kat-lin);background:var(--kat-panel);color:var(--kat-mut);cursor:pointer}
+.np-x:hover{background:var(--kat-lin);color:#fff}
 
-.np-sekcja{border-radius:16px;padding:14px 16px;background:rgba(15,23,42,.8);border:1px solid #1e293b;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.np-sekcja{border-radius:16px;padding:14px 16px;background:var(--kat-panel);border:1px solid var(--kat-lin);box-shadow:0 4px 14px rgba(0,0,0,.25)}
 .np-gl{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}
-.np-gl h3{margin:0;font-size:14px;font-weight:800;color:#f1f5f9}
-.np-gl p{margin:0;font-size:11px;color:#94a3b8}
-.np-przyc{height:28px;min-width:28px;padding:0 9px;border-radius:9px;border:1px solid #334155;background:#1e293b;color:#cbd5e1;font-size:12px;font-weight:700;cursor:pointer}
-.np-przyc:hover{background:#334155;color:#fff}
+.np-gl h3{margin:0;font-size:14px;font-weight:800;color:var(--kat-fg)}
+.np-gl p{margin:0;font-size:11px;color:var(--kat-mut)}
+.np-przyc{height:28px;min-width:28px;padding:0 9px;border-radius:9px;border:1px solid var(--kat-lin);background:var(--kat-lin);color:var(--kat-mut);font-size:12px;font-weight:700;cursor:pointer}
+.np-przyc:hover{background:var(--kat-lin);color:#fff}
 .np-przyc[disabled]{opacity:.5;cursor:default}
 
 /* oś czasu */
 .np-os-przew{overflow-x:auto;overflow-y:hidden;cursor:grab;padding-bottom:6px}
 .np-os-przew.np-chwyt{cursor:grabbing;user-select:none}
 .np-os-tor{position:relative}
-.np-os-rok{position:absolute;top:0;bottom:22px;border-left:1px solid #334155;pointer-events:none}
-.np-os-rok span{position:absolute;left:5px;bottom:-20px;font-size:11px;font-weight:800;color:#94a3b8}
-.np-os-msc{position:absolute;bottom:22px;height:6px;border-left:1px solid #1e293b;pointer-events:none}
-.np-os-wyp{position:absolute;height:20px;display:flex;align-items:center;gap:6px;padding:0;border:0;background:transparent;color:#cbd5e1;
+.np-os-rok{position:absolute;top:0;bottom:22px;border-left:1px solid var(--kat-lin);pointer-events:none}
+.np-os-rok span{position:absolute;left:5px;bottom:-20px;font-size:11px;font-weight:800;color:var(--kat-mut)}
+.np-os-msc{position:absolute;bottom:22px;height:6px;border-left:1px solid var(--kat-lin);pointer-events:none}
+.np-os-wyp{position:absolute;height:20px;display:flex;align-items:center;gap:6px;padding:0;border:0;background:transparent;color:var(--kat-mut);
   font-size:10.5px;font-weight:700;white-space:nowrap;cursor:pointer;text-align:left;transition:opacity .12s}
 .np-os-wyp i{display:block;flex:none;height:14px;min-width:9px;border-radius:7px;box-shadow:0 1px 4px rgba(0,0,0,.45);transition:filter .12s,transform .12s}
 .np-os-wyp:hover i,.np-os-wyp:focus-visible i{filter:brightness(1.35);transform:scaleY(1.25)}
@@ -40,30 +40,30 @@
 
 /* mapa państw */
 .np-kraje-pudlo{position:relative}
-#kraje-mapa{height:300px;min-width:0;border-radius:12px;background:#0b1220;border:1px solid #1e293b}
+#kraje-mapa{height:300px;min-width:0;border-radius:12px;background:var(--kat-bg);border:1px solid var(--kat-lin)}
 .np-kraj-licz{display:flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;border-radius:10px;
-  background:#042f2e;border:1.5px solid #5eead4;color:#ccfbf1;font-size:11px;font-weight:800;box-shadow:0 0 8px rgba(45,212,191,.5);pointer-events:none}
+  background:var(--kat-panel);border:1.5px solid var(--neon-c);color:var(--kat-fg);font-size:11px;font-weight:800;box-shadow:0 0 8px rgba(45,212,191,.5);pointer-events:none}
 .np-filtr[hidden]{display:none}
-.np-filtr{display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 10px;border-radius:999px;background:#0d9488;color:#fff;font-size:12px;font-weight:700}
+.np-filtr{display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 10px;border-radius:999px;background:var(--kat-akc);color:#fff;font-size:12px;font-weight:700}
 .np-filtr button{border:0;border-radius:999px;width:20px;height:20px;background:rgba(0,0,0,.25);color:#fff;cursor:pointer}
-.np-legenda-kraje{display:flex;align-items:center;gap:10px;font-size:10.5px;color:#94a3b8;flex-wrap:wrap}
+.np-legenda-kraje{display:flex;align-items:center;gap:10px;font-size:10.5px;color:var(--kat-mut);flex-wrap:wrap}
 .np-legenda-kraje i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px}
 
 /* legenda śladu na mapie wyprawy */
-.np-trasa-leg{padding:8px 10px;border-radius:12px;background:rgba(2,6,23,.9);border:1px solid #334155;color:#cbd5e1;font-size:11px;line-height:1.7;min-width:190px}
+.np-trasa-leg{padding:8px 10px;border-radius:12px;background:var(--kat-panel);border:1px solid var(--kat-lin);color:var(--kat-mut);font-size:11px;line-height:1.7;min-width:190px}
 .np-trasa-leg .np-lin{display:inline-block;width:26px;border-top-width:3px;border-top-style:solid;margin-right:7px;vertical-align:middle}
-.np-trasa-leg button{margin-top:4px;width:100%;height:26px;border-radius:8px;border:1px solid #0e7490;background:#083344;color:#a5f3fc;font-weight:700;font-size:11px;cursor:pointer}
-.np-trasa-leg button:hover{background:#0e7490}
+.np-trasa-leg button{margin-top:4px;width:100%;height:26px;border-radius:8px;border:1px solid var(--neon-c);background:var(--kat-panel);color:var(--neon-c);font-weight:700;font-size:11px;cursor:pointer}
+.np-trasa-leg button:hover{background:var(--neon-c)}
 .np-trasa-leg button[disabled]{opacity:.6;cursor:default}
-.np-trasa-leg small{display:block;color:#94a3b8;font-size:10px;line-height:1.35}
+.np-trasa-leg small{display:block;color:var(--kat-mut);font-size:10px;line-height:1.35}
 
 .np-kraje-uklad{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:10px}
 .np-kraje-lista{list-style:none;margin:0;padding:0;height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
-.np-kraje-lista button{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border-radius:9px;border:1px solid transparent;background:#1e293b;color:#e2e8f0;
+.np-kraje-lista button{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border-radius:9px;border:1px solid transparent;background:var(--kat-lin);color:var(--kat-fg);
   font-size:12px;font-weight:600;cursor:pointer;text-align:left}
-.np-kraje-lista button:hover{background:#334155}
-.np-kraje-lista button[aria-pressed=true]{background:#0d9488;color:#fff;border-color:#99f6e4}
-.np-kraje-lista .np-kod{flex:none;min-width:26px;text-align:center;font-size:10px;font-weight:800;letter-spacing:.04em;padding:2px 4px;border-radius:5px;background:#0f172a;color:#5eead4}
+.np-kraje-lista button:hover{background:var(--kat-lin)}
+.np-kraje-lista button[aria-pressed=true]{background:var(--kat-akc);color:#fff;border-color:var(--neon-c)}
+.np-kraje-lista .np-kod{flex:none;min-width:26px;text-align:center;font-size:10px;font-weight:800;letter-spacing:.04em;padding:2px 4px;border-radius:5px;background:var(--kat-panel);color:var(--neon-c)}
 .np-kraje-lista .np-nazwa{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.np-kraje-lista .np-n{flex:none;font-weight:800;color:#99f6e4}
+.np-kraje-lista .np-n{flex:none;font-weight:800;color:var(--neon-c)}
 @media (max-width:820px){.np-kraje-uklad{grid-template-columns:1fr}.np-kraje-lista{height:auto;max-height:180px}}
