@@ -485,7 +485,7 @@ def _skan(g) -> None:
                         continue
                     alt = polacz_geoclip(wyniki)
                     la, lo, p = alt[0]
-                    grupy.append(_grupa_json(gr, "geoclip", f"GeoCLIP — rozpoznanie z obrazu (~{round(p * 100)}%)", "przybliżona",
+                    grupy.append(_grupa_json(gr, "geoclip", f"GeoCLIP — rozpoznanie z obrazu ({'<1' if p < 0.01 else '~' + str(round(p * 100))}%)", "przybliżona",
                                              [[z["id"], la, lo] for z in gr], {"alternatywy": [list(a) for a in alt[1:]], "jeden_punkt": True}))
                     bez -= len(gr)
             finally:

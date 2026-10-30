@@ -24,8 +24,9 @@ LOG = logging.getLogger("katalogator.geoclip")
 WYDANIE = "https://github.com/mbarczykmb-afk/chmura/releases/download/geoclip-model-1/"
 PLIK_MODELU = "geoclip-obraz-int8.onnx"
 PLIK_GALERII = "geoclip-galeria.npz"
-# SHA-256 plików z wydania (gdy None — sprawdzane z geoclip-sumy.json z tego samego wydania)
-SUMY: dict[str, str | None] = {PLIK_MODELU: None, PLIK_GALERII: None}
+# SHA-256 plików z wydania geoclip-model-1 (CI: fp32 = oryginał GeoCLIP, int8 — wieża Eiffla 0 km, Empire State 0,1 km)
+SUMY: dict[str, str | None] = {PLIK_MODELU: "c12a40e15a83f8d3946fc02a6c2a4d2cef1e14511a5f83c3d0099057749d4369",
+                               PLIK_GALERII: "ae3e5032fdec939834bd4343b87b5961d35f3d388f879b1ff68b2bba0756d779"}
 
 _SREDNIA = np.array([0.48145466, 0.4578275, 0.40821073], dtype=np.float32)
 _ODCHYL = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
