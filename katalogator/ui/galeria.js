@@ -830,6 +830,7 @@ function uklad() {  // co widać: oś czasu (wykres, miesiące), wyniki/kolekcja
   $("w-osoby").classList.toggle("akt", w === "osoby" || (w === "os" && g.zrodlo.typ === "osoba"));
   $("w-foldery").classList.toggle("akt", w === "foldery");
   $("w-serie").classList.toggle("akt", w === "serie");
+  $("w-gps").classList.toggle("akt", w === "gps");
   $("drzewo").hidden = w !== "foldery"; document.body.classList.toggle("foldery", w === "foldery");
   $("os").hidden = w === "mapa"; $("lata").hidden = !os; $("miesiace").hidden = !os; tip(null);
   $("wykres").hidden = !os || !$("wykres").childElementCount || !naglowek.wykres;
@@ -847,6 +848,7 @@ function widok(w) {
   if (w === "osoby") rysujOsoby();
   if (w === "foldery") rysujDrzewo();
   if (w === "serie") rysujSerie();
+  if (w === "gps") rysujGps();
 }
 function pokazWyniki(zrodlo) {  // wyniki szukania, ulubione, album, tego dnia — w tej samej siatce
   g.zrodlo = zrodlo; g.widok = "os"; g.pliki = []; g.razem = 0;
@@ -859,6 +861,8 @@ $("w-kolekcje").onclick = () => widok("kolekcje");
 $("w-osoby").onclick = () => widok("osoby");
 $("w-foldery").onclick = () => widok("foldery");
 $("w-serie").onclick = () => widok("serie");
+$("w-gps").onclick = () => widok("gps");
+$("w-gps").hidden = !W_PROGRAMIE;   // 📍 propozycje lokalizacji — tylko na komputerze
 $("w-dzien").onclick = () => { g.widok = "os"; pokazWyniki({typ: "dzien", md: mdDzis(), dni: 0}); };
 
 // ---------- w oknie programu: zakres, zamykanie, udostępnianie na telefon ----------
@@ -988,6 +992,9 @@ function rysujFiltr() {
                                                    : "Teraz widać wszystko — kliknij, żeby znów ukryć albumy 🙈", k.ukrywanie ? "akt" : ""));
   } else if (g.widok === "osoby") {
     filtrOsob(f, inf);
+  } else if (g.widok === "gps") {
+    const t = document.createElement("span"); t.className = "tyt"; t.textContent = "📍 Bez GPS"; f.append(t);
+    f.append(inf("propozycje miejsca dla zdjęć bez lokalizacji — sprawdź na mapie i zdecyduj"));
   } else if (g.widok === "serie") {
     const t = document.createElement("span"); t.className = "tyt"; t.textContent = "🔀 Serie"; f.append(t);
     if (g.serie) f.append(inf(`${g.serie.razem.toLocaleString("pl-PL")} ${g.serie.razem === 1 ? "seria" : [2, 3, 4].includes(g.serie.razem % 10) && ![12, 13, 14].includes(g.serie.razem % 100) ? "serie" : "serii"} · ${liczbaZdjec(g.serie.zdjec)} — kliknij serię, porównaj i zostaw najlepsze`));

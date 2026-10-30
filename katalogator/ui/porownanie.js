@@ -7,6 +7,7 @@ function przeladujWidok() {
   if (g.widok === "kolekcje") rysujKolekcje();
   else if (g.widok === "osoby") rysujOsoby();
   else if (g.widok === "serie") rysujSerie();
+  else if (g.widok === "gps") rysujGps(false);
   else if (g.widok === "foldery") { if (g.zrodlo.typ === "folder") pokazFolder(g.zrodlo.f, g.zrodlo.pod); rysujDrzewo(); }
   else if (g.widok === "mapa") pokazMape().catch(() => {});
   else if (g.zrodlo.typ === "os") { g.przeladuj = false; g.rok = null; start(); }

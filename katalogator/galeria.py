@@ -1625,6 +1625,13 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
         return g.mapa(), None
     if sciezka == "/api/g/serie":
         return g.serie(i("od"), min(i("ile", 120), 500)), None
+    if sciezka in ("/api/g/gps", "/api/g/gps/grupy"):   # 📍 zdjęcia bez GPS — propozycje (bez_gps.py); tylko w oknie programu
+        from . import bez_gps
+        if not okno:
+            return {"blad": "Propozycje lokalizacji są dostępne tylko na komputerze."}, None
+        if sciezka == "/api/g/gps":
+            return bez_gps.stan(g), None
+        return bez_gps.grupy(g, i("od"), min(i("ile", 40), 200), q.get("typ", [""])[0]), None
     if sciezka == "/api/g/seria":
         return g.seria(i("id")), None
     if sciezka == "/api/g/ostrosc":
@@ -1712,6 +1719,30 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
         return g.album_ukryj(int(dane.get("album") or 0), bool(dane.get("tak", True)))
     if sciezka == "/api/g/ukrywanie":
         return g.ustaw_ukrywanie(bool(dane.get("wlacz", True)))
+    if sciezka.startswith("/api/g/gps/"):   # 📍 propozycje lokalizacji dla zdjęć bez GPS
+        from . import bez_gps, geoclip, slady
+        if sciezka == "/api/g/gps/skanuj":
+            return bez_gps.start(g, dane.get("geoclip") if "geoclip" in dane else None)
+        if sciezka == "/api/g/gps/przerwij":
+            bez_gps.przerwij(g)
+            return {"ok": True}
+        if sciezka == "/api/g/gps/odrzuc":
+            return bez_gps.odrzuc(g, ids, str(dane.get("typ") or ""))
+        if sciezka == "/api/g/gps/przyjete":
+            return bez_gps.przyjete(g, ids)
+        if sciezka == "/api/g/gps/ustawienia":
+            w = bez_gps.zapisz_ustawienia(g, dane)
+            return w if "blad" in w else bez_gps.stan(g)
+        if sciezka == "/api/g/gps/model":
+            if not bez_gps.KATALOG:
+                return {"blad": "brak folderu danych"}
+            return geoclip.pobierz(Path(bez_gps.KATALOG) / "modele")
+        if sciezka == "/api/g/gps/slady":   # ślady Stravy / Intervals.icu z dni, w których są zdjęcia bez GPS
+            dni = bez_gps.dni_bez_gps(g)
+            if not dni:
+                return {"blad": "Nie ma zdjęć bez GPS z datą."}
+            return slady.pobierz(bez_gps.KATALOG, dni) if bez_gps.KATALOG else {"blad": "brak folderu danych"}
+        return None
     if sciezka.startswith(("/api/g/twarze/", "/api/g/osoba/", "/api/g/twarz/")):
         from . import twarze
         o = int(dane.get("id") or 0)

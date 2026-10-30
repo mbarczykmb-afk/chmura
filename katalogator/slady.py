@@ -31,6 +31,7 @@ POLA_Z_KOPII = {"clientId": "strava_client_id", "clientSecret": "strava_client_s
                 "intervalsAthleteId": "intervals_athlete_id", "intervalsApiKey": "intervals_api_key"}
 MAKS_PUNKTOW = 900          # punkty jednego śladu w pliku wyprawy
 TOLERANCJA_M = 4.0          # uproszczenie śladu (Douglas–Peucker)
+WERSJA_PAMIECI = 2          # 2: zapamiętany ślad ma czas (sekundy od startu) — potrzebny do zdjęć bez GPS
 
 _stan = {"trwa": False, "etap": "", "zrobione": 0, "wszystkie": 0, "komunikat": "", "blad": "", "koniec": 0.0}
 _blokada = threading.Lock()
@@ -193,7 +194,7 @@ def _intervals_slad(k: dict, id_: str) -> list[list]:
     a, b = ll.get("data") or [], ll.get("data2")
     pary = list(zip(a, b)) if b else [tuple(x) if isinstance(x, (list, tuple)) and len(x) == 2 else (None, None) for x in a]
     wys, dyst = (dane.get("altitude") or {}).get("data") or [], (dane.get("distance") or {}).get("data") or []
-    return _punkty(pary, wys, dyst)
+    return _punkty(pary, wys, dyst, (dane.get("time") or {}).get("data") or [])
 
 
 class _Strava:
@@ -237,10 +238,11 @@ class _Strava:
                   self.naglowek())
         st = st if isinstance(st, dict) else {}
         return _punkty((st.get("latlng") or {}).get("data") or [], (st.get("altitude") or {}).get("data") or [],
-                       (st.get("distance") or {}).get("data") or [])
+                       (st.get("distance") or {}).get("data") or [], (st.get("time") or {}).get("data") or [])
 
 
-def _punkty(pary, wys, dyst) -> list[list]:
+def _punkty(pary, wys, dyst, czas=()) -> list[list]:
+    """[lat, lon, wysokość, dystans, sekundy od startu] — czas służy do dopasowania zdjęć bez GPS (bez_gps.py)."""
     wynik = []
     for i, p in enumerate(pary):
         try:
@@ -251,7 +253,22 @@ def _punkty(pary, wys, dyst) -> list[list]:
             continue
         w = wys[i] if i < len(wys) and wys[i] is not None else None
         d = dyst[i] if i < len(dyst) and dyst[i] is not None else None
-        wynik.append([round(la, 6), round(lo, 6), round(w, 1) if w is not None else None, round(d, 1) if d is not None else None])
+        t = czas[i] if i < len(czas) and czas[i] is not None else None
+        wynik.append([round(la, 6), round(lo, 6), round(w, 1) if w is not None else None, round(d, 1) if d is not None else None,
+                      int(t) if t is not None else None])
+    return wynik
+
+
+def przerzedz(pkt: list[list], co_s: int = 10) -> list[list]:
+    """Do zapamiętania: punkt co ≥ `co_s` sekund (czas zostaje dokładny do dopasowania zdjęć); bez czasu — uproszczenie kształtu."""
+    if len(pkt) < 3 or any(p[4] is None for p in (pkt[0], pkt[-1])):
+        return upros(pkt, maks=4000)
+    wynik, ost = [pkt[0]], pkt[0][4]
+    for p in pkt[1:-1]:
+        if p[4] is not None and p[4] - ost >= co_s:
+            wynik.append(p)
+            ost = p[4]
+    wynik.append(pkt[-1])
     return wynik
 
 
@@ -357,7 +374,7 @@ def zloz(katalog) -> int:
             continue
         wid = _w_wyprawie(wyprawy, a["start"][:10])
         if wid:
-            pkt = _wczytaj_slad(katalog, a["zrodlo"], a["id"])
+            pkt = [p[:4] for p in upros(_wczytaj_slad(katalog, a["zrodlo"], a["id"]))]
             if len(pkt) > 1:
                 grupy.setdefault(wid, []).append({"id": a["id"], "zrodlo": a["zrodlo"], "nazwa": a["nazwa"], "typ": a["typ"],
                                                   "start": a["start"], "km": a["km"], "pts": pkt})
@@ -397,20 +414,40 @@ def _ustaw(**kw) -> None:
         _stan.update(kw)
 
 
-def pobierz(katalog) -> dict:
+def aktywnosci_z_czasem(katalog) -> list[dict]:
+    """Zapamiętane ślady z czasem (do dopasowania zdjęć): start/koniec (czas lokalny) i punkty (sekundy od startu, lat, lon)."""
+    wynik = []
+    for a in _indeks(katalog).values():
+        if not a.get("slad") or a.get("wersja") != WERSJA_PAMIECI:
+            continue
+        pkt = [(p[4], p[0], p[1]) for p in _wczytaj_slad(katalog, a["zrodlo"], a["id"]) if len(p) > 4 and p[4] is not None]
+        if len(pkt) < 2:
+            continue
+        try:
+            start = dt.datetime.fromisoformat(a["start"][:19])
+        except ValueError:
+            continue
+        wynik.append({"zrodlo": a["zrodlo"], "id": a["id"], "nazwa": a.get("nazwa") or "", "typ": a.get("typ") or "",
+                      "start": start, "koniec": start + dt.timedelta(seconds=pkt[-1][0]), "pts": pkt})
+    return sorted(wynik, key=lambda x: x["start"])
+
+
+def pobierz(katalog, dni=None) -> dict:
+    """Pobiera ślady aktywności z dni wypraw — albo z podanych dni (`dni`: zbiór 'RRRR-MM-DD', np. dni zdjęć bez GPS)."""
     k = klucze(katalog)
     ma_i = bool(k.get("intervals_athlete_id") and k.get("intervals_api_key"))
     ma_s = all(k.get(n) for n in ("strava_client_id", "strava_client_secret", "strava_refresh_token"))
     if not (ma_i or ma_s):
         return {"blad": "Najpierw wpisz klucze Intervals.icu albo Stravy (lub wczytaj je z kopii aplikacji Szczyty)."}
-    if not _wyprawy(katalog):
+    if not dni and not _wyprawy(katalog):
         return {"blad": "Najpierw zaimportuj dane wypraw — ślady pobieram dla dni, w których były wyprawy."}
     with _blokada:
         if _stan["trwa"]:
             return {"blad": "Pobieranie już trwa."}
-        _stan.update(trwa=True, etap="lista", zrobione=0, wszystkie=0, komunikat="Sprawdzam aktywności z dni wypraw…", blad="")
+        _stan.update(trwa=True, etap="lista", zrobione=0, wszystkie=0, blad="",
+                     komunikat="Sprawdzam aktywności z dni zdjęć bez GPS…" if dni else "Sprawdzam aktywności z dni wypraw…")
     _przerwij.clear()
-    threading.Thread(target=_pobierz, args=(Path(katalog), k, ma_i, ma_s), daemon=True, name="podroze-slady").start()
+    threading.Thread(target=_pobierz, args=(Path(katalog), k, ma_i, ma_s, set(dni or ())), daemon=True, name="podroze-slady").start()
     return {"ok": True}
 
 
@@ -418,11 +455,12 @@ def przerwij() -> None:
     _przerwij.set()
 
 
-def _pobierz(katalog: Path, k: dict, ma_i: bool, ma_s: bool) -> None:
+def _pobierz(katalog: Path, k: dict, ma_i: bool, ma_s: bool, dni: set | None = None) -> None:
     ind: dict = {}
     try:
-        wyprawy = _wyprawy(katalog)
-        od, do = min(w["od"] for w in wyprawy), max(w["do"] for w in wyprawy)
+        wyprawy = [] if dni else _wyprawy(katalog)
+        nalezy = (lambda d: d in dni) if dni else (lambda d: bool(_w_wyprawie(wyprawy, d)))
+        od, do = (min(dni), max(dni)) if dni else (min(w["od"] for w in wyprawy), max(w["do"] for w in wyprawy))
         ind = _indeks(katalog)
         kandydaci: list[dict] = []
         uwagi: list[str] = []
@@ -440,7 +478,7 @@ def _pobierz(katalog: Path, k: dict, ma_i: bool, ma_s: bool) -> None:
         # tylko aktywności z dni wypraw; ta sama aktywność w obu źródłach (start w odstępie do 3 min) liczy się raz
         wybrane: list[dict] = []
         for a in sorted(kandydaci, key=lambda x: (x["start"], x["zrodlo"] != "intervals")):
-            if not _w_wyprawie(wyprawy, a["start"][:10]):
+            if not nalezy(a["start"][:10]):
                 continue
             dubl = next((b for b in wybrane if abs((dt.datetime.fromisoformat(a["start"]) - dt.datetime.fromisoformat(b["start"])).total_seconds()) <= 180
                          and b.get("alt") is None and b["zrodlo"] != a["zrodlo"]), None)
@@ -456,8 +494,9 @@ def _pobierz(katalog: Path, k: dict, ma_i: bool, ma_s: bool) -> None:
                 break
             _ustaw(zrobione=i - 1, komunikat=f"Ślad {i} z {len(wybrane)}: {a['nazwa'] or a['start'][:10]}")
             warianty = [a] + ([a["alt"]] if a.get("alt") else [])
-            if any(f"{w['zrodlo']}:{w['id']}" in ind for w in warianty):
-                continue   # już sprawdzone (ze śladem albo bez niego)
+            if any(f"{w['zrodlo']}:{w['id']}" in ind and (not ind[f"{w['zrodlo']}:{w['id']}"].get("slad")
+                                                          or ind[f"{w['zrodlo']}:{w['id']}"].get("wersja") == WERSJA_PAMIECI) for w in warianty):
+                continue   # już sprawdzone (bez śladu albo ze śladem z czasem); ślady sprzed 1.53 pobieramy raz jeszcze — z czasem
             wpis = None
             for w in warianty:
                 try:
@@ -467,9 +506,10 @@ def _pobierz(katalog: Path, k: dict, ma_i: bool, ma_s: bool) -> None:
                         raise
                     pkt = []
                 if len(pkt) > 1:
-                    pkt = upros(pkt)
+                    pkt = przerzedz(pkt)
                     _zapisz_slad(katalog, w["zrodlo"], w["id"], pkt)
-                    wpis = {**{n: w[n] for n in ("zrodlo", "id", "start", "nazwa", "typ", "km")}, "slad": True, "punkty": len(pkt)}
+                    wpis = {**{n: w[n] for n in ("zrodlo", "id", "start", "nazwa", "typ", "km")}, "slad": True, "punkty": len(pkt),
+                            "wersja": WERSJA_PAMIECI}
                     pobrane += 1
                     break
             if wpis is None:

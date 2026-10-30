@@ -27,7 +27,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, most, naprawa, odzyskiwanie, pilot, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, twarze, usuwanie, wykonawca, wysylanie)
-from . import podroze, slady
+from . import bez_gps, podroze, slady
 from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
@@ -58,6 +58,7 @@ class Stan:
         indeks.ustaw(Path(katalog) / "wspolny_indeks.db")
         self.przegladarka = przegladarka.Przegladarka(katalog)  # dyski do oglądania, osobna baza
         twarze.KATALOG_MODELI = Path(katalog) / "modele"  # model rozpoznawania twarzy (pobierany raz)
+        bez_gps.KATALOG = Path(katalog)  # 📍 zdjęcia bez GPS: ślady, oś czasu Podróży, model GeoCLIP
         twarze.SILNIK = aktualizacje._ustawienia(katalog).get("twarze_silnik") or "sface"
         self.serwer_tel = None
         self.wzorce_pamiec: dict = {}  # marka ftyp → wzorce, które zadziałały przy naprawie filmów
@@ -1783,6 +1784,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 usuwa = u.path in galeria.ZMIANY_PLIKOW
                 if usuwa and z != "przegladarka" and stan.zajety():
                     return self._wyslij({"blad": "Poczekaj, aż skończy się bieżące zadanie."}, kod=HTTPStatus.CONFLICT)
+                if self.headers.get("X-Z-Telefonu") and u.path.startswith("/api/g/gps/"):
+                    return self._wyslij({"blad": "Propozycje lokalizacji są dostępne tylko na komputerze."}, kod=HTTPStatus.FORBIDDEN)
                 if self.headers.get("X-Z-Telefonu") and u.path in ("/api/g/ukrywanie", "/api/g/album/ukryj"):
                     return self._wyslij({"blad": "Ukrywanie albumów zmienia się tylko na komputerze."},
                                         kod=HTTPStatus.FORBIDDEN)
