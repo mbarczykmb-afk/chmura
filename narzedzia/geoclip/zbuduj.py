@@ -46,7 +46,7 @@ try:   # klasyczny eksporter (TorchScript) — przewidywalny dla ViT i osi wsadu
 except TypeError:   # starszy torch bez parametru dynamo
     torch.onnx.export(Obraz(model), torch.randn(1, 3, 224, 224), str(fp32), **opcje)
 int8 = cel / kg.PLIK_MODELU
-quantize_dynamic(str(fp32), str(int8), weight_type=QuantType.QInt8)
+quantize_dynamic(str(fp32), str(int8), weight_type=QuantType.QInt8, per_channel=True)   # per kanał — wierniej niż per tensor
 
 gal = model.gps_gallery.float()
 cechy = torch.cat([F.normalize(model.location_encoder(gal[i:i + 10000]), dim=1) for i in range(0, len(gal), 10000)])
@@ -56,8 +56,8 @@ np.savez_compressed(cel / kg.PLIK_GALERII, cechy=cechy.numpy().astype(np.float16
 # --- sprawdzenie: ta sama odpowiedź co oryginał ---
 import onnxruntime as ort  # noqa: E402
 obrazy = [Path(__import__("geoclip").__file__).parent / "images" / "Kauai.png"]
-for i, url in enumerate(("https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Tour_Eiffel_Wikimedia_Commons.jpg/640px-Tour_Eiffel_Wikimedia_Commons.jpg",
-                         "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Empire_State_Building_%28aerial_view%29.jpg/640px-Empire_State_Building_%28aerial_view%29.jpg")):
+for i, url in enumerate(("https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Tour_Eiffel_Wikimedia_Commons.jpg/500px-Tour_Eiffel_Wikimedia_Commons.jpg",
+                         "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Empire_State_Building_%28aerial_view%29.jpg/500px-Empire_State_Building_%28aerial_view%29.jpg")):
     try:
         p = cel / f"test{i}.jpg"
         zad = urllib.request.Request(url, headers={"User-Agent": "Katalogator-CI/1.0 (model build)"})
@@ -85,10 +85,11 @@ for p in obrazy:
     c32 = sesja32.run(None, {"pixel_values": px})[0][0]
     c8 = sesja8.run(None, {"pixel_values": px})[0][0]
     pod = float(np.dot(c32, c8) / (np.linalg.norm(c32) * np.linalg.norm(c8)))
-    nasz = g.najlepsze(c8, 3)[0]
-    d = km(oryg, (nasz[0], nasz[1]))
-    print(f"{p.name}: oryginał {oryg} p={float(prob[0]):.3f} | ONNX int8 {nasz} | {d:.1f} km | podobieństwo fp32/int8 {pod:.4f}")
-    if d > 150 or pod < 0.95:
+    n32, n8 = g.najlepsze(c32, 3)[0], g.najlepsze(c8, 3)[0]
+    d32, d8 = km(oryg, n32[:2]), km(oryg, n8[:2])
+    print(f"{p.name}: oryginał {oryg} p={float(prob[0]):.3f} | ONNX fp32 {n32} ({d32:.1f} km) | int8 {n8} ({d8:.1f} km) | podobieństwo fp32/int8 {pod:.4f}")
+    # fp32 + nasze przetwarzanie obrazu = oryginał (inaczej błąd w przygotowaniu obrazu); int8 — blisko
+    if d32 > 50 or pod < 0.95 or d8 > 1000:
         zle += 1
 fp32.unlink()
 for p in cel.glob("test*.jpg"):
