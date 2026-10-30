@@ -39,8 +39,12 @@ class Obraz(torch.nn.Module):
 
 
 fp32 = cel / "geoclip-obraz-fp32.onnx"
-torch.onnx.export(Obraz(model), torch.randn(1, 3, 224, 224), str(fp32), input_names=["pixel_values"], output_names=["cecha"],
-                  dynamic_axes={"pixel_values": {0: "n"}, "cecha": {0: "n"}}, opset_version=17, do_constant_folding=True)
+opcje = dict(input_names=["pixel_values"], output_names=["cecha"], dynamic_axes={"pixel_values": {0: "n"}, "cecha": {0: "n"}},
+             opset_version=17, do_constant_folding=True)
+try:   # klasyczny eksporter (TorchScript) — przewidywalny dla ViT i osi wsadu
+    torch.onnx.export(Obraz(model), torch.randn(1, 3, 224, 224), str(fp32), dynamo=False, **opcje)
+except TypeError:   # starszy torch bez parametru dynamo
+    torch.onnx.export(Obraz(model), torch.randn(1, 3, 224, 224), str(fp32), **opcje)
 int8 = cel / kg.PLIK_MODELU
 quantize_dynamic(str(fp32), str(int8), weight_type=QuantType.QInt8)
 
