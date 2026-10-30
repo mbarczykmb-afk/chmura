@@ -37,6 +37,11 @@ const GPS_ZRODLA = {slad: "🥾 Ślad", sasiad: "📷 Zdjęcie obok", wizyta: "�
   .gps-adres small{display:block;color:var(--mut);font-size:12px}
   .gps-adres .gps-ad-wiersz+.gps-ad-wiersz{margin-top:6px;padding-top:6px;border-top:1px solid var(--lin)}
   .gps-etyk{background:var(--panel);color:var(--fg);border:1px solid var(--lin);border-radius:8px;font-size:12px;font-weight:600;padding:3px 8px;box-shadow:var(--cien)}
+  .gps-wpisz{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+  .gps-wpisz input{width:100%;padding:8px 10px;border:1px solid var(--lin);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+  .gps-wyniki{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto}
+  .gps-wyniki .gps-wynik{text-align:left;font-size:12.5px;padding:6px 10px;white-space:normal}
+  .gps-reczne-opis{margin-top:4px;color:var(--fg)}
   .gps-mp{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--mut)}
   .gps-zrodla{display:flex;gap:6px;flex-wrap:wrap}
   @media (max-width:900px){.gps-uklad{grid-template-columns:1fr}.gps-prawa{position:relative;height:320px}}`;
@@ -177,18 +182,36 @@ function kartaGps(x) {
   rysujMin(false);
   k.append(m);
   const a = gpsEl("div", {className: "gps-akcje"});
-  a.append(przycisk(`✓ Dodaj lokalizację (${x.n})`, e => { e.stopPropagation(); przyjmijGps(x); }, "Zapisuje propozycję w zdjęciach (JPEG — EXIF, inne — .xmp obok); można cofnąć", "akt"));
+  a.append(przycisk(x.reczne ? `✓ Dodaj własną lokalizację (${x.n})` : `✓ Dodaj lokalizację (${x.n})`, e => { e.stopPropagation(); przyjmijGps(x); }, "Zapisuje propozycję w zdjęciach (JPEG — EXIF, inne — .xmp obok); można cofnąć", "akt"));
   a.append(przycisk("✕ Odrzuć", async e => {
     e.stopPropagation();
     try { await post("/api/g/gps/odrzuc", {ids: x.ids, typ: x.typ}); usunGps(x); toastG("Odrzucono — ta propozycja nie wróci."); } catch (er) { toastG(er.message); }
   }, "Ta propozycja nie wróci przy kolejnym szukaniu (inne źródła — tak)"));
-  k.append(a);
+  const wp = gpsPoleMiejsca(x, k);
+  a.append(wp.przyc);
+  k.append(a, wp.opis, wp.pole);
+  if (x.reczne) wp.opis.textContent = `✎ Własna lokalizacja: ${x.reczneNazwa || x.reczne.map(v => v.toFixed(5)).join(", ")}`;
   return k;
 }
 
 // ---------- adres punktu na mapie: z OpenStreetMap (Nominatim, po zgodzie) albo z nazw miejsc bez internetu ----------
 const gpsAdresy = {pam: new Map(), ostatnie: 0, kolejka: Promise.resolve()};
 const gpsAdresWl = () => { try { return localStorage.getItem("kat_gps_adres") !== "0"; } catch (e) { return true; } };
+function gpsOsm(url) {   // → json albo null; wszystkie zapytania do Nominatim idą jedno po drugim, co najmniej 1,1 s od siebie
+  const p = gpsAdresy.kolejka.then(async () => {
+    const czekaj = 1100 - (Date.now() - gpsAdresy.ostatnie);
+    if (czekaj > 0) await new Promise(r => setTimeout(r, czekaj));
+    gpsAdresy.ostatnie = Date.now();
+    try {
+      const ac = new AbortController(), t = setTimeout(() => ac.abort(), 8000);
+      const r = await fetch(url, {signal: ac.signal, headers: {Accept: "application/json"}});
+      clearTimeout(t);
+      return r.ok ? await r.json() : null;
+    } catch (e) { return null; }
+  });
+  gpsAdresy.kolejka = p.catch(() => null);
+  return p;
+}
 function gpsAdres(lat, lon) {   // → {glowna, reszta} albo null (brak internetu / wyłączone)
   const k = `${lat.toFixed(4)},${lon.toFixed(4)}`;
   if (gpsAdresy.pam.has(k)) return Promise.resolve(gpsAdresy.pam.get(k));
@@ -217,10 +240,69 @@ function gpsAdres(lat, lon) {   // → {glowna, reszta} albo null (brak internet
   });
   return gpsAdresy.kolejka;
 }
+// ---------- własna lokalizacja: współrzędne, nazwa miejscowości (program, bez internetu — Polska) albo adres (OpenStreetMap) ----------
+async function gpsSzukajMiejsca(q) {   // → [{nazwa, lat, lon}]
+  q = q.trim();
+  if (q.length < 2) return [];
+  const m = q.match(/^\s*(-?\d{1,3}(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:[.,]\d+)?)\s*$/);   // „49.29, 19.95” albo „49,29 19,95”
+  if (m) {
+    const la = parseFloat(m[1].replace(",", ".")), lo = parseFloat(m[2].replace(",", "."));
+    if (Math.abs(la) <= 90 && Math.abs(lo) <= 180) return [{nazwa: `współrzędne ${la.toFixed(5)}, ${lo.toFixed(5)}`, lat: la, lon: lo}];
+  }
+  const wynik = [];
+  try { for (const x of (await api("/api/g/miejsce", {q})).miejsca || []) wynik.push({nazwa: x.nazwa + " (Polska)", lat: x.lat, lon: x.lon}); } catch (e) { /* bez listy z programu */ }
+  if (gpsAdresWl()) {
+    const j = await gpsOsm(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=pl&q=${encodeURIComponent(q)}`);
+    for (const x of Array.isArray(j) ? j : []) wynik.push({nazwa: x.display_name, lat: +x.lat, lon: +x.lon});
+  }
+  return wynik.slice(0, 10);
+}
+function gpsUstawReczne(x, lat, lon, nazwa) {   // własny punkt dla całej grupy: pinezka do przesunięcia, adres, podpis na karcie
+  x.reczne = [lat, lon];
+  if (nazwa) x.reczneNazwa = nazwa;
+  if (gps.wybrana !== x || !gps.mapa) return;
+  if (gps.reczny) gps.warstwy.removeLayer(gps.reczny);
+  gps.reczny = L.marker([lat, lon], {draggable: true, autoPan: true, zIndexOffset: 1000}).addTo(gps.warstwy);
+  gps.reczny.bindTooltip("Twoja lokalizacja — przeciągnij, jeśli trzeba poprawić", {direction: "top"});
+  gps.reczny.on("dragend", () => { const p = gps.reczny.getLatLng(); x.reczne = [p.lat, p.lng]; gpsPokazAdres(x); });
+  gps.mapa.setView([lat, lon], Math.max(gps.mapa.getZoom(), 12));
+  gpsPokazAdres(x);
+  const k = document.querySelectorAll(".gps-gr")[gps.grupy.indexOf(x)];
+  if (k) { const o = k.querySelector(".gps-reczne-opis"); if (o) o.textContent = `✎ Własna lokalizacja: ${x.reczneNazwa || x.reczne.map(v => v.toFixed(5)).join(", ")}`;
+           const b = k.querySelector(".gps-akcje .akt"); if (b) b.textContent = `✓ Dodaj własną lokalizację (${x.n})`; }
+}
+function gpsPoleMiejsca(x, k) {   // wiersz „Wpisz miejsce” pod kartą grupy
+  const pole = gpsEl("div", {className: "gps-wpisz", hidden: true});
+  const wej = gpsEl("input", {type: "text", placeholder: "Miejscowość, adres albo współrzędne (np. 49.29, 19.95)…", autocomplete: "off"});
+  const lista = gpsEl("div", {className: "gps-wyniki"});
+  const opis = gpsEl("div", {className: "m gps-reczne-opis"});
+  let zegar = null, numer = 0;
+  const szukaj = async () => {
+    const my = ++numer; lista.textContent = "Szukam…";
+    const w = await gpsSzukajMiejsca(wej.value);
+    if (my !== numer) return;
+    lista.replaceChildren();
+    if (!w.length) { lista.textContent = wej.value.trim().length < 2 ? "" : "Nic nie znaleziono — spróbuj inaczej albo kliknij miejsce na mapie."; return; }
+    for (const r of w) {
+      const b = przycisk(r.nazwa, e => { e.stopPropagation(); wybierzGps(x); gpsUstawReczne(x, r.lat, r.lon, r.nazwa.replace(/ \(Polska\)$/, "")); lista.replaceChildren(); }, "Ustaw dla całej grupy", "gps-wynik");
+      lista.append(b);
+    }
+  };
+  wej.oninput = () => { clearTimeout(zegar); zegar = setTimeout(szukaj, 450); };
+  wej.onkeydown = e => { if (e.key === "Enter") { clearTimeout(zegar); szukaj(); } e.stopPropagation(); };
+  wej.onclick = e => e.stopPropagation();
+  pole.onclick = e => e.stopPropagation();
+  pole.append(wej, gpsEl("div", {className: "m", textContent: "Wybierz z listy albo kliknij miejsce na mapie. Zdjęcia z tej grupy dostaną tę samą lokalizację."}), lista);
+  const przyc = przycisk("✎ Wpisz miejsce", e => {
+    e.stopPropagation(); wybierzGps(x); pole.hidden = !pole.hidden; x.wpisuje = !pole.hidden; if (!pole.hidden) wej.focus();
+  }, "Znasz to miejsce? Wpisz nazwę, adres albo współrzędne (albo kliknij na mapie)");
+  return {pole, przyc, opis};
+}
+
 async function gpsPokazAdres(x, numer) {
   if (!gps.mapa) return;
   if (gps.adresKontrolka) { gps.mapa.removeControl(gps.adresKontrolka); gps.adresKontrolka = null; }
-  const pkt = x.punkty.map(p => [p[1], p[2]]);
+  const pkt = x.reczne ? [x.reczne] : x.punkty.map(p => [p[1], p[2]]);
   const a = pkt[0], b = pkt[pkt.length - 1];
   const dalekie = pkt.length > 1 && Math.hypot((a[0] - b[0]) * 111, (a[1] - b[1]) * 70) > 3;   // początek i koniec w różnych miejscach
   const wiersze = [[a, dalekie ? "Początek" : ""]].concat(dalekie ? [[b, "Koniec"]] : []);
@@ -228,7 +310,7 @@ async function gpsPokazAdres(x, numer) {
   kon.onAdd = () => {
     const d = L.DomUtil.create("div", "gps-adres"); L.DomEvent.disableClickPropagation(d);
     for (const [, et] of wiersze) {
-      const w = gpsEl("div", {className: "gps-ad-wiersz"}, gpsEl("b", {textContent: (et ? et + ": " : "") + (x.miejsce || "…")}), gpsEl("small", {textContent: "szukam adresu…"}));
+      const w = gpsEl("div", {className: "gps-ad-wiersz"}, gpsEl("b", {textContent: (et ? et + ": " : "") + (x.reczne ? (x.reczneNazwa || "…") : (x.miejsce || "…"))}), gpsEl("small", {textContent: "szukam adresu…"}));
       d.append(w);
     }
     const mp = gpsEl("label", {className: "gps-mp", title: "Współrzędne pokazanego punktu są wysyłane do nominatim.openstreetmap.org (ta sama usługa OpenStreetMap, z której jest podkład mapy). Wyłącz, jeśli wolisz tylko nazwy z programu."});
@@ -256,6 +338,10 @@ function gpsMapa() {
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'}).addTo(gps.mapa);
   gps.warstwy = L.layerGroup().addTo(gps.mapa);
+  gps.mapa.on("click", e => {   // klik na mapie, gdy przy grupie otwarte „Wpisz miejsce” — własny punkt
+    const x = gps.wybrana;
+    if (x && x.wpisuje) gpsUstawReczne(x, e.latlng.lat, e.latlng.lng, "");
+  });
   setTimeout(() => gps.mapa.invalidateSize(), 50);
 }
 
@@ -298,8 +384,10 @@ function wybierzGps(x) {
       e.bindTooltip(x.miejsce, {permanent: true, direction: "bottom", offset: [0, 10], className: "gps-etyk"}); gps.etykieta = e;
     }
   }
-  gpsPokazAdres(x);
-  if (granice.length) gps.mapa.fitBounds(L.latLngBounds(granice).pad(0.25), {maxZoom: x.typ === "geoclip" ? 9 : 16});
+  gps.reczny = null;
+  if (x.reczne) gpsUstawReczne(x, x.reczne[0], x.reczne[1], "");
+  else gpsPokazAdres(x);
+  if (granice.length && !x.reczne) gps.mapa.fitBounds(L.latLngBounds(granice).pad(0.25), {maxZoom: x.typ === "geoclip" ? 9 : 16});
 }
 
 function usunGps(x) {
@@ -316,7 +404,7 @@ async function przyjmijGps(x) {
   // punkty z tą samą pozycją zapisujemy razem; GeoCLIP — jeden (być może przesunięty) punkt dla całej grupy
   const porcje = new Map();
   for (const [id, la, lo] of x.punkty) {
-    const [pla, plo] = x.jeden_punkt && gps.wybrana === x && gps.punkt ? gps.punkt : [la, lo];
+    const [pla, plo] = x.reczne ? x.reczne : (x.jeden_punkt && gps.wybrana === x && gps.punkt ? gps.punkt : [la, lo]);
     const k = `${pla.toFixed(5)},${plo.toFixed(5)}`;
     if (!porcje.has(k)) porcje.set(k, {la: +pla.toFixed(6), lo: +plo.toFixed(6), ids: []});
     porcje.get(k).ids.push(id);
