@@ -174,6 +174,8 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.53.4:** Ta sama zawartość co 1.53.3 (adres przy punkcie w „Bez GPS”, naprawa „Bad Request” i błędu bazy) — wydanie 1.53.3 nie opublikowało się z powodu awarii GitHuba (błąd 500), więc wychodzi jako 1.53.4.
+
 **1.53.3:** 📍 „Bez GPS”: przy punkcie na mapie jest teraz **nazwa miejscowości**, a w rogu mapy **adres** (ulica, miejscowość, region, kraj) z OpenStreetMap — wystarczy zaznaczyć propozycję; gdy brak internetu albo opcję wyłączysz, zostaje nazwa z danych programu (miejscowość w Polsce, za granicą kraj). Każda karta ma też podpis „okolice: …”. Współrzędne pokazanego punktu idą wtedy do nominatim.openstreetmap.org (ta sama usługa co podkład mapy); przełącznik „adres z internetu” jest w rogu mapy. **Naprawa:** przycisk „Użyj: C:\Claude\…\sports-tracker” (oraz GeoCLIP i pole folderu GPX) kończył się komunikatem „Bad Request” mimo poprawnego zapisu. **Naprawa:** rzadki błąd „duplicate column name: ukryty” przy równoczesnym otwarciu bazy Przeglądarki przez żądanie i skan w tle.
 
 **1.53.2:** 📍 „Bez GPS”: miniatury w propozycjach są większe i **zmieniają rozmiar suwakiem** u góry (jak w całej Przeglądarce); kliknięcie zdjęcia otwiera je na cały ekran z powiększaniem. Grupa pokazuje 6 zdjęć, resztę — przyciskiem „Pokaż wszystkie”.
