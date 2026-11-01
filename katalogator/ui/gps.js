@@ -188,6 +188,7 @@ function kartaGps(x) {
     try { await post("/api/g/gps/odrzuc", {ids: x.ids, typ: x.typ}); usunGps(x); toastG("Odrzucono — ta propozycja nie wróci."); } catch (er) { toastG(er.message); }
   }, "Ta propozycja nie wróci przy kolejnym szukaniu (inne źródła — tak)"));
   const wp = gpsPoleMiejsca(x, k);
+  a.append(gpsEl("span", {className: "m", style: "flex-basis:100%", textContent: "Zły punkt? Przeciągnij pinezkę na mapie albo wpisz miejsce."}));
   a.append(wp.przyc);
   k.append(a, wp.opis, wp.pole);
   if (x.reczne) wp.opis.textContent = `✎ Własna lokalizacja: ${x.reczneNazwa || x.reczne.map(v => v.toFixed(5)).join(", ")}`;
@@ -229,9 +230,10 @@ function gpsAdres(lat, lon) {   // → {glowna, reszta} albo null (brak internet
       if (r.ok) {
         const a = (await r.json()).address || {};
         const ulica = [a.road || a.pedestrian || a.footway || a.path, a.house_number].filter(Boolean).join(" ");
-        const miasto = a.city || a.town || a.village || a.municipality || a.hamlet || a.suburb || a.city_district || "";
-        const reg = [a.county, a.state].filter(x => x && x !== miasto)[0] || "";
-        w = {glowna: [miasto, a.country].filter(Boolean).join(", ") || (a.country || ""), reszta: [ulica, reg].filter(Boolean).join(" · ")};
+        // najpierw sama miejscowość / dzielnica (np. Curral das Freiras), dopiero potem gmina (Câmara de Lobos) i region
+        const miasto = a.hamlet || a.village || a.town || a.city || a.suburb || a.quarter || a.neighbourhood || a.city_district || a.municipality || "";
+        const wyzej = [a.municipality, a.city, a.town, a.county, a.state].filter((x, i, t) => x && x !== miasto && t.indexOf(x) === i);
+        w = {glowna: [miasto, a.country].filter(Boolean).join(", ") || (a.country || ""), reszta: [ulica, ...wyzej.slice(0, 2)].filter(Boolean).join(" · ")};
         if (!w.glowna && !w.reszta) w = null;
       }
     } catch (e) { w = null; }
@@ -257,15 +259,19 @@ async function gpsSzukajMiejsca(q) {   // → [{nazwa, lat, lon}]
   }
   return wynik.slice(0, 10);
 }
-function gpsUstawReczne(x, lat, lon, nazwa) {   // własny punkt dla całej grupy: pinezka do przesunięcia, adres, podpis na karcie
-  x.reczne = [lat, lon];
-  if (nazwa) x.reczneNazwa = nazwa;
-  if (gps.wybrana !== x || !gps.mapa) return;
+function gpsPinezka(x, la, lo) {   // jedna pinezka na grupę — zawsze do przeciągnięcia myszką (przeciągnięcie = własny punkt dla całej grupy)
   if (gps.reczny) gps.warstwy.removeLayer(gps.reczny);
-  gps.reczny = L.marker([lat, lon], {draggable: true, autoPan: true, zIndexOffset: 1000}).addTo(gps.warstwy);
-  gps.reczny.bindTooltip("Twoja lokalizacja — przeciągnij, jeśli trzeba poprawić", {direction: "top"});
-  gps.reczny.on("dragend", () => { const p = gps.reczny.getLatLng(); x.reczne = [p.lat, p.lng]; gpsPokazAdres(x); });
-  gps.mapa.setView([lat, lon], Math.max(gps.mapa.getZoom(), 12));
+  const m = L.marker([la, lo], {draggable: true, autoPan: true, zIndexOffset: 1000}).addTo(gps.warstwy);
+  const podp = () => x.reczne ? "Twoja lokalizacja — przeciągnij, jeśli trzeba poprawić" : "Propozycja — przeciągnij pinezkę, aby poprawić miejsce dla całej grupy";
+  m.bindTooltip(podp(), {direction: "top"});
+  m.on("dragend", () => { const p = m.getLatLng(); gpsUstawReczne(x, p.lat, p.lng, "", false); m.setTooltipContent(podp()); });
+  gps.reczny = m;
+}
+function gpsUstawReczne(x, lat, lon, nazwa, przesun = true) {   // własny punkt dla całej grupy: pinezka do przesunięcia, adres, podpis na karcie
+  x.reczne = [lat, lon];
+  x.reczneNazwa = nazwa || "";
+  if (gps.wybrana !== x || !gps.mapa) return;
+  if (przesun) { gpsPinezka(x, lat, lon); gps.mapa.setView([lat, lon], Math.max(gps.mapa.getZoom(), 12)); }
   gpsPokazAdres(x);
   const k = document.querySelectorAll(".gps-gr")[gps.grupy.indexOf(x)];
   if (k) { const o = k.querySelector(".gps-reczne-opis"); if (o) o.textContent = `✎ Własna lokalizacja: ${x.reczneNazwa || x.reczne.map(v => v.toFixed(5)).join(", ")}`;
@@ -360,14 +366,10 @@ function wybierzGps(x) {
   }
   if (x.jeden_punkt) {   // GeoCLIP: jeden punkt dla całej grupy — można przesunąć albo wybrać inną propozycję
     const [, la, lo] = x.punkty[0];
-    gps.punkt = [la, lo];
-    const m = L.marker([la, lo], {draggable: true, autoPan: true}).addTo(gps.warstwy);
-    m.bindTooltip("Propozycja — przeciągnij, jeśli trzeba poprawić", {direction: "top"});
-    m.on("dragend", () => { const p = m.getLatLng(); gps.punkt = [p.lat, p.lng]; });
     for (const [ala, alo, p] of x.alternatywy || []) {
       L.circleMarker([ala, alo], {radius: 7, color: "#64748b", fillColor: "#94a3b8", fillOpacity: 0.8, weight: 2})
         .bindTooltip(`Inna możliwość (~${Math.round(p * 100)}%) — kliknij, aby wybrać`, {direction: "top"})
-        .on("click", () => { m.setLatLng([ala, alo]); gps.punkt = [ala, alo]; }).addTo(gps.warstwy);
+        .on("click", () => gpsUstawReczne(x, ala, alo, "")).addTo(gps.warstwy);
       granice.push([ala, alo]);
     }
     granice.push([la, lo]);
@@ -385,8 +387,11 @@ function wybierzGps(x) {
     }
   }
   gps.reczny = null;
-  if (x.reczne) gpsUstawReczne(x, x.reczne[0], x.reczne[1], "");
-  else gpsPokazAdres(x);
+  if (x.reczne) gpsUstawReczne(x, x.reczne[0], x.reczne[1], x.reczneNazwa || "");
+  else {   // propozycja jako pinezka do przeciągnięcia (GeoCLIP: punkt grupy; reszta: pierwsze zdjęcie)
+    gpsPinezka(x, x.punkty[0][1], x.punkty[0][2]);
+    gpsPokazAdres(x);
+  }
   if (granice.length && !x.reczne) gps.mapa.fitBounds(L.latLngBounds(granice).pad(0.25), {maxZoom: x.typ === "geoclip" ? 9 : 16});
 }
 
