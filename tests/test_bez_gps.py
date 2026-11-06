@@ -203,3 +203,20 @@ def test_http_zapis_ustawien_nie_zwraca_400(tmp_path):
         assert zapytanie("POST", "/api/g/gps/ustawienia", {"folder_gpx": str(tmp_path / "nie-ma")})[0] == 400
     finally:
         serwer.shutdown()
+
+
+def test_podroze_zdjecia_z_biblioteki(biblioteka):
+    """Podróże biorą zdjęcia wyprawy z bazy Przeglądarki (data, GPS, miniatura) — bez skanowania dysków."""
+    from types import SimpleNamespace
+    from katalogator import aplikacja
+    ja = SimpleNamespace(przegladarka=SimpleNamespace(galeria=biblioteka))
+    lista = aplikacja.Stan.podroze_zdjecia(ja, "2025-08-01", "2025-08-02")
+    nazwy = [p["name"] for p in lista]
+    assert "nic.jpg" not in nazwy and {"z_gps.jpg", "obok.jpg", "szlak1.jpg"} <= set(nazwy)
+    gps = {p["name"]: p for p in lista}
+    assert gps["z_gps.jpg"]["hasGps"] and gps["z_gps.jpg"]["lat"] == pytest.approx(50.0, abs=1e-3)
+    assert not gps["obok.jpg"]["hasGps"] and gps["obok.jpg"]["lat"] is None
+    assert gps["z_gps.jpg"]["url"].startswith("api/library-mini?id=") and gps["z_gps.jpg"]["fullUrl"].startswith("api/photo?path=")
+    assert aplikacja.Stan.podroze_zdjecia(ja, "2025-08-02", "2025-08-01") == []          # odwrócony zakres
+    assert aplikacja.Stan.podroze_zdjecia(ja, "2020-01-01", "2025-08-01") == []          # zbyt długi zakres
+    assert aplikacja.Stan.podroze_zdjecia(ja, "zle", "2025-08-01") == []

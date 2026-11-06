@@ -662,7 +662,7 @@ class PhotoMatcher {
     const thumbsStrip = document.getElementById('lightbox-thumbs-strip');
 
     // Load full-res URL, with thumbnail fallback while loading
-    img.src = photo.url || photo.thumbnailUrl;
+    img.src = photo.fullUrl || photo.url || photo.thumbnailUrl;
     img.onerror = () => {
       // Fallback SVG indicating drive U status
       img.src = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="100%" height="100%" fill="%230f172a"/><text x="50%" y="45%" fill="%2300f0ff" font-size="40" text-anchor="middle">📷</text><text x="50%" y="60%" fill="%23f8fafc" font-size="16" font-family="sans-serif" font-weight="bold" text-anchor="middle">${encodeURIComponent(photo.filename || photo.name)}</text><text x="50%" y="70%" fill="%2394a3b8" font-size="13" font-family="sans-serif" text-anchor="middle">Brak pliku (podłącz dysk ze zdjęciami)</text></svg>`;

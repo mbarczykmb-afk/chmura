@@ -236,7 +236,7 @@ def zastepcze_svg(nazwa: str) -> bytes:
 
 
 # --- odpowiedzi serwera --------------------------------------------------------------------------------------------------
-def odpowiedz_get(katalog, rel: str, q: dict, korzenie: list[str], szukaj=None) -> tuple:
+def odpowiedz_get(katalog, rel: str, q: dict, korzenie: list[str], szukaj=None, biblioteka=None) -> tuple:
     """Co odpowiedzieć na GET /podroze/<rel>. Zwraca:
     ("plik", Path, typ, cache) | ("bajty", dane, typ) | ("json", obiekt) | ("brak",) | ("zabronione",)."""
     if rel == "api/version":
@@ -244,6 +244,14 @@ def odpowiedz_get(katalog, rel: str, q: dict, korzenie: list[str], szukaj=None) 
     if rel == "api/user-photos":
         p = zdjecia_json(katalog)
         return ("plik", p, "application/json; charset=utf-8", "no-cache") if p else ("json", {"error": "No indexed photos found"}, 404)
+    if rel == "api/library-photos" and biblioteka:
+        return ("json", biblioteka.podroze_zdjecia((q.get("od") or [""])[0], (q.get("do") or [""])[0]))
+    if rel == "api/library-mini" and biblioteka:
+        try:
+            dane = biblioteka.miniatura(int((q.get("id") or ["0"])[0]))
+        except (ValueError, OSError):
+            dane = None
+        return ("bajty", dane, "image/jpeg") if dane else ("brak",)
     if rel == "api/photo":
         zadanie = (q.get("path") or q.get("file") or [""])[0]
         p, kod = rozwiaz_zdjecie(zadanie, korzenie, katalog, szukaj)

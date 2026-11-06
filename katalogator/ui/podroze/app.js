@@ -3294,9 +3294,42 @@ function renderPhotoMatcherModalList() {
   `).join('');
 }
 
+// Zdjęcia wyprawy z biblioteki Katalogatora: po dacie wyprawy (z bazy Przeglądarki — data, GPS, miniatury)
+async function loadLibraryPhotosForTrip(trip) {
+  if (!trip || !trip.startDate) return false;
+  const dzien = (d) => d instanceof Date ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : String(d).slice(0, 10);
+  const od = dzien(trip.startDate), doo = dzien(trip.endDate || trip.startDate);
+  let lista;
+  try {
+    const r = await fetch(`api/library-photos?od=${od}&do=${doo}`);
+    if (!r.ok) return false;
+    lista = await r.json();
+  } catch (e) { return false; }
+  if (!Array.isArray(lista) || !lista.length) return false;
+  const reczne = (trip.photos || []).filter(p => !p.fromLibrary);
+  const zbior = lista.map(p => {
+    const f = { ...p, timestamp: new Date(p.timestamp) };
+    if (window.photoMatcher && window.photoMatcher.matchPhotoToTrip) window.photoMatcher.matchPhotoToTrip(f, trip);
+    const idx = (trip.days || []).findIndex(d => d.date === String(p.timestamp).slice(0, 10));   // dzień wg czasu lokalnego zdjęcia
+    if (idx >= 0) f.dayNumber = idx + 1;
+    return f;
+  });
+  trip.photos = reczne.concat(zbior);
+  window.photoMatcher.photos = trip.photos;
+  renderTripDetail(trip);
+  renderPhotoMatcherModalList();
+  const zgps = zbior.filter(p => p.hasGps).length;
+  alert(`Wczytano ${zbior.length} zdjęć z biblioteki Katalogatora (${zgps} z GPS) dla wyprawy „${trip.title}”.`);
+  return true;
+}
+
 function loadUserPhotosFromIndex() {
   const trip = detectedTrips[currentTripIndex];
   if (!trip) return;
+  loadLibraryPhotosForTrip(trip).then(ok => { if (!ok) loadUserPhotosFromIndexStare(trip); });
+}
+
+function loadUserPhotosFromIndexStare(trip) {
 
   const isMadeira = trip.title && (trip.title.includes('Madera') || trip.title.includes('ITAKA'));
 

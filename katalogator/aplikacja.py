@@ -6,6 +6,7 @@ ani komputery w sieci nie mają do niego dostępu.
 
 from __future__ import annotations
 
+import datetime
 import hashlib
 import hmac
 import json
@@ -23,7 +24,7 @@ import http.cookies
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, most, naprawa, odzyskiwanie, pilot, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, twarze, usuwanie, wykonawca, wysylanie)
@@ -95,6 +96,32 @@ class Stan:
         finally:
             db.close()
         return r[0] if r else None
+
+    def podroze_zdjecia(self, od: str, do: str) -> list[dict]:
+        """Zdjęcia z biblioteki Przeglądarki z podanego zakresu dat (RRRR-MM-DD), z GPS i datą — dla wyprawy w Podróżach."""
+        try:
+            d0 = datetime.date.fromisoformat((od or "")[:10])
+            d1 = datetime.date.fromisoformat((do or "")[:10])
+        except ValueError:
+            return []
+        if d1 < d0 or (d1 - d0).days > 120:
+            return []
+        db = self.przegladarka.galeria._db()
+        try:
+            wiersze = db.execute("SELECT rowid, sciezka, wzgledna, data, lat, lon FROM pliki WHERE rodzaj = 'zdjecie' AND data >= ? AND data < ? "
+                                 "ORDER BY data LIMIT 3000",
+                                 (d0.isoformat(), (d1 + datetime.timedelta(days=1)).isoformat())).fetchall()
+        finally:
+            db.close()
+        wynik = []
+        for rid, sciezka, wzgl, data, lat, lon in wiersze:
+            nazwa = os.path.basename(wzgl or sciezka)
+            gps = lat is not None and lon is not None
+            wynik.append({"id": f"lib{rid}", "name": nazwa, "filename": nazwa, "filePath": sciezka, "timestamp": data,
+                          "url": f"api/library-mini?id={rid}", "fullUrl": "api/photo?path=" + quote(sciezka),
+                          "lat": lat if gps else None, "lon": lon if gps else None, "hasGps": gps,
+                          "geotagSource": "exif_camera" if gps else "", "fromLibrary": True})
+        return wynik
 
     def podroze_info(self) -> dict:
         return {**podroze.stan(self.katalog, self.podroze_ust(), self.podroze_korzenie()), "slady": slady.stan(self.katalog)}
@@ -1453,7 +1480,7 @@ def _handler(stan: Stan, token: str, zamknij):
                 ciastko = {"Set-Cookie": f"kat_podroze={token}; Path=/podroze; HttpOnly; SameSite=Strict"}
                 return self._wyslij((podroze.UI_PODROZE / "index.html").read_bytes(), "text/html; charset=utf-8",
                                     dodatkowe=ciastko)
-            w = podroze.odpowiedz_get(stan.katalog, rel, q, stan.podroze_korzenie(), stan.podroze_szukaj)
+            w = podroze.odpowiedz_get(stan.katalog, rel, q, stan.podroze_korzenie(), stan.podroze_szukaj, stan)
             if w[0] == "plik":
                 return podroze.wyslij_plik(self, w[1], w[2], w[3])
             if w[0] == "bajty":

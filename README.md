@@ -174,6 +174,8 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.55.0:** Podróże biorą zdjęcia wyprawy z biblioteki Katalogatora (baza Przeglądarki: data, GPS, miniatury) zamiast skanować dysk U:\ — przycisk „Wczytaj zdjęcia z biblioteki” w wyprawie pobiera zdjęcia z jej dat, przypisuje je do dni i miejsc, pełny podgląd otwiera oryginał.
+
 **1.54.0:** Podróże — nowa oś czasu wypraw na górze: pasek słupków z liczbą wypraw w każdym roku (kliknięcie przybliża rok), automatyczna skala (na starcie ostatnie 3 lata), przycisk „Wszystko”, podpowiedź z datami i państwami, nazwy miesięcy przy dużym przybliżeniu, Ctrl+kółko = zoom, kółko = przewijanie. Przy dużej liczbie wypraw znikają podpisy, zostają same kropki.
 
 **1.53.6:** 📍 „Bez GPS”: **pinezkę na mapie można przeciągnąć myszką** — przeciągnięcie ustawia własny punkt dla całej grupy (pod kartą podpowiedź „Zły punkt? Przeciągnij pinezkę…”); to samo robi klik w mapę po otwarciu „Wpisz miejsce”. **Adres:** na pierwszym miejscu jest teraz sama miejscowość lub dzielnica (np. „Curral das Freiras, Portugalia”), a gmina i region (np. Câmara de Lobos · Madeira) w drugiej linii.
