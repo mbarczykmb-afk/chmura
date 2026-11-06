@@ -31,6 +31,15 @@
 .np-os-rok{position:absolute;top:0;bottom:22px;border-left:1px solid var(--kat-lin);pointer-events:none}
 .np-os-rok span{position:absolute;left:5px;bottom:-20px;font-size:11px;font-weight:800;color:var(--kat-mut)}
 .np-os-msc{position:absolute;bottom:22px;height:6px;border-left:1px solid var(--kat-lin);pointer-events:none}
+.np-os-slup{position:absolute;top:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;padding:0;border:0;background:transparent;cursor:pointer}
+.np-os-slup b{display:block;border-radius:4px 4px 1px 1px;background:var(--kat-akc);opacity:.55;transition:opacity .12s}
+.np-os-slup em{position:absolute;top:0;left:0;right:0;text-align:center;font-style:normal;font-size:10px;font-weight:800;color:var(--kat-mut)}
+.np-os-slup:hover b{opacity:1}
+.np-os-msc span{position:absolute;left:3px;top:8px;font-size:9px;color:var(--kat-mut);white-space:nowrap}
+#os-czasu{position:relative}
+.np-os-tip{position:absolute;z-index:30;display:flex;flex-direction:column;gap:2px;max-width:320px;padding:8px 11px;border-radius:10px;background:var(--kat-panel);border:1px solid var(--kat-lin);box-shadow:0 6px 20px rgba(0,0,0,.35);pointer-events:none;font-size:11px;color:var(--kat-mut)}
+.np-os-tip[hidden]{display:none}
+.np-os-tip b{font-size:12px;color:var(--kat-fg)}
 .np-os-wyp{position:absolute;height:20px;display:flex;align-items:center;gap:6px;padding:0;border:0;background:transparent;color:var(--kat-mut);
   font-size:10.5px;font-weight:700;white-space:nowrap;cursor:pointer;text-align:left;transition:opacity .12s}
 .np-os-wyp i{display:block;flex:none;height:14px;min-width:9px;border-radius:7px;box-shadow:0 1px 4px rgba(0,0,0,.45);transition:filter .12s,transform .12s}
