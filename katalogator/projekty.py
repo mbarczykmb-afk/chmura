@@ -16,10 +16,11 @@ import re
 import secrets
 import shutil
 import sqlite3
-import threading
 import time
 import unicodedata
 from pathlib import Path
+
+from . import plik_json
 
 DOMYSLNE = {"nazwa": "Mój projekt", "notatki": "", "zrodla": [], "cel": "", "przychodzace": [],
             "dom": "", "harmonogram": "",
@@ -37,31 +38,10 @@ def _slug(nazwa: str) -> str:
     return f"{s}-{secrets.token_hex(3)}"
 
 
-_BLOKADA_ZAPISU = threading.RLock()   # projekt.json zapisują różne wątki serwera — nigdy naraz
-
-
-def _czytaj_json(plik: Path, proby: int = 6) -> dict:
-    """Odczyt projekt.json odporny na chwilową blokadę pliku (Windows: antywirus, równoległa podmiana).
-    Uszkodzony plik → kopia .bak. Brak obu → {}. Plik jest, ale nieczytelny → wyjątek (NIGDY domyślne
-    wartości — inaczej zapis nadpisałby nazwę, notatki i resztę projektu)."""
-    for i in range(proby):
-        try:
-            return json.loads(plik.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            break
-        except ValueError:
-            break
-        except OSError:
-            if i == proby - 1:
-                raise
-            time.sleep(0.05 * (i + 1))
-    bak = plik.with_name(plik.name + ".bak")
-    try:
-        return json.loads(bak.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        if plik.exists() and plik.stat().st_size:
-            raise ValueError(f"Plik projektu jest uszkodzony: {plik}")
-        return {}
+def _czytaj_json(plik: Path) -> dict:
+    """Bezpieczny odczyt projekt.json (plik_json): nieczytelny plik → wyjątek, nigdy domyślne wartości."""
+    d = plik_json.czytaj(plik)
+    return d if isinstance(d, dict) else {}
 
 
 class Zajety(ValueError):
@@ -180,24 +160,9 @@ class Projekty:
         folder = self._folder(pid, musi_istniec=False)
         folder.mkdir(parents=True, exist_ok=True)
         plik = folder / "projekt.json"
-        with _BLOKADA_ZAPISU:
-            obecne = _czytaj_json(plik)   # nieczytelny plik → wyjątek, a nie projekt z domyślną nazwą
-            nowe = {**DOMYSLNE, **obecne, **{k: v for k, v in dane.items() if k != "id"}}
-            tekst = json.dumps(nowe, ensure_ascii=False, indent=2)
-            tmp = plik.with_suffix(".tmp")
-            tmp.write_text(tekst, encoding="utf-8")
-            for i in range(6):   # Windows: podmiana pliku otwartego przez czytelnika chwilowo się nie udaje
-                try:
-                    tmp.replace(plik)
-                    break
-                except PermissionError:
-                    if i == 5:
-                        raise
-                    time.sleep(0.05 * (i + 1))
-            try:   # kopia ostatniej dobrej wersji — gdyby projekt.json się uszkodził
-                (folder / "projekt.json.bak").write_text(tekst, encoding="utf-8")
-            except OSError:
-                pass
+        with plik_json.BLOKADA:
+            nowe = {**DOMYSLNE, **_czytaj_json(plik), **{k: v for k, v in dane.items() if k != "id"}}
+            plik_json.zapisz(plik, nowe)
         return {**nowe, "id": pid}
 
     def usun(self, pid: str) -> Path:

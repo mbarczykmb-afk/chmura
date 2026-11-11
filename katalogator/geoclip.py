@@ -96,7 +96,7 @@ def _sha(p: Path) -> str:
     return h.hexdigest()
 
 
-def _pobierz_plik(url: str, cel: Path, postep) -> None:
+def _pobierz_plik(url: str, cel: Path, postep, suma: str | None = None) -> None:
     tmp = cel.with_name(cel.name + ".pobieranie")
     zad = urllib.request.Request(url, headers={"User-Agent": "Katalogator"})
     with urllib.request.urlopen(zad, timeout=60) as r, open(tmp, "wb") as f:  # noqa: S310 — stały adres wydania na GitHubie
@@ -106,6 +106,9 @@ def _pobierz_plik(url: str, cel: Path, postep) -> None:
             f.write(kawalek)
             mam += len(kawalek)
             postep(mam, razem)
+    if suma and _sha(tmp) != suma:   # sprawdzenie PRZED nadaniem nazwy — nigdy niesprawdzony model pod właściwą nazwą
+        tmp.unlink(missing_ok=True)
+        raise ValueError(f"{cel.name}: suma kontrolna się nie zgadza — plik usunięty.")
     os.replace(tmp, cel)
 
 
@@ -135,10 +138,7 @@ def _pobierz(katalog_modeli: Path) -> None:
             def postep(mam, razem, n=n):
                 with _blokada:
                     _stan.update(zrobione=mam // 1048576, wszystkie=razem // 1048576, komunikat=f"Pobieram {n}…")
-            _pobierz_plik(WYDANIE + n, cel, postep)
-            if _sha(cel) != sumy[n]:
-                cel.unlink(missing_ok=True)
-                raise ValueError(f"{n}: suma kontrolna się nie zgadza — plik usunięty.")
+            _pobierz_plik(WYDANIE + n, cel, postep, sumy[n])
         with _blokada:
             _stan.update(trwa=False, komunikat="Model gotowy.")
     except Exception as e:  # noqa: BLE001 — błąd ma trafić do panelu

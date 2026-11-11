@@ -406,6 +406,16 @@ class Stan:
                 lokalizacja.rozeslij(b, w["sciezki"], w.get("lat"), w.get("lon"))
         self._kopia_zapomnij(w["sciezki"])
 
+    def rozeslij_usuniecie(self, zakres: str, w: dict) -> None:
+        """🗑 Plik odłożony w Przeglądarce / projekcie znika z pozostałych baz (plan nie sięgnie po niego)."""
+        bazy = [self.projekty.baza(p["id"]) for p in self.projekty.lista()] + [self.przegladarka.baza]
+        zrodlo = self.przegladarka.baza if zakres == "przegladarka" else self.baza
+        for b in bazy:
+            if os.path.abspath(str(b)) != os.path.abspath(str(zrodlo)) and os.path.exists(b):
+                lokalizacja.rozeslij_usuniecie(b, w["usuniete_sciezki"])
+        with self.blokada:
+            self.wersja_danych += 1
+
     def rozeslij_daty(self, zakres: str, w: dict) -> None:
         """📅 Zmiana daty widoczna od razu w pozostałych projektach i w Przeglądarce."""
         bazy = [self.projekty.baza(p["id"]) for p in self.projekty.lista()] + [self.przegladarka.baza]
@@ -1836,6 +1846,8 @@ def _handler(stan: Stan, token: str, zamknij):
                     stan.rozeslij_lokalizacje(z, w)
                 if u.path == "/api/g/data" and w.get("sciezki"):
                     stan.rozeslij_daty(z, w)
+                if u.path == "/api/g/usun" and w.get("usuniete_sciezki"):
+                    stan.rozeslij_usuniecie(z, w)
                 if u.path == "/api/g/album/udostepnij" and w.get("token"):  # link działa przez serwer telefonu
                     s = stan.serwer_tel
                     w["adresy"] = [a.rstrip("/") + "/a/" + w["token"] for a in s.adresy()] if s else []

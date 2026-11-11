@@ -79,17 +79,37 @@ def sprawdz_miejsce(zrodlo: str, cel: str) -> str | None:
     return None
 
 
-def _kopiuj_plik(z: str, do: str, postep_bajty) -> None:
+FOLDER_POPRZEDNICH = "Poprzednie wersje"   # w folderze kopii: wersja sprzed ostatniego nadpisania
+
+
+def _kopiuj_plik(z: str, do: str, postep_bajty, poprzednia: str | None = None) -> None:
+    """Kopia ze sprawdzeniem (suma kontrolna źródła = suma zapisanej kopii) i fsync. Gdy `do` już istnieje,
+    a podano `poprzednia` — dotychczasowa wersja jest przenoszona tam, a nie nadpisywana (kopia to nie tylko
+    lustro: plik uszkodzony w bibliotece nie zniszczy jedynej dobrej wersji)."""
     os.makedirs(os.path.dirname(do), exist_ok=True)
     tmp = do + TMP
+    h = hashlib.blake2b(digest_size=16)
     with open(z, "rb") as fz, open(tmp, "wb") as fd:
         while True:
             k = fz.read(4 << 20)
             if not k:
                 break
+            h.update(k)
             fd.write(k)
             postep_bajty(len(k))
+        fd.flush()
+        os.fsync(fd.fileno())
+    h2 = hashlib.blake2b(digest_size=16)
+    with open(tmp, "rb") as f:
+        for k in iter(lambda: f.read(4 << 20), b""):
+            h2.update(k)
+    if h.digest() != h2.digest():
+        os.remove(tmp)
+        raise OSError(f"kopia pliku {z} nie zgadza się z oryginałem")
     shutil.copystat(z, tmp)
+    if poprzednia and os.path.exists(do):
+        os.makedirs(os.path.dirname(poprzednia), exist_ok=True)
+        os.replace(do, poprzednia)
     os.replace(tmp, do)
 
 
@@ -127,7 +147,7 @@ def kopiuj(zrodlo: str, cel: str, postep=None, przerwij=None) -> dict:
         if postep:
             postep("kopiowanie", i, len(do_zrobienia), bajty, bajty_razem=razem, plik=os.path.relpath(sc, zrodlo))
         try:
-            _kopiuj_plik(sc, do, dodaj)
+            _kopiuj_plik(sc, do, dodaj, os.path.join(cel, FOLDER_POPRZEDNICH, os.path.relpath(sc, zrodlo)))
             skopiowane += 1
         except Przerwano:
             try:
@@ -265,10 +285,10 @@ def przywroc(db: sqlite3.Connection, zrodlo: str, kopia_folder: str, sciezka: st
     odl = os.path.join(zrodlo, FOLDER_ODLOZONE, "Uszkodzone", os.path.relpath(sciezka, zrodlo))
     os.makedirs(os.path.dirname(odl), exist_ok=True)
     if os.path.exists(sciezka):
-        if os.path.exists(odl):
-            os.remove(sciezka)
-        else:
-            os.replace(sciezka, odl)
+        if os.path.exists(odl):   # już jest tam starszy uszkodzony — ten też zostaje (z dopiskiem czasu)
+            nazwa, ext = os.path.splitext(odl)
+            odl = f"{nazwa} ({time.strftime('%Y%m%d-%H%M%S')}){ext}"
+        os.replace(sciezka, odl)
     _kopiuj_plik(kop, sciezka, lambda n: None)
     st = os.stat(sciezka)
     db.execute("UPDATE sumy SET rozmiar=?, mtime=?, sprawdzone=? WHERE sciezka=?", (st.st_size, st.st_mtime, time.time(), sciezka))

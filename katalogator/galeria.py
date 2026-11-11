@@ -651,7 +651,12 @@ class Galeria:
                          if db.execute(f"SELECT 1 FROM pliki WHERE rowid=? {w}", [int(i)] + arg).fetchone()]
             if not dozwolone:
                 return {"blad": "Nie ma takiego pliku — odśwież widok."}
-            return usuwanie.usun(db, dozwolone)
+            sciezki = [r[0] for r in db.execute(
+                f"SELECT sciezka FROM pliki WHERE rowid IN ({','.join('?' * len(dozwolone))})", dozwolone)]
+            w = usuwanie.usun(db, dozwolone)
+            # odłożone pliki — do usunięcia także z pozostałych baz (projekty / Przeglądarka)
+            w["usuniete_sciezki"] = [x for x in sciezki if not os.path.exists(x)]
+            return w
         finally:
             db.close()
 
@@ -796,14 +801,14 @@ class Galeria:
         finally:
             db.close()
 
-    def edytuj_cofnij(self, id_: int, partia: int | None) -> dict:
+    def edytuj_cofnij(self, id_: int, partia: int | None, sciezka: str = "") -> dict:
         from . import edycja
         if not self._wiersz(id_):
             return {"blad": "Nie ma takiego pliku — odśwież widok."}
         db = self._db()
         try:
             self._zapomnij_miniatury(id_)
-            return edycja.cofnij(db, id_, partia)
+            return edycja.cofnij(db, id_, partia, sciezka)
         finally:
             db.close()
 
@@ -1794,7 +1799,7 @@ def obsluz_usuwanie(g: Galeria, sciezka: str, dane: dict, okno: bool = True) -> 
         op = dane.get("op") if isinstance(dane.get("op"), dict) else {}
         return g.edytuj(int(dane.get("id") or 0), op, bool(dane.get("zastap")))
     if sciezka == "/api/g/edytuj/cofnij":
-        return g.edytuj_cofnij(int(dane.get("id") or 0), int(dane.get("partia") or 0) or None)
+        return g.edytuj_cofnij(int(dane.get("id") or 0), int(dane.get("partia") or 0) or None, str(dane.get("sciezka") or ""))
     if sciezka == "/api/g/lokalizacja":
         return g.lokalizacja([int(x) for x in (dane.get("ids") or []) if str(x).isdigit()],
                              dane.get("lat"), dane.get("lon"))

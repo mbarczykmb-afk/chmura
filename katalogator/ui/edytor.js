@@ -235,7 +235,7 @@ $("ed-zapisz").onclick = async () => {
   toastG(zastap ? `✏ Zapisano zmiany w „${nowy.nazwa}” (oryginał w Odłożone/Usunięte)` : `✏ Zapisano kopię „${nowy.nazwa}”`,
     async () => {
       try {
-        const c = await post("/api/g/edytuj/cofnij", {id: nowy.id, partia: w.partia || 0});
+        const c = await post("/api/g/edytuj/cofnij", {id: nowy.id, partia: w.partia || 0, sciezka: w.sciezka || ""});
         toastG(zastap ? (c.przywrocone ? "Przywrócono oryginał" : "Nie przywrócono: " + (c.bledy || [])[0]) : "Usunięto kopię");
       } catch (e) { toastG(e.message); }
       if (biezacy() === nowy) zamknijPelny();
@@ -274,7 +274,7 @@ async function edycjaPlikow(lista, op, nazwa, pytaj = true, poZgodzie = () => {}
           if (zastap) tab[i] = nowy; else tab.splice(i + 1, 0, nowy);
         }
         if (!zastap) g.razem++;
-        zrobione.push({nowy, partia: w.partia || 0});
+        zrobione.push({nowy, partia: w.partia || 0, sciezka: w.sciezka || ""});
       } catch (e) { bl.push(e.message); }
       const n = zrobione.length + bl.length;
       postep(n);
@@ -286,7 +286,7 @@ async function edycjaPlikow(lista, op, nazwa, pytaj = true, poZgodzie = () => {}
       zrobione.length ? () => zadanieTla("↶ Cofam " + nazwa.replace(/^\S+\s/, "").toLowerCase(), zrobione.length, async krok => {
         let i = 0, zle = 0;
         for (const z of zrobione) {
-          try { await post("/api/g/edytuj/cofnij", {id: z.nowy.id, partia: z.partia}); } catch (e) { zle++; }
+          try { await post("/api/g/edytuj/cofnij", {id: z.nowy.id, partia: z.partia, sciezka: z.sciezka}); } catch (e) { zle++; }
           krok(++i);
         }
         wczytajPliki().catch(() => {});

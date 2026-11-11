@@ -128,6 +128,8 @@ class Pilot:
             s.rozeslij_lokalizacje(zakres, w)
         if w and w.get("sciezki") and sciezka == "/api/g/data":
             s.rozeslij_daty(zakres, w)
+        if w and w.get("usuniete_sciezki") and sciezka == "/api/g/usun":
+            s.rozeslij_usuniecie(zakres, w)
         if zakres == "przegladarka":
             return
         with s.blokada:

@@ -16,6 +16,7 @@ import sqlite3
 from datetime import datetime
 
 from . import indeks
+from .logi import LOG
 
 ZNACZNIK = b"katalogator:Lokalizacja"
 NASZ = b"xmlns:katalogator="  # każdy .xmp zapisany przez Katalogator (lokalizacja i/lub data)
@@ -81,6 +82,8 @@ def _zmien_exif_jpeg(sciezka: str, zmien, sprawdz) -> None:
     try:
         with open(tmp, "wb") as f:
             f.write(nowe)
+            f.flush()
+            os.fsync(f.fileno())   # zanik prądu po podmianie nie zostawi pustego oryginału
         # sprawdzenie przed podmianą: obraz się otwiera, a zapisane dane są takie, jak trzeba
         with Image.open(tmp) as im:
             im.verify()
@@ -318,6 +321,28 @@ def ustaw(db: sqlite3.Connection, ids: list[int], lat: float | None, lon: float 
     indeks.usun(sciezki)
     return {"zmienione": zmienione, "bledy": bledy[:20], "poprzednie": poprzednie, "sciezki": sciezki,
             "lat": lat, "lon": lon}
+
+
+def rozeslij_usuniecie(baza: str, sciezki: list[str]) -> int:
+    """Pliki odłożone / usunięte w jednej bazie znikają też z innej — propozycja drzewa nie sięgnie po plik,
+    który leży już w „Odłożone”. Tylko pliki, których naprawdę nie ma na dysku."""
+    sciezki = [s for s in sciezki if not os.path.exists(s)]
+    if not sciezki:
+        return 0
+    from .skaner import otworz_baze
+    n = 0
+    try:
+        db = otworz_baze(baza)
+        try:
+            for i in range(0, len(sciezki), 500):
+                cz = sciezki[i:i + 500]
+                n += db.execute(f"DELETE FROM pliki WHERE sciezka IN ({','.join('?' * len(cz))})", cz).rowcount
+            db.commit()
+        finally:
+            db.close()
+    except sqlite3.Error as e:
+        LOG.warning("Nie udało się usunąć %s plików z bazy %s: %s", len(sciezki), baza, e)
+    return n
 
 
 def rozeslij(baza: str, sciezki: list[str], lat: float | None, lon: float | None) -> None:

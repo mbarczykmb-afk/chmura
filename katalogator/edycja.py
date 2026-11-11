@@ -162,10 +162,18 @@ def zapisz(db: sqlite3.Connection, wiersz, op: dict, zastap: bool = False) -> di
         cel = sc if rozsz.lower() in (".jpg", ".jpeg") and not os.path.exists(sc) else wolna_nazwa(folder, rdzen)
     else:
         cel = wolna_nazwa(folder, f"{rdzen} (edytowane)")
-    try:
-        with open(cel, "xb") as f:
+    tmp = os.path.join(folder, "." + os.path.basename(cel) + ".katalogator-tmp")
+    try:   # zapis do pliku tymczasowego i dopiero potem nazwa — przy błędzie (sieć, brak miejsca) nie zostaje
+        with open(tmp, "wb") as f:   # niepełny JPEG w miejscu oryginału, a cofnięcie zadziała
             f.write(dane)
+            f.flush()
+            os.fsync(f.fileno())
+        os.rename(tmp, cel)
     except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
         if partia:
             usuwanie.cofnij(db, partia)
         return {"blad": f"Nie udało się zapisać: {e.strerror or e}"}
@@ -195,10 +203,14 @@ def _przenies_metadane(db: sqlite3.Connection, wiersz, cel: str, nowy: int) -> N
         skaner.dodaj_plik(db, cel, wiersz["korzen"])
 
 
-def cofnij(db: sqlite3.Connection, id_: int, partia: int | None) -> dict:
-    """Cofnięcie „Zastąp oryginał”: usuwa wersję edytowaną i przywraca oryginał z kosza programu."""
+def cofnij(db: sqlite3.Connection, id_: int, partia: int | None, sciezka: str = "") -> dict:
+    """Cofnięcie „Zastąp oryginał”: usuwa wersję edytowaną i przywraca oryginał z kosza programu.
+    `sciezka` — plik zapisany przez edycję: numer wiersza bywa później użyty ponownie, więc bez zgodności
+    ścieżki nic nie usuwamy (nieaktualne „Cofnij” nie skasuje innego zdjęcia)."""
     from . import usuwanie
     r = db.execute("SELECT sciezka FROM pliki WHERE rowid=?", (int(id_),)).fetchone()
+    if r and sciezka and os.path.normcase(r[0]) != os.path.normcase(sciezka):
+        return {"blad": "To „Cofnij” jest już nieaktualne — plik zmienił się od edycji."}
     if r:
         try:
             os.remove(r[0])

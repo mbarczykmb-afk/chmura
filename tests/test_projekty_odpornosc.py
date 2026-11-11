@@ -131,3 +131,31 @@ def test_oproznianie_kosza_nie_rusza_wlasnych_folderow(tmp_path):
     sprzatanie.usun_odlozone(db, [str(tmp_path)])
     assert not (tmp_path / "Odłożone" / "Duplikaty" / "a.jpg").exists()
     assert (tmp_path / "Odłożone" / "Wakacje 2019" / "moje.jpg").exists()
+
+
+def test_usuniecie_rozsylane_do_innej_bazy(tmp_path):
+    from katalogator import lokalizacja, skaner
+    db = skaner.otworz_baze(tmp_path / "inna.db")
+    for n in ("jest.jpg", "zniknal.jpg"):
+        db.execute("INSERT INTO pliki(sciezka, korzen, wzgledna, rozmiar, mtime, rodzaj, rozszerzenie, skan) VALUES (?,?,?,?,?,?,?,?)",
+                   (str(tmp_path / n), str(tmp_path), n, 1, 1.0, "zdjecie", ".jpg", 1))
+    db.commit(); db.close()
+    (tmp_path / "jest.jpg").write_bytes(b"x")
+    n = lokalizacja.rozeslij_usuniecie(tmp_path / "inna.db", [str(tmp_path / "jest.jpg"), str(tmp_path / "zniknal.jpg")])
+    assert n == 1   # plik, który jest na dysku, zostaje w bazie
+    db = skaner.otworz_baze(tmp_path / "inna.db")
+    assert [r[0] for r in db.execute("SELECT wzgledna FROM pliki")] == ["jest.jpg"]
+
+
+def test_kopia_zachowuje_poprzednia_wersje(tmp_path):
+    import os
+    from katalogator import kopia
+    bib, kop = tmp_path / "bib", tmp_path / "kop"
+    (bib / "2020").mkdir(parents=True)
+    (bib / "2020" / "a.jpg").write_bytes(b"dobra wersja")
+    kopia.kopiuj(str(bib), str(kop))
+    (bib / "2020" / "a.jpg").write_bytes(b"uszk")          # plik w bibliotece obcięty / zmieniony
+    os.utime(bib / "2020" / "a.jpg", (2_000_000_000, 2_000_000_000))
+    kopia.kopiuj(str(bib), str(kop))
+    assert (kop / "2020" / "a.jpg").read_bytes() == b"uszk"
+    assert (kop / kopia.FOLDER_POPRZEDNICH / "2020" / "a.jpg").read_bytes() == b"dobra wersja"

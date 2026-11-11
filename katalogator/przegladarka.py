@@ -9,7 +9,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import dyski, galeria, skaner, stabilnosc
+from . import dyski, galeria, plik_json, skaner, stabilnosc
 from .logi import LOG
 
 
@@ -43,12 +43,9 @@ class Przegladarka:
         return self.katalog / "zestawy.json"
 
     def _zestawy(self) -> dict:
-        try:
-            d = json.loads(self._plik().read_text(encoding="utf-8"))
-            if isinstance(d, dict) and d.get("zestawy"):
-                return d
-        except (OSError, ValueError):
-            pass
+        d = plik_json.czytaj(self._plik())   # nieczytelny plik → wyjątek, a nie jeden pusty zestaw „Moje dyski”
+        if isinstance(d, dict) and d.get("zestawy"):
+            return d
         stare = []  # do 1.9.1 jedna lista w foldery.json
         try:
             stare = [str(f) for f in json.loads((self.katalog / "foldery.json").read_text(encoding="utf-8"))]
@@ -57,9 +54,7 @@ class Przegladarka:
         return {"aktywny": 1, "zestawy": [{"id": 1, "nazwa": "Moje dyski", "foldery": stare}]}
 
     def _zapisz_zestawy(self, d: dict) -> None:
-        tmp = self._plik().with_suffix(".nowy")
-        tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
-        os.replace(tmp, self._plik())
+        plik_json.zapisz(self._plik(), d, 1)
 
     def _aktywny(self, d: dict) -> dict:
         return next((z for z in d["zestawy"] if z["id"] == d.get("aktywny")), d["zestawy"][0])
@@ -109,17 +104,13 @@ class Przegladarka:
     # --- samoczynne odświeżanie: przy starcie programu i co kilka godzin (tylko nowe/zmienione pliki) ---------
     def _ust(self) -> dict:
         try:
-            d = json.loads((self.katalog / "ustawienia.json").read_text(encoding="utf-8"))
-            return d if isinstance(d, dict) else {}
+            d = plik_json.czytaj(self.katalog / "ustawienia.json")
         except (OSError, ValueError):
-            return {}
+            return {}   # tylko odczyt (np. częstotliwość odświeżania) — zapis i tak odmówi nadpisania
+        return d if isinstance(d, dict) else {}
 
     def _zapisz_ust(self, **zmiany) -> dict:
-        d = {**self._ust(), **zmiany}
-        tmp = self.katalog / "ustawienia.nowy"
-        tmp.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
-        os.replace(tmp, self.katalog / "ustawienia.json")
-        return d
+        return plik_json.zmien(self.katalog / "ustawienia.json", **zmiany)
 
     def ustaw_auto(self, auto: bool, co_godzin=None) -> dict:
         zm = {"auto": bool(auto)}
