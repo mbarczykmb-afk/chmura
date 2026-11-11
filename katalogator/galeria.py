@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS g_album_pliki (album INTEGER NOT NULL, sciezka TEXT N
                                           PRIMARY KEY (album, sciezka));
 CREATE TABLE IF NOT EXISTS g_min_filmow (sciezka TEXT PRIMARY KEY, mtime REAL NOT NULL, dane BLOB NOT NULL);
 CREATE INDEX IF NOT EXISTS g_album_pliki_sciezka ON g_album_pliki(sciezka);
+CREATE TABLE IF NOT EXISTS g_oceny (sciezka TEXT PRIMARY KEY, ocena INTEGER NOT NULL DEFAULT 0, tagi TEXT NOT NULL DEFAULT '');
 """
 _MIESIACE_SZUKANIA = [("stycz", 1), ("lut", 2), ("mar", 3), ("kwie", 4), ("maj", 5), ("czerw", 6), ("lip", 7),
                       ("sierp", 8), ("wrze", 9), ("paźdz", 10), ("pazdz", 10), ("listop", 11), ("grud", 12)]
@@ -439,12 +440,57 @@ class Galeria:
             except sqlite3.OperationalError:
                 d = None
             dokument = bool(d[0]) if d else "dokument" in r["wzgledna"].lower()
+            oc = db.execute("SELECT ocena, tagi FROM g_oceny WHERE sciezka=?", (r["sciezka"],)).fetchone()
         finally:
             db.close()
         return {"id": r["id"], "nazwa": re.split(r"[\\/]", r["wzgledna"])[-1], "folder": os.path.dirname(r["wzgledna"]),
                 "data": r["data"], "rodzaj": r["rodzaj"], "aparat": r["aparat"], "lat": r["lat"], "lon": r["lon"],
                 "miejsce": miejsce, "rozmiar": r["rozmiar"], "ulubione": ulub, "albumy": albumy, "dokument": dokument,
-                "nazwy_albumow": nazwy_alb}
+                "nazwy_albumow": nazwy_alb, "ocena": oc[0] if oc else 0,
+                "tagi": [t for t in (oc[1] if oc else "").split(";") if t]}
+
+    def ocen(self, ids: list[int], ocena=None, dodaj=None, usun=None) -> dict:
+        """★ ocena (0–5) i/lub 🏷 tagi (dodaj / usuń) — w bazie i, dla JPEG, w EXIF pliku (Eksplorator Windows)."""
+        from . import lokalizacja
+        w, arg = self._warunek()
+        dodaj = [t.strip()[:40] for t in (dodaj or []) if t and t.strip() and ";" not in t][:20]
+        usun = {t.strip().casefold() for t in (usun or []) if t}
+        db = self._db()
+        zapisane, bledy = 0, []
+        try:
+            for i in ids[:2000]:
+                r = db.execute(f"SELECT sciezka, rodzaj FROM pliki WHERE rowid=? {w}", [int(i)] + arg).fetchone()
+                if not r:
+                    continue
+                st = db.execute("SELECT ocena, tagi FROM g_oceny WHERE sciezka=?", (r[0],)).fetchone()
+                o = int(st[0]) if st else 0
+                tagi = [t for t in (st[1] if st else "").split(";") if t]
+                if ocena is not None:
+                    o = max(0, min(5, int(ocena)))
+                tagi = [t for t in tagi if t.casefold() not in usun]
+                tagi += [t for t in dodaj if t.casefold() not in {x.casefold() for x in tagi}]
+                if r[1] == "zdjecie":
+                    try:
+                        if lokalizacja.zapisz_ocene_tagi(r[0], o, tagi):
+                            zapisane += 1
+                    except Exception as e:  # noqa: BLE001 — plik tylko do odczytu / uszkodzony: zostaje w bazie
+                        bledy.append(f"{os.path.basename(r[0])}: {e}")
+                db.execute("INSERT OR REPLACE INTO g_oceny VALUES (?,?,?)", (r[0], o, ";".join(tagi)))
+            db.commit()
+        finally:
+            db.close()
+        return {"ok": True, "w_pliku": zapisane, "bledy": bledy[:5]}
+
+    def tagi_wszystkie(self) -> list[str]:
+        db = self._db()
+        try:
+            licz: dict[str, int] = {}
+            for (t,) in db.execute("SELECT tagi FROM g_oceny WHERE tagi != ''"):
+                for x in t.split(";"):
+                    licz[x] = licz.get(x, 0) + 1
+            return [t for t, _ in sorted(licz.items(), key=lambda kv: -kv[1])][:60]
+        finally:
+            db.close()
 
     def sciezka(self, id_: int, rodzaj: str | None = None) -> str | None:
         r = self._wiersz(id_)
@@ -523,6 +569,13 @@ class Galeria:
     def szukaj(self, tekst: str, od: int = 0, ile: int = 200) -> dict:
         slowa = [s for s in re.split(r"[\s,;]+", (tekst or "").strip()) if s]
         rok, mies, reszta = None, None, []
+        min_ocena, tagi_sz = None, []
+        for s in list(slowa):   # ★4 / *4 / 4★ — co najmniej tyle gwiazdek; #wakacje — tag
+            m = re.fullmatch(r"[★*]([1-5])|([1-5])[★*]", s)
+            if m:
+                min_ocena = int(m.group(1) or m.group(2)); slowa.remove(s)
+            elif s.startswith("#") and len(s) > 1:
+                tagi_sz.append(s[1:]); slowa.remove(s)
         for s in slowa:
             sl = s.lower()
             m = re.fullmatch(r"(19\d\d|20\d\d)(?:[-./](\d{1,2}))?", sl) or re.fullmatch(r"(\d{1,2})[-./](19\d\d|20\d\d)", sl)
@@ -560,7 +613,7 @@ class Galeria:
                     if miejsce:
                         tekstowe = reszta[:i] + reszta[i + 1:]
                         break
-        if not (rok or mies or miejsce or tekstowe or osoby_ids):
+        if not (rok or mies or miejsce or tekstowe or osoby_ids or min_ocena or tagi_sz):
             return {"razem": 0, "pliki": [], "opis": ""}
         w, arg = self._warunek()
         war, a = [], []
@@ -578,6 +631,13 @@ class Galeria:
             a_t += [f"%{s.lower()}%"] * (3 if ocr else 2) + z_indeksu
         for o in osoby_ids:
             war.append("sciezka IN (SELECT sciezka FROM g_twarze WHERE osoba=?)"); a.append(o)
+        if min_ocena:
+            war.append("sciezka IN (SELECT sciezka FROM g_oceny WHERE ocena >= ?)"); a.append(min_ocena)
+            osoby_nazwy = osoby_nazwy + ["★" * min_ocena + "+"]
+        for t in tagi_sz:
+            war.append("sciezka IN (SELECT sciezka FROM g_oceny WHERE ';' || lower(tagi) || ';' LIKE ?)")
+            a.append(f"%;{t.lower()};%")
+            osoby_nazwy = osoby_nazwy + [f"#{t}"]
         if tekstowe and not miejsce:
             from . import tresc
             if tresc.gotowe():
@@ -613,7 +673,7 @@ class Galeria:
                                                        arg + a + [int(ile), int(od)])]
         finally:
             db.close()
-        opis = [f"👤 {n}" for n in osoby_nazwy] + ([miejsce["nazwa"]] if miejsce else [])
+        opis = [n if n.startswith(("★", "#")) else f"👤 {n}" for n in osoby_nazwy] + ([miejsce["nazwa"]] if miejsce else [])
         if mies:
             opis.append(_NAZWY_MIES[mies - 1] + (f" {rok}" if rok else ""))
         elif rok:
@@ -644,7 +704,7 @@ class Galeria:
                     wiersze[r["id"]] = dict(r)
         finally:
             db.close()
-        opis = [f"👤 {n}" for n in osoby_nazwy]
+        opis = [n if n.startswith(("★", "#")) else f"👤 {n}" for n in osoby_nazwy]
         if mies:
             opis.append(_NAZWY_MIES[mies - 1] + (f" {rok}" if rok else ""))
         elif rok:
@@ -1692,6 +1752,8 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
         return g.mapa(), None
     if sciezka == "/api/g/serie":
         return g.serie(i("od"), min(i("ile", 120), 500)), None
+    if sciezka == "/api/g/tagi":
+        return {"tagi": g.tagi_wszystkie()}, None
     if sciezka == "/api/g/tresc":   # 🧠 wyszukiwanie po treści — stan modelu i indeksu
         from . import tresc
         return tresc.stan(g), None
@@ -1749,6 +1811,9 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
     ids = [int(x) for x in (dane.get("ids") or []) if str(x).lstrip("-").isdigit()]
     if sciezka == "/api/g/ulubione":
         return g.ulubione(int(dane.get("id") or 0), dane.get("wlacz"))
+    if sciezka == "/api/g/ocena":   # ★ ocena i 🏷 tagi
+        ocena = dane.get("ocena")
+        return g.ocen(ids, None if ocena is None else int(ocena), dane.get("dodaj") or [], dane.get("usun") or [])
     if sciezka == "/api/g/album/nowy":
         return g.album_nowy(str(dane.get("nazwa", "")), ids)
     if sciezka == "/api/g/album/dodaj":

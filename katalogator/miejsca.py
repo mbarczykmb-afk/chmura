@@ -339,12 +339,15 @@ def szukaj_miejsca(tekst: str) -> dict | None:
     k = " ".join(tekst.lower().split())
     if not k:
         return None
-    kraj = KRAJE_NAZWY.get(k) or KRAJE_NAZWY.get(_bez_ogonkow(k)) or \
-        next((kod for n, kod in KRAJE_NAZWY.items() if _bez_ogonkow(n) == _bez_ogonkow(k)), None) or \
+    # bez polskich znaków w zapytaniu („krakow”) — porównujemy też bez ogonków; z nimi („plaża”) — dokładnie,
+    # inaczej „plaża” trafiała w wieś Płaza zamiast w zdjęcia plaży (szukanie po treści)
+    luzno = k == _bez_ogonkow(k)
+    kraj = KRAJE_NAZWY.get(k) or (luzno and (KRAJE_NAZWY.get(k) or next(
+        (kod for n, kod in KRAJE_NAZWY.items() if _bez_ogonkow(n) == k), None))) or \
         ("PL" if _bez_ogonkow(k) == "polska" else None)
     if kraj:  # kraje i znane miejsca za granicą („Praga”, „Rzym”) — przed polskimi wsiami o tej samej nazwie
         return {"nazwa": tekst.strip(), "pl": [], "kraj": kraj}
-    pl = _wspolrzedne_pl().get(k) or _wspolrzedne_pl().get(_bez_ogonkow(k)) or []
+    pl = _wspolrzedne_pl().get(k) or (_wspolrzedne_pl().get(k) if not luzno else _wspolrzedne_pl().get(_bez_ogonkow(k))) or []
     if pl:
         return {"nazwa": pl[0][2], "pl": pl, "kraj": None}
     return None

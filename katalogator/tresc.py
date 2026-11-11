@@ -26,9 +26,13 @@ LOG = logging.getLogger("katalogator.tresc")
 WYDANIE = "https://github.com/mbarczykmb-afk/chmura/releases/download/clip-model-1/"
 PLIKI = ("clip-obraz-int8.onnx", "clip-tekst-int8.onnx", "clip-slownik.txt")
 # SHA-256 z wydania clip-model-1 (None → z pliku clip-sumy.json z tego samego wydania)
-SUMY: dict[str, str | None] = {n: None for n in PLIKI}
+SUMY: dict[str, str | None] = {
+    "clip-obraz-int8.onnx": "24e42d2379f42310c43b35b406ff255f025913894ce022573c60776deaebe1df",
+    "clip-tekst-int8.onnx": "123736dfc70590dc9f67b92aa8ba9e72ba3dcf9e94bb3a99063ed6d3699c111c",
+    "clip-slownik.txt": "fe0fda7c425b48c516fc8f160d594c8022a0808447475c1a7c6d6479763f310c"}
 MAKS_TOKENOW = 64
-PROG = 0.20          # podobieństwo (cosinus) poniżej tego — to już nie „to samo”
+PROG = 0.23          # podobieństwo (cosinus) poniżej tego — to już nie „to samo” (tło: ok. 0,18–0,24)
+ODSTEP = 0.06        # … i nie dalej niż tyle od najlepszego trafienia (próg względny)
 WYNIKOW = 400        # najwyżej tyle zdjęć „podobnych treścią” w jednym wyszukiwaniu
 
 SCHEMAT = "CREATE TABLE IF NOT EXISTS g_clip (sciezka TEXT PRIMARY KEY, mtime REAL, wektor BLOB NOT NULL);"
@@ -338,9 +342,15 @@ def podobne(tekst: str, dozwolone: set[str] | None = None) -> list[tuple[str, fl
     if not sciezki:
         return []
     oceny = m @ wektor_tekstu(tekst)
+    if dozwolone is not None:   # najlepsze trafienie liczone wśród dozwolonych (np. tylko zdjęcia z 2023)
+        maska = np.fromiter((s_ in dozwolone for s_ in sciezki), bool, len(sciezki))
+        if not maska.any():
+            return []
+        oceny = np.where(maska, oceny, -1.0)
+    prog = max(PROG, float(oceny.max()) - ODSTEP)
     wynik = []
     for i in np.argsort(-oceny):
-        if oceny[i] < PROG or len(wynik) >= WYNIKOW:
+        if oceny[i] < prog or len(wynik) >= WYNIKOW:
             break
         if dozwolone is None or sciezki[i] in dozwolone:
             wynik.append((sciezki[i], float(oceny[i])))

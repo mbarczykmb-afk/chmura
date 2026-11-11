@@ -122,6 +122,33 @@ def _zapisz_jpeg_date(sciezka: str, data: datetime) -> None:
     _usun_nasz_xmp(sciezka, tylko="data")
 
 
+_PROCENT = {0: 0, 1: 1, 2: 25, 3: 50, 4: 75, 5: 99}   # RatingPercent (tak zapisuje Eksplorator Windows)
+
+
+def zapisz_ocene_tagi(sciezka: str, ocena: int, tagi: list[str]) -> bool:
+    """★ ocena 0–5 i 🏷 tagi w EXIF zdjęcia JPEG (Rating, RatingPercent, XPKeywords) — widać je w Eksploratorze
+    Windows (Właściwości → Szczegóły) i w programach zdjęciowych. Inne formaty: False (zostają w bazie programu)."""
+    if os.path.splitext(sciezka)[1].lower() not in _JPEG:
+        return False
+    ocena = max(0, min(5, int(ocena)))
+    slowa = ";".join(t for t in tagi if t)
+    kodowane = (slowa.encode("utf-16-le") + b"\0\0") if slowa else b""
+
+    def zmien(exif):
+        exif[0x4746], exif[0x4749] = ocena, _PROCENT[ocena]
+        if kodowane:
+            exif[0x9C9E] = kodowane
+        elif 0x9C9E in exif:
+            del exif[0x9C9E]
+
+    def sprawdz(exif):
+        k = exif.get(0x9C9E)
+        k = bytes(k) if isinstance(k, (bytes, tuple, list)) else b""
+        return exif.get(0x4746) == ocena and (k.rstrip(b"\0") == kodowane.rstrip(b"\0"))
+    _zmien_exif_jpeg(sciezka, zmien, sprawdz)
+    return True
+
+
 def _xmp(gps, data: str | None = None) -> bytes:
     """gps: None — bez lokalizacji w pliku, () — lokalizacja usunięta, (lat, lon) — ustawiona; data: ISO albo None."""
     pola = []

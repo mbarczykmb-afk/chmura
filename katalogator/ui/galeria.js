@@ -479,6 +479,7 @@ async function pokazPelny(lista, poz) {
   if (p.miejsce === undefined) {
     try {
       const d = await api("/api/g/plik", {id: p.id}); p.miejsce = d.miejsce; p.ulubione = d.ulubione; p.dokument = d.dokument;
+      p.ocena = d.ocena || 0; p.tagi = d.tagi || [];
       if (p.lat == null && d.lat != null) { p.lat = d.lat; p.lon = d.lon; }
     }
     catch (e) { p.miejsce = null; }
@@ -589,6 +590,7 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowRight" && zoom.s === 1) krokRecznie(1);
   if (e.key === "p" || e.key === "P") przelaczPokaz();
   if ((e.key === "f" || e.key === "F") && W_PROGRAMIE) $("p-ulub").click();
+  if (/^[1-5]$/.test(e.key) && W_PROGRAMIE && window.ocenBiezacy) window.ocenBiezacy(+e.key);   // ★1–★5
   if (!$("lok").hidden) { if (e.key === "Escape") zamknijLok(); return; }
   if (e.key === "Delete" && MOZE_USUWAC) $("p-usun").click();
   if ((e.key === "l" || e.key === "L") && MOZE_USUWAC) $("p-miejsce").click();
@@ -1663,6 +1665,7 @@ $("p-usun").onclick = e => { e.stopPropagation(); const p = biezacy(); if (p) us
 
 // ---------- podgląd: ulubione, album, pokaz slajdów, otwieranie w programie ----------
 function narzedziaPelnego(p) {
+  if (window.ocenyPelnego) window.ocenyPelnego(p);   // ★ ocena i 🏷 tagi (oceny.js)
   const ul = $("p-ulub");
   ul.hidden = !W_PROGRAMIE; ul.classList.toggle("akt", !!p.ulubione); ul.textContent = p.ulubione ? "★ Ulubione" : "☆ Ulubione";
   $("p-album").hidden = !W_PROGRAMIE;

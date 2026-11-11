@@ -174,6 +174,8 @@ W podglądzie zdjęcia w Bibliotece i Przeglądarce — **mała mapa** z miejsce
 
 **🖥 Pełny program z telefonu** (gdy Katalogator działa na komputerze): 📱 → kod QR + PIN → na pilocie *🖥 Pełny
 program* — wszystkie zakładki (Duplikaty, Dokumenty, Podobne, Drzewo, kosz…) w układzie na telefon. Serwer telefonu
+**1.60.0:** 🧠 Szukanie po treści zdjęcia: w polu „Szukaj” w Przeglądarce wpisz to, co jest na zdjęciu — „plaża”, „śnieg w górach”, „tort urodzinowy”, także razem z datą („plaża 2020”). Działa po polsku, w całości na komputerze (model CLIP ok. 225 MB pobierany jednorazowo i sprawdzany sumą kontrolną; przycisk 🧠 przy polu szukania → „Pobierz model”, potem „Przygotuj wyszukiwanie” — zdjęcia przygotowują się w tle). ★ Oceny 1–5 (klawisze 1–5 w podglądzie) i 🏷 tagi zdjęć — zapisywane w bazie i w EXIF JPEG-ów (widać je w Eksploratorze Windows); szukanie „★4” (co najmniej 4 gwiazdki) i „#wakacje”. Wyszukiwarka nie bierze już słów z polskimi znakami za podobne nazwy miejscowości („plaża” ≠ wieś Płaza).
+
 **1.59.0:** ✈ Propozycja drzewa korzysta z wypraw zapisanych w Podróżach: zdjęcia z dni wyprawy trafiają do jednego folderu z jej nazwą (np. „Zdjęcia z 2025/Grudzień – Madera (Portugalia)”), także gdy wyprawa przechodzi na kolejny miesiąc — przełącznik przy „Utwórz propozycję drzewa”. Poprawka: miejscowość zamieszkania wpisana w projekcie jest teraz używana także w głównej propozycji (dotąd tylko w folderze przychodzącym).
 
 **1.58.0:** Historia operacji w panelu projektu („↶ Historia operacji — cofnij dowolną”): wszystkie porządkowania i odłożenia (duplikaty, podobne, nieostre, śmieci, usunięte) z datą i liczbą plików — każdą można cofnąć, nie tylko ostatnią. Pliki zmienione od tamtej chwili zostają na miejscu i trafiają na listę problemów.
