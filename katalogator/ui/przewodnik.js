@@ -47,6 +47,14 @@ function krokBiezacy() {
 const nazwaFolderu = p => (p || "").split(/[\\/]/).filter(Boolean).pop() || p;
 const liczba = n => (n || 0).toLocaleString("pl-PL");
 
+// „· 3 dni temu (przeskanuj, żeby znaleźć nowe pliki)” — plan i duplikaty liczą się z ostatniego skanu, nie z dysku
+function kiedySkan(t) {
+  if (!t) return "";
+  const h = (Date.now() / 1000 - t) / 3600;
+  const ile = h < 1 ? "przed chwilą" : h < 24 ? `${Math.floor(h)} godz. temu` : `${Math.floor(h / 24)} dni temu`;
+  return ` · ${ile}` + (h >= 24 ? " — przeskanuj, żeby znaleźć nowe pliki" : "");
+}
+
 function streszczenia() {
   const s = stan, o = {};
   o.projekt = $("proj-postep-opis") ? $("proj-postep-opis").textContent : "";
@@ -55,7 +63,7 @@ function streszczenia() {
     : "Nie wybrano folderów";
   o.cel = s.cel ? "✓ " + nazwaFolderu(s.cel) : "Nie wybrano miejsca docelowego";
   o.skan = s.skan && s.skan.trwa ? "⏳ Trwa skanowanie…" :
-    (s.ma_wyniki ? `✓ Zeskanowano ${liczba(s.plikow)} plików` : "Jeszcze nie skanowano");
+    (s.ma_wyniki ? `✓ Zeskanowano ${liczba(s.plikow)} plików` + kiedySkan(s.ostatni_skan) : "Jeszcze nie skanowano");
   o.dup = s.dup && s.dup.trwa ? "⏳ Szukam…" : (s.duplikaty
     ? (s.duplikaty.nadmiar ? `✓ ${liczba(s.duplikaty.nadmiar)} zbędnych kopii · ${rozmiar(s.duplikaty.bajty)}` : "✓ Brak duplikatów")
     : "Nie szukano (opcjonalnie)");

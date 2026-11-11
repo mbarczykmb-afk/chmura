@@ -834,6 +834,7 @@ class Stan:
                 cache["plan"] = planista.podsumowanie(db)
             cache["nie_z_aparatu"] = sum(1 for p in kategorie.do_sprawdzenia(db) if not p["decyzja"])
             cache["plikow"] = db.execute("SELECT COUNT(*) FROM pliki").fetchone()[0]
+            cache["ostatni_skan"] = db.execute("SELECT MAX(koniec) FROM skany").fetchone()[0]
             cache["wykonanie"] = wykonawca.ostatnia_partia(db)
         finally:
             db.close()
@@ -1286,7 +1287,13 @@ class Stan:
 
         def f(db, postep, przerwij):
             w = planista.generuj(db, zrodla, cel, postep=postep, przerwij=przerwij)
-            return f"Propozycja gotowa: {w['kopiuj'] + w['przenies']} plików do uporządkowania."
+            k = f"Propozycja gotowa: {w['kopiuj'] + w['przenies']} plików do uporządkowania."
+            if not w["kopiuj"] + w["przenies"]:   # częsta pułapka: plan liczy się z OSTATNIEGO skanu, nie z dysku
+                kon = db.execute("SELECT MAX(koniec) FROM skany").fetchone()[0]
+                kiedy = time.strftime("%d.%m.%Y %H:%M", time.localtime(kon)) if kon else "nigdy"
+                k += (f" Propozycja powstaje z ostatniego skanu ({kiedy}) — wszystko, co wtedy znalazłem, jest już "
+                      "w bibliotece. Nowe pliki (np. z telefonu) pojawią się po ponownym „Skanuj”.")
+            return k
         return self.uruchom("plan", f)
 
     def wykonaj(self, usun_puste: bool, usun_oryginaly: bool = True, folder: str | None = None) -> str | None:
@@ -1660,7 +1667,7 @@ def _handler(stan: Stan, token: str, zamknij):
                                      "plik_logu": str(logi.plik() or ""), **logi.system(),
                                      "sprawdzaj_aktualizacje": aktualizacje.wlaczone(stan.katalog)})
             if u.path == "/api/projekty":
-                return self._wyslij({"projekty": stan.projekty.lista(), "biezacy": stan.pid})
+                return self._wyslij({"projekty": stan.projekty.lista(), "biezacy": stan.pid, "usuniete": stan.projekty.usuniete()})
             if u.path == "/api/projekt/dziennik":
                 return self._wyslij({"wpisy": stan.z_db(projekty.dziennik, 60)})
             if u.path == "/api/plan/pliki":
@@ -2019,6 +2026,14 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/projekty/zmien":
                 w = stan.zmien_projekt(dane)
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/projekty/przywroc":
+                try:
+                    pid = stan.projekty.przywroc(str(dane.get("klucz", "")))
+                except (ValueError, OSError) as e:
+                    return self._wyslij({"blad": str(e)}, kod=HTTPStatus.BAD_REQUEST)
+                blad = stan.otworz_projekt(pid)
+                return self._wyslij({"blad": blad} if blad else stan.stan(),
+                                    kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
             if u.path == "/api/projekty/usun":
                 blad = stan.usun_projekt(str(dane.get("id", "")))
                 return self._wyslij({"blad": blad} if blad else stan.stan(),

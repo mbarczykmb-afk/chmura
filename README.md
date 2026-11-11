@@ -174,6 +174,8 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.56.0:** Projekty nie tracą już nazwy, notatek i miejscowości, gdy Windows chwilowo blokuje plik projektu (wcześniej zapis ustawień nadpisywał je domyślnymi — tak „zniknął” projekt z własną nazwą). Kopia projekt.json.bak, zapis pod blokadą z ponowieniem. Usunięty projekt trafia do kosza projektów i można go przywrócić z okna projektów. Karta „Skanowanie” pokazuje, kiedy był ostatni skan, a pusta propozycja drzewa wyjaśnia, że trzeba przeskanować, by znaleźć nowe pliki.
+
 **1.55.0:** Podróże biorą zdjęcia wyprawy z biblioteki Katalogatora (baza Przeglądarki: data, GPS, miniatury) zamiast skanować dysk U:\ — przycisk „Wczytaj zdjęcia z biblioteki” w wyprawie pobiera zdjęcia z jej dat, przypisuje je do dni i miejsc, pełny podgląd otwiera oryginał.
 
 **1.54.0:** Podróże — nowa oś czasu wypraw na górze: pasek słupków z liczbą wypraw w każdym roku (kliknięcie przybliża rok), automatyczna skala (na starcie ostatnie 3 lata), przycisk „Wszystko”, podpowiedź z datami i państwami, nazwy miesięcy przy dużym przybliżeniu, Ctrl+kółko = zoom, kółko = przewijanie. Przy dużej liczbie wypraw znikają podpisy, zostają same kropki.

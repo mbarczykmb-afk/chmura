@@ -14,6 +14,7 @@ import re
 import secrets
 import shutil
 import sqlite3
+import threading
 import time
 import unicodedata
 from pathlib import Path
@@ -32,6 +33,33 @@ def _slug(nazwa: str) -> str:
     s = unicodedata.normalize("NFKD", nazwa).encode("ascii", "ignore").decode().lower()
     s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")[:30] or "projekt"
     return f"{s}-{secrets.token_hex(3)}"
+
+
+_BLOKADA_ZAPISU = threading.RLock()   # projekt.json zapisują różne wątki serwera — nigdy naraz
+
+
+def _czytaj_json(plik: Path, proby: int = 6) -> dict:
+    """Odczyt projekt.json odporny na chwilową blokadę pliku (Windows: antywirus, równoległa podmiana).
+    Uszkodzony plik → kopia .bak. Brak obu → {}. Plik jest, ale nieczytelny → wyjątek (NIGDY domyślne
+    wartości — inaczej zapis nadpisałby nazwę, notatki i resztę projektu)."""
+    for i in range(proby):
+        try:
+            return json.loads(plik.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            break
+        except ValueError:
+            break
+        except OSError:
+            if i == proby - 1:
+                raise
+            time.sleep(0.05 * (i + 1))
+    bak = plik.with_name(plik.name + ".bak")
+    try:
+        return json.loads(bak.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        if plik.exists() and plik.stat().st_size:
+            raise ValueError(f"Plik projektu jest uszkodzony: {plik}")
+        return {}
 
 
 class Projekty:
@@ -65,7 +93,7 @@ class Projekty:
             if not plik.is_file():
                 continue
             try:
-                d = {**DOMYSLNE, **json.loads(plik.read_text(encoding="utf-8")), "id": p.name}
+                d = {**DOMYSLNE, **_czytaj_json(plik), "id": p.name}
             except (OSError, ValueError):
                 continue
             d["statystyki"] = self._statystyki(p / "katalog.db")
@@ -105,25 +133,69 @@ class Projekty:
 
     def wczytaj(self, pid: str) -> dict:
         plik = self._folder(pid) / "projekt.json"
-        return {**DOMYSLNE, **json.loads(plik.read_text(encoding="utf-8")), "id": pid}
+        return {**DOMYSLNE, **_czytaj_json(plik), "id": pid}
 
     def zapisz(self, pid: str, dane: dict) -> dict:
         folder = self._folder(pid, musi_istniec=False)
         folder.mkdir(parents=True, exist_ok=True)
         plik = folder / "projekt.json"
-        try:
-            obecne = json.loads(plik.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            obecne = {}
-        nowe = {**DOMYSLNE, **obecne, **{k: v for k, v in dane.items() if k != "id"}}
-        tmp = plik.with_suffix(".tmp")
-        tmp.write_text(json.dumps(nowe, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(plik)
+        with _BLOKADA_ZAPISU:
+            obecne = _czytaj_json(plik)   # nieczytelny plik → wyjątek, a nie projekt z domyślną nazwą
+            nowe = {**DOMYSLNE, **obecne, **{k: v for k, v in dane.items() if k != "id"}}
+            tekst = json.dumps(nowe, ensure_ascii=False, indent=2)
+            if obecne:  # poprzednia dobra wersja — gdyby ta się uszkodziła
+                try:
+                    (folder / "projekt.json.bak").write_text(json.dumps(obecne, ensure_ascii=False, indent=2), encoding="utf-8")
+                except OSError:
+                    pass
+            tmp = plik.with_suffix(".tmp")
+            tmp.write_text(tekst, encoding="utf-8")
+            for i in range(6):   # Windows: podmiana pliku otwartego przez czytelnika chwilowo się nie udaje
+                try:
+                    tmp.replace(plik)
+                    break
+                except PermissionError:
+                    if i == 5:
+                        raise
+                    time.sleep(0.05 * (i + 1))
         return {**nowe, "id": pid}
 
-    def usun(self, pid: str) -> None:
-        """Usuwa tylko dane projektu (ustawienia, bazę) — nigdy Twoich plików."""
-        shutil.rmtree(self._folder(pid))
+    def usun(self, pid: str) -> Path:
+        """Usuwa projekt z listy — tylko dane projektu (ustawienia, bazę), nigdy Twoich plików. Folder trafia do
+        projekty/_kosz/, skąd można go przywrócić (przywroc) — najstarsze ponad 10 usuniętych są kasowane."""
+        f = self._folder(pid)
+        kosz = self.folder / "_kosz"
+        kosz.mkdir(exist_ok=True)
+        cel = kosz / f"{pid}--{time.strftime('%Y%m%d-%H%M%S')}"
+        shutil.move(str(f), str(cel))
+        for stary in sorted(kosz.iterdir(), key=lambda x: x.stat().st_mtime)[:-10]:
+            shutil.rmtree(stary, ignore_errors=True)
+        return cel
+
+    def usuniete(self) -> list[dict]:
+        """Projekty z kosza: [{klucz, nazwa, usunieto}] — najnowsze pierwsze."""
+        kosz = self.folder / "_kosz"
+        wynik = []
+        for p in (kosz.iterdir() if kosz.is_dir() else []):
+            try:
+                d = _czytaj_json(p / "projekt.json")
+            except (OSError, ValueError):
+                d = {}
+            wynik.append({"klucz": p.name, "nazwa": d.get("nazwa") or p.name, "usunieto": p.stat().st_mtime})
+        return sorted(wynik, key=lambda d: -d["usunieto"])
+
+    def przywroc(self, klucz: str) -> str:
+        """Przywraca projekt z kosza; zwraca jego id (nowe, jeśli dawne jest zajęte)."""
+        if not re.fullmatch(r"[a-z0-9\-]{1,64}--\d{8}-\d{6}", klucz or ""):
+            raise ValueError("Nieprawidłowy projekt.")
+        z = self.folder / "_kosz" / klucz
+        if not (z / "projekt.json").is_file():
+            raise ValueError("Nie ma takiego projektu w koszu.")
+        pid = klucz.split("--")[0]
+        if (self.folder / pid).exists():
+            pid = f"{pid[:57]}-{secrets.token_hex(3)}"
+        shutil.move(str(z), str(self.folder / pid))
+        return pid
 
     def _folder(self, pid: str, musi_istniec: bool = True) -> Path:
         if not re.fullmatch(r"[a-z0-9\-]{1,64}", pid or ""):

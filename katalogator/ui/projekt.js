@@ -97,10 +97,26 @@ async function rysujListeProjektow() {
     const us = document.createElement("button"); us.className = "maly"; us.textContent = "Usuń";
     us.onclick = async () => {
       if (!await oknoTak(`Usunąć projekt „${p.nazwa}”?\n\nUsunę tylko dane projektu (ustawienia, skan, propozycję, historię). ` +
-                   "Twoje zdjęcia i pliki NIE zostaną ruszone.")) return;
+                   "Twoje zdjęcia i pliki NIE zostaną ruszone. Projekt trafi do kosza projektów — można go przywrócić z tej listy.")) return;
       try { stan = await api("/api/projekty/usun", {id: p.id}); rysuj(); rysujListeProjektow(); } catch (e) { toast(e.message); }
     };
     ak.append(otw, zm, us); k.append(ak); l.append(k);
+  }
+  if ((r.usuniete || []).length) {   // kosz projektów: usunięte da się przywrócić
+    const h = document.createElement("div"); h.className = "inf"; h.style.margin = "12px 0 4px"; h.textContent = "🗑 Usunięte projekty (można przywrócić):";
+    l.append(h);
+    for (const u of r.usuniete) {
+      const k = document.createElement("div"); k.className = "proj";
+      const nz = document.createElement("div"); nz.className = "nz"; nz.textContent = u.nazwa;
+      const inf = document.createElement("div"); inf.className = "inf"; inf.textContent = "usunięto " + czasPL(u.usunieto);
+      const ak = document.createElement("div"); ak.className = "akcje";
+      const pr = document.createElement("button"); pr.className = "maly"; pr.textContent = "Przywróć";
+      pr.onclick = async () => {
+        try { stan = await api("/api/projekty/przywroc", {klucz: u.klucz}); $("okno-proj").hidden = true; rysuj(); toast("Przywrócono projekt: " + u.nazwa); }
+        catch (e) { toast(e.message); }
+      };
+      ak.append(pr); k.append(nz, inf, ak); l.append(k);
+    }
   }
 }
 $("projekt-btn").onclick = () => { $("okno-proj").hidden = false; rysujListeProjektow(); };
