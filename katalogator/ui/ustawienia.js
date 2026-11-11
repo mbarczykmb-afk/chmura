@@ -123,7 +123,9 @@ async function sekcjaKopii(k) {
   s.append(wiersz(el("span", {className: "info", textContent: "Sprawdzanie: " + (sp ? `${dataCzas(sp.czas)} — ${sp.sprawdzone} plików` : "jeszcze nie było") +
     ` · znane sumy: ${k.sprawdzonych_plikow.toLocaleString("pl-PL")} plików`}),
     przyc("🔍 Sprawdź pliki", () => startKopii("/api/kopia/sprawdz"), "",
-          "Czyta każdy plik i porównuje z zapisaną sumą — wykrywa uszkodzenia dysku. Można przerwać i dokończyć później.")));
+          "Czyta każdy plik i porównuje z zapisaną sumą — wykrywa uszkodzenia dysku i pliki, które zniknęły. Można przerwać i dokończyć później.")));
+  s.append(pole("Sprawdzaj bibliotekę samoczynnie raz w tygodniu (w tle, gdy program nic nie robi)", k.sprawdzaj_auto,
+                v => api("/api/kopia/ustaw", {sprawdzaj_auto: v})));
   if (trwa) s.append(el("div", {className: "info", textContent: `⏳ ${stan.biezace.tytul} trwa — postęp na pasku u góry okna.`}));
   if (k.problemy) {
     s.append(el("div", {className: "zle", innerHTML: `<b>⚠ Problemy: ${k.problemy}</b>`}));
@@ -131,9 +133,10 @@ async function sekcjaKopii(k) {
     try { p = (await api("/api/kopia/problemy")).problemy; } catch (e) { /* bez listy */ }
     for (const x of p.slice(0, 50)) {
       const akcje = [];
+      if (x.rodzaj === "zniknal" && x.z_kopii) akcje.push(przyc("↺ Przywróć z kopii", () => problem(x, "przywroc"), "glowny"));
       if (x.rodzaj === "uszkodzony" && x.z_kopii) akcje.push(przyc("↺ Przywróć z kopii", () => problem(x, "przywroc"), "glowny"));
       if (x.rodzaj === "kopia") akcje.push(przyc("💾 Napraw kopię", () => problem(x, "napraw"), "glowny"));
-      akcje.push(przyc(x.rodzaj === "uszkodzony" ? "To moja zmiana" : "Pomiń", () => problem(x, "przyjmij"), "",
+      akcje.push(przyc(x.rodzaj === "uszkodzony" ? "To moja zmiana" : x.rodzaj === "zniknal" ? "Usunąłem go celowo" : "Pomiń", () => problem(x, "przyjmij"), "",
                        "Uznaj obecny plik za dobry (problem zniknie z listy)"));
       s.append(el("div", {className: "problem"}, el("b", {textContent: x.sciezka}), ...akcje, el("span", {className: "info", textContent: x.opis})));
     }

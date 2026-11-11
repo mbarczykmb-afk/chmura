@@ -459,12 +459,12 @@ class Stan:
         finally:
             db.close()
         folder = k.get("folder") or ""
-        return {"folder": folder, "auto": bool(k.get("auto")), "biblioteka": self.ustawienia["cel"],
+        return {"folder": folder, "auto": bool(k.get("auto")), "sprawdzaj_auto": bool(k.get("sprawdzaj_auto")), "biblioteka": self.ustawienia["cel"],
                 "dostepny": bool(folder) and os.path.isdir(folder), "ostatnia": ust.get("kopia_ostatnia"),
                 "sprawdzanie": ust.get("sprawdzanie_ostatnie"), "problemy": n, "sprawdzonych_plikow": sumy,
                 "blad_miejsca": kopia.sprawdz_miejsce(self.ustawienia["cel"], folder) if folder else None}
 
-    def kopia_ustaw(self, folder: str | None = None, auto: bool | None = None) -> dict:
+    def kopia_ustaw(self, folder: str | None = None, auto: bool | None = None, sprawdzaj_auto: bool | None = None) -> dict:
         k = dict(aktualizacje._ustawienia(self.katalog).get("kopia") or {})
         if folder is not None:
             folder = os.path.normpath(folder.strip()) if folder.strip() else ""
@@ -474,6 +474,8 @@ class Stan:
             k["folder"] = folder
         if auto is not None:
             k["auto"] = bool(auto)
+        if sprawdzaj_auto is not None:
+            k["sprawdzaj_auto"] = bool(sprawdzaj_auto)
         aktualizacje.zapisz_ustawienia(self.katalog, kopia=k)
         return self.kopia_info()
 
@@ -633,6 +635,25 @@ class Stan:
             LOG.info("Odzyskiwanie: winfr %s", w["polecenie"])
             return {"ok": True, "zadanie": odzyskiwanie.postep(zad)}
         return w
+
+    def sprawdzanie_po_starcie(self, opoznienie: float = 600) -> None:
+        """🔍 Samoczynne sprawdzanie biblioteki raz w tygodniu (gdy włączone i program akurat nic nie robi).
+        Każdy plik jest czytany ponownie najwcześniej po miesiącu — tygodniowe sprawdzanie obejmuje nowe pliki,
+        część starych i wykrywa pliki, które zniknęły."""
+        ust = aktualizacje._ustawienia(self.katalog)
+        if not (ust.get("kopia") or {}).get("sprawdzaj_auto"):
+            return
+        if time.time() - ((ust.get("sprawdzanie_ostatnie") or {}).get("czas") or 0) < 7 * 86400:
+            return
+
+        def start():
+            if not self.zajety():
+                blad = self.sprawdzanie_start()
+                if blad:
+                    LOG.info("Samoczynne sprawdzanie: %s", blad)
+        t = threading.Timer(opoznienie, start)
+        t.daemon = True
+        t.start()
 
     def kopia_po_starcie(self, opoznienie: float = 120) -> None:
         """Automatyczna kopia: raz na dobę (po starcie programu) i po porządkowaniu plików."""
@@ -1995,7 +2016,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij({"ok": True})
             if u.path == "/api/kopia/ustaw":
                 w = stan.kopia_ustaw(dane["folder"] if "folder" in dane else None,
-                                     dane["auto"] if "auto" in dane else None)
+                                     dane["auto"] if "auto" in dane else None,
+                                     dane["sprawdzaj_auto"] if "sprawdzaj_auto" in dane else None)
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
             if u.path in ("/api/kopia/start", "/api/kopia/sprawdz"):
                 blad = stan.kopia_start() if u.path.endswith("start") else stan.sprawdzanie_start()
@@ -2397,6 +2419,7 @@ def main(otworz: bool = True) -> None:
     stan.telefon_po_starcie()
     threading.Thread(target=stan.most_po_starcie, daemon=True).start()
     stan.kopia_po_starcie()
+    stan.sprawdzanie_po_starcie()
     if otworz:
         otworz_okno(url)
     try:

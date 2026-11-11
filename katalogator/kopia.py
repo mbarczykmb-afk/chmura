@@ -199,13 +199,16 @@ def sprawdz(db: sqlite3.Connection, zrodlo: str, kopia_folder: str | None = None
     teraz = time.time()
     znane = {r["sciezka"]: r for r in db.execute("SELECT * FROM sumy")}
     kolejka, pominiete = [], 0
+    widziane: dict[tuple[str, int], str] = {}   # (nazwa, rozmiar) → ścieżka — do rozpoznania przeniesionych
     for sc, st in _pliki(zrodlo):
+        widziane.setdefault((os.path.basename(sc).casefold(), st.st_size), sc)
         r = znane.get(sc)
         if r and r["rozmiar"] == st.st_size and abs(r["mtime"] - st.st_mtime) < 2 and teraz - r["sprawdzone"] < co_dni * 86400:
             pominiete += 1
             continue
         kolejka.append((sc, st, r))
     kolejka.sort(key=lambda x: x[2]["sprawdzone"] if x[2] else 0)  # najpierw nowe i najdawniej sprawdzane
+    zniknely = _zniknale(db, zrodlo, kopia_folder, znane, widziane)
     razem = sum(st.st_size for _, st, _ in kolejka)
     bajty, nowe, dobre, zle, ostatni_zapis = 0, 0, 0, 0, time.monotonic()
 
@@ -252,8 +255,45 @@ def sprawdz(db: sqlite3.Connection, zrodlo: str, kopia_folder: str | None = None
                 ostatni_zapis = time.monotonic()
     finally:
         db.commit()
-    return {"sprawdzone": dobre + zle, "nowe": nowe, "dobre": dobre, "problemy": zle, "pominiete": pominiete,
+    return {"sprawdzone": dobre + zle, "nowe": nowe, "dobre": dobre, "problemy": zle + zniknely, "pominiete": pominiete,
+            "zniknely": zniknely,
             "bajty": bajty, "czas": time.time(), "wszystkich_problemow": db.execute("SELECT COUNT(*) FROM problemy").fetchone()[0]}
+
+
+def _zniknale(db, zrodlo: str, kopia_folder, znane: dict, widziane: dict) -> int:
+    """Pliki ze znaną sumą, których nie ma już w bibliotece. Przeniesione (ta sama nazwa i rozmiar gdzie indziej
+    w bibliotece) albo odłożone przez program do kosza — tylko poprawiamy zapis; reszta to problem „zniknął”
+    (usunięty poza programem, awaria dysku) — z kopii da się go przywrócić."""
+    w_koszu: set[tuple[str, int]] = set()
+    kosz = os.path.join(zrodlo, FOLDER_ODLOZONE)
+    for gdzie, _, pliki in os.walk(kosz):
+        for n in pliki:
+            try:
+                w_koszu.add((n.casefold(), os.path.getsize(os.path.join(gdzie, n))))
+            except OSError:
+                pass
+    n_problemow = 0
+    obecne = set(widziane.values())
+    for sc, r in znane.items():
+        if sc in obecne or not _w_srodku(sc, zrodlo) or os.path.exists(sc):
+            continue
+        klucz = (os.path.basename(sc).casefold(), r["rozmiar"])
+        nowa = widziane.get(klucz)
+        if nowa and nowa not in znane:
+            db.execute("UPDATE OR IGNORE sumy SET sciezka=? WHERE sciezka=?", (nowa, sc))   # przeniesiony w bibliotece
+            db.execute("DELETE FROM sumy WHERE sciezka=?", (sc,))
+            continue
+        if klucz in w_koszu:   # odłożony przez program (duplikat, usunięty) — to nie zniknięcie
+            db.execute("DELETE FROM sumy WHERE sciezka=?", (sc,))
+            db.execute("DELETE FROM problemy WHERE sciezka=?", (sc,))
+            continue
+        kop = os.path.join(kopia_folder, os.path.relpath(sc, zrodlo)) if kopia_folder else None
+        z_kopii = bool(kop and os.path.isfile(kop) and os.path.getsize(kop) == r["rozmiar"])
+        _problem(db, sc, "zniknal", "Pliku nie ma już w bibliotece (usunięty poza programem albo awaria dysku)." +
+                 (" W kopii jest — „Przywróć z kopii”." if z_kopii else " W kopii go nie ma."), z_kopii)
+        n_problemow += 1
+    db.commit()
+    return n_problemow
 
 
 def problemy(db: sqlite3.Connection) -> list[dict]:

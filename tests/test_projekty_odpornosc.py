@@ -165,3 +165,28 @@ def test_nazwy_zarezerwowane_windows():
     from katalogator import planista
     assert planista.czysta_nazwa("CON") == "_CON" and planista.czysta_nazwa("nul.jpg") == "_nul.jpg"
     assert planista.czysta_nazwa("Console") == "Console" and planista.czysta_nazwa("com10") == "com10"
+
+
+def test_sprawdzanie_wykrywa_zniknale_pliki(tmp_path):
+    import os
+    import shutil
+    from katalogator import kopia
+    bib, kop = tmp_path / "bib", tmp_path / "kop"
+    (bib / "2020").mkdir(parents=True)
+    from PIL import Image
+    for i, n in enumerate(("przeniesiony.jpg", "do_kosza.jpg", "usuniety.jpg", "zostaje.jpg")):
+        Image.new("RGB", (40 + i, 30), (i * 60, 100, 50)).save(bib / "2020" / n)
+    kopia.kopiuj(str(bib), str(kop))
+    db = kopia.baza(tmp_path)
+    kopia.sprawdz(db, str(bib), str(kop))
+    (bib / "Inne").mkdir()
+    shutil.move(bib / "2020" / "przeniesiony.jpg", bib / "Inne" / "przeniesiony.jpg")        # przeniesiony w bibliotece
+    (bib / "Odłożone" / "Usunięte").mkdir(parents=True)
+    shutil.move(bib / "2020" / "do_kosza.jpg", bib / "Odłożone" / "Usunięte" / "do_kosza.jpg")  # odłożony przez program
+    os.remove(bib / "2020" / "usuniety.jpg")                                                   # usunięty poza programem
+    w = kopia.sprawdz(db, str(bib), str(kop), co_dni=1000)
+    pr = {os.path.basename(p["sciezka"]): p for p in kopia.problemy(db)}
+    assert w["zniknely"] == 1 and set(pr) == {"usuniety.jpg"} and pr["usuniety.jpg"]["rodzaj"] == "zniknal"
+    assert db.execute("SELECT COUNT(*) FROM sumy WHERE sciezka LIKE '%Inne%przeniesiony.jpg'").fetchone()[0] == 1
+    assert kopia.przywroc(db, str(bib), str(kop), pr["usuniety.jpg"]["sciezka"])["ok"]
+    assert (bib / "2020" / "usuniety.jpg").read_bytes() == (kop / "2020" / "usuniety.jpg").read_bytes()
