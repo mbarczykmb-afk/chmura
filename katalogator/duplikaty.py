@@ -475,18 +475,10 @@ def przenies_plik(z: str, do: str) -> None:
     except OSError as e:
         if not (getattr(e, "winerror", None) == 17 or e.errno == 18):  # inny dysk (Windows / EXDEV)
             raise
-    tmp = do + ".katalogator-tmp"
-    try:
-        shutil.copy2(z, tmp)
-        if os.path.getsize(tmp) != os.path.getsize(z):
-            raise OSError("kopia niepełna")
-        os.replace(tmp, do)
-    except BaseException:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
-        raise
+    from .wykonawca import kopiuj_z_weryfikacja   # kopia sprawdzana sumą kontrolną, nie tylko rozmiarem
+    if os.path.exists(do):
+        raise FileExistsError(17, "plik docelowy już istnieje", do)
+    kopiuj_z_weryfikacja(z, do)
     os.remove(z)
 
 
@@ -548,13 +540,20 @@ def _odloz_wiersz(db: sqlite3.Connection, w, partia: int, typ: str, docelowy: st
         if (st.st_size, st.st_mtime) != (w["rozmiar"], w["mtime"]):
             return f"Zmieniony od skanu: {w['wzgledna']}"
         cel = _cel_przeniesienia(w["korzen"], w["wzgledna"], typ, docelowy)
-        przenies_plik(w["sciezka"], cel)
     except OSError as e:
         return f"{w['wzgledna']}: {e.strerror or e}"
     dane = {k: w[k] for k in w.keys() if k != "rowid"}
     dane["_rowid"] = w["rowid"]  # przy cofaniu plik wraca z tym samym numerem (miniatury, propozycja drzewa)
-    db.execute("INSERT INTO operacje(partia, czas, typ, z_, do_, wiersz) VALUES (?,?,?,?,?,?)",
-               (partia, time.time(), typ, w["sciezka"], cel, json.dumps(dane, ensure_ascii=False)))
+    # wpis do historii PRZED przeniesieniem (i od razu trwały): gdyby program padł w trakcie, plik da się cofnąć
+    op = db.execute("INSERT INTO operacje(partia, czas, typ, z_, do_, wiersz) VALUES (?,?,?,?,?,?)",
+                    (partia, time.time(), typ, w["sciezka"], cel, json.dumps(dane, ensure_ascii=False))).lastrowid
+    db.commit()
+    try:
+        przenies_plik(w["sciezka"], cel)
+    except OSError as e:
+        db.execute("DELETE FROM operacje WHERE id = ?", (op,))
+        db.commit()
+        return f"{w['wzgledna']}: {e.strerror or e}"
     db.execute("DELETE FROM pliki WHERE rowid = ?", (w["rowid"],))
     # zapis po każdym pliku: przenoszenie setek plików po sieci trwa minuty, a otwarta transakcja blokowała
     # w tym czasie każde kliknięcie w oknie („database is locked”); plik już przeniesiony = wpis od razu trwały

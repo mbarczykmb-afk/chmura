@@ -37,6 +37,11 @@ def _dom(proj: projekty.Projekty, pid: str) -> str | None:
 
 
 def sprawdz(proj: projekty.Projekty, pid: str, postep=None, przerwij=None) -> dict:
+    with projekty.blokada_plikow(proj.baza(pid).parent):
+        return _sprawdz(proj, pid, postep, przerwij)
+
+
+def _sprawdz(proj: projekty.Projekty, pid: str, postep=None, przerwij=None) -> dict:
     """Skanuje folder(y) przychodzące i tworzy propozycję. Nic jeszcze nie przenosi."""
     dane = proj.wczytaj(pid)
     foldery = [f for f in dane.get("przychodzace") or [] if f]
@@ -92,6 +97,11 @@ def podsumowanie(proj: projekty.Projekty, pid: str, db=None) -> dict | None:
 
 
 def wykonaj(proj: projekty.Projekty, pid: str, postep=None, przerwij=None) -> dict:
+    with projekty.blokada_plikow(proj.baza(pid).parent):
+        return _wykonaj(proj, pid, postep, przerwij)
+
+
+def _wykonaj(proj: projekty.Projekty, pid: str, postep=None, przerwij=None) -> dict:
     db = skaner.otworz_baze(proj.baza_przychodzacych(pid))
     try:
         wykonawca.przygotuj(db)
@@ -103,6 +113,11 @@ def wykonaj(proj: projekty.Projekty, pid: str, postep=None, przerwij=None) -> di
 
 
 def cofnij(proj: projekty.Projekty, pid: str, postep=None, przerwij=None) -> dict:
+    with projekty.blokada_plikow(proj.baza(pid).parent):
+        return _cofnij(proj, pid, postep, przerwij)
+
+
+def _cofnij(proj: projekty.Projekty, pid: str, postep=None, przerwij=None) -> dict:
     db = skaner.otworz_baze(proj.baza_przychodzacych(pid))
     try:
         wykonawca.przygotuj(db)

@@ -9,7 +9,9 @@ Układ na dysku (domyślnie %LOCALAPPDATA%\\Katalogator):
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import re
 import secrets
 import shutil
@@ -60,6 +62,45 @@ def _czytaj_json(plik: Path, proby: int = 6) -> dict:
         if plik.exists() and plik.stat().st_size:
             raise ValueError(f"Plik projektu jest uszkodzony: {plik}")
         return {}
+
+
+class Zajety(ValueError):
+    """Ten projekt porządkuje właśnie inny proces (drugie okno albo automat z Harmonogramu)."""
+
+
+@contextlib.contextmanager
+def blokada_plikow(folder_projektu: Path):
+    """Blokada MIĘDZY PROCESAMI na operacje na plikach projektu (porządkowanie, cofanie, folder przychodzący).
+    Systemowa blokada pliku znika sama, gdy proces się zakończy (także po awarii) — nie zostaje „wisząca”."""
+    plik = Path(folder_projektu) / "pliki.blokada"
+    f = open(plik, "a+b")
+    try:
+        try:
+            if os.name == "nt":
+                import msvcrt
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise Zajety("Ten projekt porządkuje właśnie inny proces (drugie okno Katalogatora albo automat "
+                         "z Harmonogramu zadań). Poczekaj, aż skończy.") from None
+        try:
+            yield
+        finally:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+                    f.seek(0)
+                    msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+    finally:
+        f.close()
 
 
 class Projekty:

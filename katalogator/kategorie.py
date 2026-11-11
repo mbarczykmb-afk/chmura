@@ -55,9 +55,12 @@ def smieci(p: dict, wymiary: tuple | None = None) -> str | None:
         return "pusty plik"
     if ext in _EXT_SMIECI:
         return "ikona / plik tymczasowy / skrót"
-    if _SCIEZKA_SMIECI.search(os.path.dirname(_wzgledna(p))):
+    # zdjęcie / film z danymi aparatu, GPS albo datą z nagłówka to własne nagranie — nigdy śmieć,
+    # nawet gdy leży w folderze o nazwie „tmp”, „cache”, „temp”…
+    wlasne = bool(p.get("aparat") or p.get("lat") is not None or p.get("zrodlo_daty") in ("exif", "film"))
+    if _SCIEZKA_SMIECI.search(os.path.dirname(_wzgledna(p))) and not wlasne:
         return "miniatury / pamięć podręczna"
-    if p["rodzaj"] == "zdjecie" and not (p.get("aparat") or p.get("lat") is not None or p.get("zrodlo_daty") == "exif"):
+    if p["rodzaj"] == "zdjecie" and not wlasne:
         # zdjęcie z danymi aparatu / GPS / datą EXIF nigdy nie jest „ikoną”
         if wymiary and wymiary[0] and max(wymiary) <= MALY_BOK:
             return f"mały obrazek {wymiary[0]}×{wymiary[1]} (ikona / miniatura)"

@@ -566,8 +566,6 @@ def cofnij(db: sqlite3.Connection, postep=None, przerwij=None) -> dict:
                          (ost["partia"],)).fetchall()
     cofniete, bledy = 0, []
     foldery_celu: set[str] = set()
-    from .skaner import Zatwierdzanie
-    zatwierdz = Zatwierdzanie(db)  # krótkie transakcje — cofanie 50 tys. plików trwa
     for i, w in enumerate(wiersze, 1):
         if przerwij is not None and przerwij.is_set():
             db.commit()
@@ -608,7 +606,7 @@ def cofnij(db: sqlite3.Connection, postep=None, przerwij=None) -> dict:
             cofniete += 1
         except OSError as e:
             bledy.append(str(e))
-        zatwierdz()
+        db.commit()   # po każdym pliku: kopiowanie następnego (między dyskami) może trwać minuty
     db.commit()
     granica = os.path.normcase(os.path.normpath(planista.meta(db).get("cel", "")))
     for f in sorted(foldery_celu, key=len, reverse=True):

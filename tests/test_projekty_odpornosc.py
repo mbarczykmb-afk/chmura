@@ -90,3 +90,44 @@ def test_kosz_projektow_trzyma_dziesiec_najnowszych_usuniec(tmp_path):
     _t.sleep(1.1)
     P.usun(stary)
     assert any(u["nazwa"] == "stary" for u in P.usuniete())
+
+
+def test_blokada_plikow_miedzy_procesami(tmp_path):
+    import subprocess
+    import sys
+    import textwrap
+    (tmp_path / "p").mkdir()
+    kod = textwrap.dedent(f"""
+        import sys, time; sys.path.insert(0, {str(pathlib.Path(__file__).resolve().parents[1])!r})
+        from katalogator import projekty
+        with projekty.blokada_plikow({str(tmp_path / 'p')!r}):
+            print('mam', flush=True); time.sleep(3)
+    """)
+    inny = subprocess.Popen([sys.executable, "-c", kod], stdout=subprocess.PIPE, text=True)
+    assert inny.stdout.readline().strip() == "mam"
+    with pytest.raises(projekty.Zajety):
+        with projekty.blokada_plikow(tmp_path / "p"):
+            pass
+    inny.wait()
+    with projekty.blokada_plikow(tmp_path / "p"):   # po zakończeniu tamtego — wolne
+        pass
+
+
+def test_smieci_po_sciezce_nie_dla_zdjec_z_aparatu():
+    from katalogator import kategorie
+    p = {"sciezka": "D:/Zdjęcia/tmp/IMG_1.jpg", "wzgledna": "tmp/IMG_1.jpg", "rozmiar": 3_000_000, "rodzaj": "zdjecie"}
+    assert kategorie.smieci(p) == "miniatury / pamięć podręczna"
+    assert kategorie.smieci({**p, "aparat": "SM-S911B"}) is None
+    assert kategorie.smieci({**p, "lat": 50.0}) is None
+
+
+def test_oproznianie_kosza_nie_rusza_wlasnych_folderow(tmp_path):
+    from katalogator import skaner, sprzatanie
+    (tmp_path / "Odłożone" / "Duplikaty").mkdir(parents=True)
+    (tmp_path / "Odłożone" / "Duplikaty" / "a.jpg").write_bytes(b"x")
+    (tmp_path / "Odłożone" / "Wakacje 2019").mkdir()
+    (tmp_path / "Odłożone" / "Wakacje 2019" / "moje.jpg").write_bytes(b"y")
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    sprzatanie.usun_odlozone(db, [str(tmp_path)])
+    assert not (tmp_path / "Odłożone" / "Duplikaty" / "a.jpg").exists()
+    assert (tmp_path / "Odłożone" / "Wakacje 2019" / "moje.jpg").exists()

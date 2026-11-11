@@ -37,6 +37,11 @@ def lista_smieci(db: sqlite3.Connection) -> list[dict]:
     return wynik
 
 
+# podfoldery Odłożone, które zakłada sam program (duplikaty, podobne, nieostre, śmieci, usunięte, uszkodzone
+# z kopii zapasowej) — tylko je liczymy jako kosz i tylko je opróżniamy
+KATEGORIE_KOSZA = frozenset(duplikaty.PODFOLDERY.values()) | {"Uszkodzone"}
+
+
 def _odlozone_foldery(korzenie: list[str]) -> list[tuple[str, str]]:
     """[(ścieżka folderu Odłożone/<kategoria>, kategoria)] dla wybranych folderów."""
     wynik = []
@@ -46,7 +51,8 @@ def _odlozone_foldery(korzenie: list[str]) -> list[tuple[str, str]]:
             continue
         try:
             for w in os.scandir(baza):
-                if w.is_dir(follow_symlinks=False):
+                # tylko kategorie zakładane przez program — własny folder „Odłożone/Wakacje” nie jest koszem
+                if w.is_dir(follow_symlinks=False) and w.name in KATEGORIE_KOSZA:
                     wynik.append((w.path, w.name))
         except OSError:
             continue

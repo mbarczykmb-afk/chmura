@@ -1297,9 +1297,12 @@ class Stan:
         return self.uruchom("plan", f)
 
     def wykonaj(self, usun_puste: bool, usun_oryginaly: bool = True, folder: str | None = None) -> str | None:
+        folder_proj = self.projekty.baza(self.pid).parent
+
         def f(db, postep, przerwij):
-            w = wykonawca.wykonaj(db, postep=postep, przerwij=przerwij, usun_puste=usun_puste,
-                                  usun_oryginaly=usun_oryginaly, folder=folder)
+            with projekty.blokada_plikow(folder_proj):   # nie równolegle z automatem z Harmonogramu
+                w = wykonawca.wykonaj(db, postep=postep, przerwij=przerwij, usun_puste=usun_puste,
+                                      usun_oryginaly=usun_oryginaly, folder=folder)
             k = (f"Próba — folder „{folder}”: " if folder else "") + \
                 f"Gotowe: {w['zrobione']} plików ({raport.rozmiar_txt(w['bajty'])})."
             if w["bledy"]:
@@ -1310,8 +1313,11 @@ class Stan:
         return self.uruchom("wykonanie", f)
 
     def cofnij_wykonanie(self) -> str | None:
+        folder_proj = self.projekty.baza(self.pid).parent
+
         def f(db, postep, przerwij):
-            w = wykonawca.cofnij(db, postep=postep, przerwij=przerwij)
+            with projekty.blokada_plikow(folder_proj):
+                w = wykonawca.cofnij(db, postep=postep, przerwij=przerwij)
             k = f"Cofnięto {w['cofniete']} plików. Przeskanuj foldery, żeby odświeżyć wyniki."
             if w["bledy"]:
                 k += " Problemy: " + "; ".join(w["bledy"][:5])
