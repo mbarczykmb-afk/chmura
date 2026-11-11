@@ -83,11 +83,21 @@ Wymaga czegoś, co działa w domu 24/7. Opcje, od najprostszej:
 ## Katalogator — porządkowanie zdjęć, filmów, muzyki i plików
 
 Specyfikacja: [`docs/katalogator-specyfikacja.md`](docs/katalogator-specyfikacja.md).
-Wersja 1.4: projekty (praca na kilka dni), skan i raport, duplikaty, analiza zdjęć (dokumenty, podobne, nieostre,
-„nie z aparatu”), śmieci, propozycja drzewa („Zdjęcia z 2023 → Marzec w Olkuszu”, „Dokumenty z 2023”), edytor
-z wyszukiwarką i zmianami zbiorczymi, porządkowanie z weryfikacją i cofaniem, folder przychodzący z harmonogramem,
-stabilna praca na dużych bibliotekach (sprawdzone: 200 tys. plików, filmy 400 GB, przerwy w dostępie do
-dysku sieciowego).
+**Co potrafi (wersja 1.56):**
+- **Porządkowanie** — projekty (praca na kilka dni, kosz projektów), skan i raport, duplikaty (po zawartości),
+  analiza zdjęć (dokumenty z OCR, podobne, nieostre, „nie z aparatu”), śmieci, propozycja drzewa
+  („Zdjęcia z 2023 → Marzec w Olkuszu”, „Dokumenty z 2023”) z edytorem, porządkowanie z weryfikacją sum i cofaniem,
+  folder przychodzący z harmonogramem (np. kopia z telefonu).
+- **Sprzątanie dysku** — duplikaty i śmieci na miejscu, bez przenoszenia do biblioteki; kosz programu „Odłożone”.
+- **Przeglądarka (biblioteka)** — oś czasu, foldery, albumy i ulubione, osoby (rozpoznawanie twarzy), mapa,
+  wyszukiwanie (także po tekście z OCR), porównywanie serii, edycja (obrót, kadrowanie, jasność), data i miejsce
+  w EXIF, 📍 zdjęcia bez GPS (propozycje ze śladów Strava/Intervals/GPX, osi czasu Google i GeoCLIP).
+- **Podróże** — dziennik wypraw z osi czasu Google: oś czasu wypraw, mapa państw, trasy i ślady GPS, zdjęcia
+  wyprawy z biblioteki.
+- **Telefon i dostęp z zewnątrz** — galeria i sterowanie z telefonu (PIN), most przez Tailscale.
+- **Bezpieczeństwo danych** — kopia zapasowa biblioteki z poprzednimi wersjami i sprawdzaniem sum, odzyskiwanie
+  usuniętych plików, naprawa filmów; nic nie jest kasowane bez kosza „Odłożone”.
+- Stabilna praca na dużych bibliotekach (sprawdzone: 200 tys. plików, filmy 400 GB, przerwy w dostępie do NAS-a).
 Nazwy miejscowości: © GeoNames, CC BY 4.0.
 
 **Instalacja:**
@@ -164,6 +174,8 @@ W podglądzie zdjęcia w Bibliotece i Przeglądarce — **mała mapa** z miejsce
 
 **🖥 Pełny program z telefonu** (gdy Katalogator działa na komputerze): 📱 → kod QR + PIN → na pilocie *🖥 Pełny
 program* — wszystkie zakładki (Duplikaty, Dokumenty, Podobne, Drzewo, kosz…) w układzie na telefon. Serwer telefonu
+**1.56.4:** Mniej błędów „database is locked”: rozpoznawanie twarzy zapisuje po każdym zdjęciu i grupuje rzadziej (co 300 zdjęć / minutę). Szybsze miniatury przy dużej bibliotece na NAS-ie (jedno zapytanie do bazy zamiast dwóch, bez pytania NAS-a o każdy plik, lista zestawów dysków w pamięci). Szybsze zdjęcia w Podróżach (słownik nazw zamiast przeglądania bazy przy każdym zdjęciu). Spójniejsze nazwy (Propozycja drzewa i porządkowanie, Kosz — folder Odłożone) i aktualny spis funkcji w README.
+
 po PIN-ie przekazuje zapytania do programu na komputerze; wymaga *Pozwól sterować z telefonu*; zamknąć programu ani
 zainstalować aktualizacji z telefonu się nie da. **Spoza domu**: VPN do domu (WireGuard na domowym serwerze albo
 Tailscale) i ten sam adres — program nie jest wystawiany wprost do internetu.

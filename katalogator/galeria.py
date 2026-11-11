@@ -440,7 +440,11 @@ class Galeria:
         return r["sciezka"]
 
     def miniatura(self, id_: int, srednia: bool = False) -> bytes | None:
-        film = self.sciezka(id_, "film")
+        # jedno zapytanie (z warunkiem zakresu/ukrytych) zamiast dwóch — siatka 200 miniatur to 200, nie 400 połączeń
+        wiersz = self._wiersz(id_)
+        if not wiersz:
+            return None
+        film = wiersz["sciezka"] if wiersz["rodzaj"] == "film" else None
         if film:  # klatka zapisana przez okno programu (przeglądarka wyciąga ją z filmu)
             db = self._db()
             try:
@@ -463,16 +467,14 @@ class Galeria:
             if klucz in self._min:
                 self._min.move_to_end(klucz)
                 return self._min[klucz]
-        sc = self.sciezka(id_, "zdjecie")
-        if not sc:
+        if wiersz["rodzaj"] != "zdjecie":
             return None
+        sc = wiersz["sciezka"]
         plik_cache = None
         if self.pamiec_min and not srednia:  # na dysku tylko małe miniatury siatki (średnie są duże)
-            try:
-                st = os.stat(sc)  # w nazwie data i rozmiar pliku — zmieniony plik = nowa miniatura
-                plik_cache = self.pamiec_min / f"{id_ % 100:02d}" / f"{id_}-{int(st.st_mtime)}-{st.st_size}.jpg"
-            except OSError:
-                return None
+            # w nazwie data i rozmiar pliku z bazy (bez pytania NAS-a o każdy plik) — zmieniony plik po
+            # odświeżeniu bazy = nowa miniatura
+            plik_cache = self.pamiec_min / f"{id_ % 100:02d}" / f"{id_}-{int(wiersz['mtime'] or 0)}-{wiersz['rozmiar']}.jpg"
         dane = None
         if plik_cache and plik_cache.exists():
             dane = plik_cache.read_bytes()

@@ -87,15 +87,20 @@ class Stan:
         return wynik
 
     def podroze_szukaj(self, nazwa: str) -> str | None:
-        """Plik o tej nazwie w bazie Przeglądarki (zdjęcia w danych podróży bywają zapisane samą nazwą)."""
-        n = nazwa.lower().replace("^", "^^").replace("%", "^%").replace("_", "^_")
-        db = self.przegladarka.galeria._db()
-        try:
-            r = db.execute("SELECT sciezka FROM pliki WHERE lower(wzgledna) = ? OR lower(wzgledna) LIKE ? ESCAPE '^' "
-                           "OR lower(wzgledna) LIKE ? ESCAPE '^' LIMIT 1", (nazwa.lower(), "%/" + n, "%\\" + n)).fetchone()
-        finally:
-            db.close()
-        return r[0] if r else None
+        """Plik o tej nazwie w bazie Przeglądarki (zdjęcia w danych podróży bywają zapisane samą nazwą).
+        Słownik nazwa → ścieżka budowany raz na ~10 min, a nie pełny przegląd bazy przy każdym zdjęciu."""
+        teraz = time.time()
+        pam = getattr(self, "_podroze_nazwy", None)
+        if not pam or teraz - pam[0] > 600:
+            slownik: dict[str, str] = {}
+            db = self.przegladarka.galeria._db()
+            try:
+                for sc, wz in db.execute("SELECT sciezka, wzgledna FROM pliki WHERE rodzaj = 'zdjecie'"):
+                    slownik.setdefault(re.split(r"[\\/]", wz or sc)[-1].lower(), sc)
+            finally:
+                db.close()
+            pam = self._podroze_nazwy = (teraz, slownik)
+        return pam[1].get(nazwa.lower())
 
     def podroze_zdjecia(self, od: str, do: str) -> list[dict]:
         """Zdjęcia z biblioteki Przeglądarki z podanego zakresu dat (RRRR-MM-DD), z GPS i datą — dla wyprawy w Podróżach."""

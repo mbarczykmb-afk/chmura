@@ -43,8 +43,17 @@ class Przegladarka:
         return self.katalog / "zestawy.json"
 
     def _zestawy(self) -> dict:
+        try:   # pamięć wg daty pliku — korzenie() woła się przy każdej miniaturze
+            mt = self._plik().stat().st_mtime_ns
+        except OSError:
+            mt = None
+        pam = getattr(self, "_pam_zestawow", None)
+        if mt is not None and pam and pam[0] == mt:
+            return json.loads(pam[1])
         d = plik_json.czytaj(self._plik())   # nieczytelny plik → wyjątek, a nie jeden pusty zestaw „Moje dyski”
         if isinstance(d, dict) and d.get("zestawy"):
+            if mt is not None:
+                self._pam_zestawow = (mt, json.dumps(d))
             return d
         stare = []  # do 1.9.1 jedna lista w foldery.json
         try:

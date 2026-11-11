@@ -382,9 +382,12 @@ def _praca(galeria) -> None:
                 _zapisz_twarze(db, sc, lista, dim)
                 db.execute("INSERT OR REPLACE INTO g_twarze_pliki VALUES (?,?,?)", (sc, mt or 0, len(lista)))
                 twarzy += len(lista)
-                if time.time() - ostatni_zapis > 3 or i == len(do_zrobienia):
-                    db.commit(); ostatni_zapis = time.time()
+                # zapis od razu: transakcja nie wisi otwarta, gdy czytamy kolejne zdjęcie z NAS-a („database is locked”)
+                db.commit()
+                # grupowanie wczytuje wszystkie wektory — rzadko (co 300 zdjęć / minutę), a nie co 3 s
+                if i % 300 == 0 or time.time() - ostatni_zapis > 60 or i == len(do_zrobienia):
                     grupuj(db)
+                    db.commit(); ostatni_zapis = time.time()
                 if not _ustaw(k, zrobione=i, twarzy=twarzy):
                     db.commit(); grupuj(db)
                     _ustaw(k, trwa=False, komunikat="Przerwano — znalezione osoby już są widoczne.")
