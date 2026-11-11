@@ -1047,6 +1047,11 @@ class Stan:
             self.skan.update(trwa=False, komunikat=komunikat, blad=blad)
             self.wersja_danych += 1
         self.dziennik("skan", komunikat + (" " + blad if blad else ""))
+        nastepny, self._po_skanie = getattr(self, "_po_skanie", None), None
+        if nastepny == "plan" and not blad and not komunikat.startswith("Przerwano"):
+            w = self.generuj_plan(odswiez=False)   # „Utwórz propozycję” zaczęło od skanu zmian — teraz propozycja
+            if w:
+                LOG.info("Propozycja po skanie: %s", w)
 
     # --- duplikaty w tle --------------------------------------------------
     def szukaj_duplikatow(self) -> str | None:
@@ -1299,11 +1304,32 @@ class Stan:
                     f"grup podobnych {w['podobne_grupy']}.")
         return self.uruchom("analiza", f)
 
-    def generuj_plan(self) -> str | None:
-        if not self.ma_wyniki():
-            return "Najpierw zeskanuj foldery."
+    SKAN_SWIEZY_S = 30 * 60   # starszy skan → „Utwórz propozycję” najpierw sam skanuje zmiany
+
+    def _ostatni_skan(self) -> float | None:
+        try:
+            db = skaner.otworz_baze(self.baza)
+            try:
+                return db.execute("SELECT MAX(koniec) FROM skany").fetchone()[0]
+            finally:
+                db.close()
+        except sqlite3.Error:
+            return None
+
+    def generuj_plan(self, odswiez: bool = True) -> str | None:
         if not self.ustawienia["cel"]:
             return "Najpierw wybierz miejsce docelowe („Dokąd?”)."
+        kon = self._ostatni_skan() if self.ma_wyniki() else None
+        if odswiez and (kon is None or time.time() - kon > self.SKAN_SWIEZY_S):
+            # propozycja liczy się ze skanu, nie z dysku — stary skan nie zna nowych plików (np. z telefonu),
+            # więc najpierw szybki skan zmian (czytane są tylko nowe/zmienione pliki), a po nim sama propozycja
+            blad = self.rozpocznij_skan()
+            if blad:
+                return blad
+            self._po_skanie = "plan"
+            return None
+        if not self.ma_wyniki():
+            return "Najpierw zeskanuj foldery."
         zrodla, cel = list(self.ustawienia["zrodla"]), self.ustawienia["cel"]
 
         def f(db, postep, przerwij):

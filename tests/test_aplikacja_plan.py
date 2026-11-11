@@ -85,3 +85,24 @@ def test_film_z_zakresem(app, tmp_path):  # noqa: F811
     with pytest.raises(urllib.error.HTTPError) as e:  # bez tokenu
         urllib.request.urlopen(f"{baza}/plik?id={fid}", timeout=5)
     assert e.value.code == 403
+
+
+def test_propozycja_sama_skanuje_gdy_skan_jest_stary(app, swiat):  # noqa: F811
+    """Pułapka „0 plików”: nowy plik po skanie (np. z telefonu) — „Utwórz propozycję” najpierw skanuje zmiany."""
+    import shutil
+    api, _, stan = app
+    k, cel, db = swiat
+    api("/api/ustawienia", {"zrodla": [{"sciezka": str(k / "Praca"), "tryb": "kopiuj"}], "cel": str(cel)})
+    api("/api/skanuj", {})
+    _czekaj(api, "skan")
+    api("/api/plan/generuj", {})
+    przed = _czekaj(api, "plan")["plan"]["kopiuj"]
+    shutil.copy(k / "Praca" / "umowa.pdf", k / "Praca" / "umowa nowa.pdf")   # pojawia się po skanie
+    stan.SKAN_SWIEZY_S = -1                                                  # skan „stary”
+    api("/api/plan/generuj", {})
+    for _ in range(200):
+        s = json.loads(api("/api/stan")[1])
+        if not s["skan"]["trwa"] and not s["zad"]["plan"]["trwa"] and s["plan"] and s["plan"]["kopiuj"] > przed:
+            break
+        time.sleep(0.05)
+    assert s["plan"]["kopiuj"] == przed + 1, s["zad"]["plan"]
