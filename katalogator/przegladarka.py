@@ -36,6 +36,7 @@ class Przegladarka:
         # galeria widzi tylko aktualnie wybrane foldery (usunięty z listy znika od razu, bez kasowania bazy)
         self.galeria = galeria.Galeria(self.baza, lambda: self.foldery(), pamiec_min=self.katalog / "miniatury",
                                        tylko_zdjecia_ludzi=True)
+        self.galeria.wszystkie_korzenie = self.wszystkie_foldery
 
     # --- zestawy dysków („projekty” Przeglądarki): każdy ma własną listę dysków/folderów -------------------
     # Jedna baza na wszystkie zestawy — ten sam dysk w dwóch zestawach skanuje się raz; ulubione i albumy wspólne.

@@ -126,7 +126,9 @@ def program(tmp_path, projekt):
         c.request(metoda, sciezka, body=dane, headers=h)
         r = c.getresponse()
         return r.status, r.read(), dict(r.getheaders())
-    yield {"get": get, "token": token, "foto": foto, "obca": obca, "stan": stan, "url": url}
+    def ciasteczko():   # osobny token Podróży (nie pełny token programu) — z odpowiedzi strony
+        return get(f"/podroze/?t={token}")[2]["Set-Cookie"].split(";")[0]
+    yield {"get": get, "ciasteczko": ciasteczko, "token": token, "foto": foto, "obca": obca, "stan": stan, "url": url}
     serwer.shutdown()
 
 
@@ -137,14 +139,14 @@ def test_strona_wymaga_tokenu_i_ustawia_ciasteczko(program):
     kod, tresc, nag = g(f"/podroze/?t={t}")
     assert kod == 200 and b'<base href="/podroze/">' in tresc and b"cdn.tailwindcss" not in tresc and b"unpkg.com" not in tresc
     ciastko = nag["Set-Cookie"]
-    assert ciastko.startswith(f"kat_podroze={t}") and "HttpOnly" in ciastko and "SameSite=Strict" in ciastko and "Path=/podroze" in ciastko
+    assert ciastko.startswith("kat_podroze=") and f"kat_podroze={t}" not in ciastko and "HttpOnly" in ciastko and "SameSite=Strict" in ciastko and "Path=/podroze" in ciastko
     assert g("/podroze", metoda="GET")[0] == 302                                   # ukośnik na końcu (adresy względne)
     assert g("/podroze/?t=" + t, naglowki={})[0] == 200
 
 
 def test_zasoby_i_dane_przez_ciasteczko(program):
     g, t = program["get"], program["token"]
-    c = f"kat_podroze={t}"
+    c = program["ciasteczko"]()
     assert g("/podroze/api/version")[0] == 403 and g("/podroze/api/version", cookie="kat_podroze=zle")[0] == 403
     kod, tresc, _ = g("/podroze/api/version", c)
     assert kod == 200 and json.loads(tresc)["totalTrips"] == 2
@@ -169,7 +171,7 @@ def test_zasoby_i_dane_przez_ciasteczko(program):
 def test_zdjecia_przez_serwer_tylko_z_biblioteki(program):
     from urllib.parse import quote
     g, t = program["get"], program["token"]
-    c = f"kat_podroze={t}"
+    c = program["ciasteczko"]()
     kod, tresc, nag = g("/podroze/api/photo?path=" + quote(str(program["foto"])), c)
     assert kod == 200 and nag["Content-Type"] == "image/jpeg" and tresc[:2] == b"\xff\xd8" and "max-age" in nag["Cache-Control"]
     assert g("/podroze/api/photo?path=" + quote(str(program["obca"])), c)[0] == 403         # spoza biblioteki
@@ -183,7 +185,7 @@ def test_zdjecia_przez_serwer_tylko_z_biblioteki(program):
 def test_post_i_panel_wymagaja_dostepu(program):
     g, t = program["get"], program["token"]
     assert g("/podroze/api/reindex", metoda="POST", dane=b"{}")[0] == 403
-    assert g("/podroze/api/reindex", f"kat_podroze={t}", "POST", b"{}")[0] == 200
+    assert g("/podroze/api/reindex", program["ciasteczko"](), "POST", b"{}")[0] == 200
     assert g("/api/podroze")[0] == 403                                                  # panel: zwykły token programu
     kod, tresc, _ = g(f"/api/podroze?t={t}")
     s = json.loads(tresc)
@@ -217,7 +219,7 @@ def test_podroze_nie_przez_serwer_telefonu(tmp_path):
 def test_slady_gps_przez_serwer_i_klucze_nie_wyplywaja(program):
     from katalogator import slady
     g, t, stan = program["get"], program["token"], program["stan"]
-    c = f"kat_podroze={t}"
+    c = program["ciasteczko"]()
     slady.zapisz_klucze(stan.katalog, {"intervals_api_key": "TAJNY-KLUCZ-123", "intervals_athlete_id": "i7"})
     cel = podroze.folder_danych(stan.katalog) / "slady"
     cel.mkdir()

@@ -174,6 +174,8 @@ W podglądzie zdjęcia w Bibliotece i Przeglądarce — **mała mapa** z miejsce
 
 **🖥 Pełny program z telefonu** (gdy Katalogator działa na komputerze): 📱 → kod QR + PIN → na pilocie *🖥 Pełny
 program* — wszystkie zakładki (Duplikaty, Dokumenty, Podobne, Drzewo, kosz…) w układzie na telefon. Serwer telefonu
+**1.56.5:** Ostatnie drobne poprawki z audytu. Albumy i ulubione nie przepinają się już na kopię zdjęcia z innego zestawu dysków (np. kopia na USB) przy przełączaniu zestawów — przepinane są tylko wpisy z dysków, których nie ma w żadnym zestawie (przeniesienie biblioteki Z: → U: działa jak dawniej). Przez most widać tylko ustawiony zakres; twarze z ukrytych albumów i spoza zakresu nie są pokazywane telefonowi. Ciasteczko Podróży ma osobny token (nie pełny token programu). Nazwy zarezerwowane Windows (CON, NUL, COM1…) są poprawiane, a ścieżki dłuższe niż 250 znaków mają ostrzeżenie w propozycji drzewa. Zmiana zakresu telefonu i przełączenie projektu działają od razu przy włączonym udostępnianiu.
+
 **1.56.4:** Mniej błędów „database is locked”: rozpoznawanie twarzy zapisuje po każdym zdjęciu i grupuje rzadziej (co 300 zdjęć / minutę). Szybsze miniatury przy dużej bibliotece na NAS-ie (jedno zapytanie do bazy zamiast dwóch, bez pytania NAS-a o każdy plik, lista zestawów dysków w pamięci). Szybsze zdjęcia w Podróżach (słownik nazw zamiast przeglądania bazy przy każdym zdjęciu). Spójniejsze nazwy (Propozycja drzewa i porządkowanie, Kosz — folder Odłożone) i aktualny spis funkcji w README.
 
 po PIN-ie przekazuje zapytania do programu na komputerze; wymaga *Pozwól sterować z telefonu*; zamknąć programu ani

@@ -141,9 +141,15 @@ def przygotuj(db: sqlite3.Connection) -> None:
     kategorie.przygotuj(db)
 
 
+_ZAREZERWOWANE = re.compile(r"^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)", re.I)   # Windows nie pozwala na te nazwy
+
+
 def czysta_nazwa(n: str, zapas: str = "_") -> str:
-    """Nazwa folderu bez znaków niedozwolonych w Windows, bez kropek/spacji na końcu."""
+    """Nazwa folderu/pliku bez znaków niedozwolonych w Windows, bez kropek/spacji na końcu i bez nazw
+    zarezerwowanych (CON, NUL, COM1… — także „nul.jpg”)."""
     n = _ZLE.sub("_", str(n or "")).strip().rstrip(". ")
+    if _ZAREZERWOWANE.match(n):
+        n = "_" + n
     return n[:120] or zapas
 
 
@@ -312,6 +318,10 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
                 w["uwaga"] = "; ".join(c for c in w["uwaga"].split("; ") if rodzaj_uwagi(c) not in przyjete) or None
     db.execute("DELETE FROM uwagi_cofnij")
     _rozwiaz_kolizje(wpisy)
+    for w in wpisy:   # Windows bez obsługi długich ścieżek: ponad ~250 znaków kopiowanie kończy się błędem
+        if len(os.path.join(cel, w["cel"])) > 250:
+            uw = "ścieżka dłuższa niż 250 znaków — skróć nazwę folderu (Zmień nazwę), inaczej Windows jej nie zapisze"
+            w["uwaga"] = f"{w['uwaga']}; {uw}" if w["uwaga"] else uw
     db.execute("DELETE FROM plan")
     db.execute("DELETE FROM plan_ops")
     db.execute("DELETE FROM plan_zmiany")

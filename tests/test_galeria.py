@@ -337,3 +337,26 @@ def test_przegladarka_czeka_na_katalogator(tmp_path):
     p._po_zmianach = __import__("time").time()                       # niedawno odświeżone po zmianach
     p.zglos_zmiany(); p._zmiany -= p.CISZA_PO_ZMIANACH
     assert not p.teraz_odswiezyc()                                    # nie częściej niż co 30 min
+
+
+def test_album_nie_przepina_sie_na_kopie_z_innego_zestawu(tmp_path):
+    """Dwa zestawy dysków (NAS i kopia na USB): przełączenie zestawu nie przenosi wpisów albumu na kopię."""
+    import shutil
+    nas, usb = tmp_path / "NAS", tmp_path / "USB"
+    (nas / "2023").mkdir(parents=True)
+    _jpg_z_exif(nas / "2023" / "IMG_1.jpg", data="2023:07:11 12:00:00", gps=HEL)
+    shutil.copytree(nas, usb)
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    skaner.skanuj(str(nas), db, wypisz=lambda *_: None)
+    skaner.skanuj(str(usb), db, wypisz=lambda *_: None)
+    foldery = [str(nas)]
+    g = galeria.Galeria(tmp_path / "k.db", lambda: foldery)
+    g.wszystkie_korzenie = lambda: [str(nas), str(usb)]
+    jeden = next(p["id"] for p in g.pliki("2023", 7)["pliki"] if p["nazwa"] == "IMG_1.jpg")
+    a = g.album_nowy("Hel", [jeden])["id"]
+    foldery[:] = [str(usb)]          # zestaw „Dysk USB”
+    g.albumy()
+    foldery[:] = [str(nas)]          # z powrotem NAS — album dalej wskazuje oryginał
+    assert g.sciezka(g.kolekcja("album", a)["pliki"][0]["id"]).startswith(str(nas))
+    db2 = skaner.otworz_baze(tmp_path / "k.db")
+    assert db2.execute("SELECT sciezka FROM g_album_pliki").fetchone()[0].startswith(str(nas))

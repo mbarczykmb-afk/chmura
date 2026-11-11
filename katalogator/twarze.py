@@ -467,7 +467,10 @@ def miniatura_twarzy(galeria, id_: int) -> bytes | None:
     db = galeria._db()
     try:
         przygotuj(db)
-        r = db.execute("SELECT miniatura FROM g_twarze WHERE id=?", (int(id_),)).fetchone()
+        # tylko twarze ze zdjęć w bieżącym zakresie (bez ukrytych albumów) — także przez telefon i most
+        w, arg = galeria._warunek()
+        r = db.execute(f"SELECT miniatura FROM g_twarze WHERE id=? AND sciezka IN (SELECT sciezka FROM pliki WHERE 1 {w})",
+                       [int(id_)] + arg).fetchone()
     finally:
         db.close()
     return r[0] if r else None

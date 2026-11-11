@@ -93,6 +93,7 @@ class Galeria:
         self.filtr = (" AND (zrodlo_daty IN ('exif','film','nazwa') OR rozmiar >= 150000 OR rodzaj = 'film')"
                       if tylko_zdjecia_ludzi else "")
         self.korzenie = korzenie or (lambda: None)
+        self.wszystkie_korzenie = None   # Przeglądarka: dyski ze wszystkich zestawów (naprawa albumów)
         self.pamiec_min = pamiec_min  # katalog na miniatury (serwer 24/7) — w oknie tylko pamięć RAM
         self._min: OrderedDict = OrderedDict()
         self._blokada = threading.Lock()
@@ -139,9 +140,20 @@ class Galeria:
 
         def w_zakresie(s: str) -> bool:
             return korz is None or os.path.normcase(s).startswith(pref)
+        # dyski ze WSZYSTKICH zestawów Przeglądarki: zdjęcie z innego zestawu (np. kopia na dysku USB) nie jest
+        # „przenoszone” na kopię przy przełączeniu zestawu; przepinamy tylko wpisy z dysków, których nigdzie już nie ma
+        wszystkie = self.wszystkie_korzenie() if self.wszystkie_korzenie else None
+        pref_wsz = tuple(os.path.normcase(os.path.abspath(r).rstrip("\\/") + os.sep) for r in wszystkie or [])
+
+        def do_naprawy(r) -> bool:
+            if not r["jest"]:
+                return True
+            if w_zakresie(r["sciezka"]):
+                return False
+            return not (pref_wsz and os.path.normcase(r["sciezka"]).startswith(pref_wsz))
         brak = {t: [r for r in db.execute(
                     f"SELECT rowid, sciezka, klucz, sciezka IN (SELECT sciezka FROM pliki) jest FROM {t} "
-                    f"WHERE klucz IS NOT NULL").fetchall() if not r["jest"] or not w_zakresie(r["sciezka"])]
+                    f"WHERE klucz IS NOT NULL").fetchall() if do_naprawy(r)]
                 for t in ("g_ulubione", "g_album_pliki")}
         if not any(brak.values()) or korz == []:
             return 0
@@ -2113,7 +2125,7 @@ class SerwerGalerii:
                     return self._wyslij(s.pilot.status() if s.pilot else None)
                 g = s.galeria
                 z = q.get("z", [""])[0]
-                if s.galerie is not None and z in s.ZAKRESY:
+                if s.galerie is not None and z in s.ZAKRESY and not self._z_mostu():   # przez most: tylko ustawiony zakres
                     g = s.galerie(z)
                 try:
                     w = obsluz_api(g, u.path, q)
@@ -2176,7 +2188,7 @@ class SerwerGalerii:
                     except ValueError:
                         dane = {}
                     z = q.get("z", [""])[0]
-                    g = s.galerie(z) if s.galerie is not None and z in s.ZAKRESY else s.galeria
+                    g = s.galerie(z) if s.galerie is not None and z in s.ZAKRESY and not self._z_mostu() else s.galeria
                     w = obsluz_usuwanie(g, u.path, dane if isinstance(dane, dict) else {}, okno=False)
                     s.pilot.po_usunieciu(z, w, u.path)
                     return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)

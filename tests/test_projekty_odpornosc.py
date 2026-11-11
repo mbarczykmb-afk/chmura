@@ -159,3 +159,9 @@ def test_kopia_zachowuje_poprzednia_wersje(tmp_path):
     kopia.kopiuj(str(bib), str(kop))
     assert (kop / "2020" / "a.jpg").read_bytes() == b"uszk"
     assert (kop / kopia.FOLDER_POPRZEDNICH / "2020" / "a.jpg").read_bytes() == b"dobra wersja"
+
+
+def test_nazwy_zarezerwowane_windows():
+    from katalogator import planista
+    assert planista.czysta_nazwa("CON") == "_CON" and planista.czysta_nazwa("nul.jpg") == "_nul.jpg"
+    assert planista.czysta_nazwa("Console") == "Console" and planista.czysta_nazwa("com10") == "com10"

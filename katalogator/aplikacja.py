@@ -255,6 +255,8 @@ class Stan:
             if self.serwer_tel is not None and wlacz:  # już działa — zmieniamy tylko sterowanie (i PIN)
                 s = self.serwer_tel
                 s.pilot.sterowanie = sterowanie
+                self.zakres_tel = zakres
+                s.galeria = self.galeria(zakres)   # zmiana zakresu działa od razu, bez wyłączania serwera
                 aktualizacje.zapisz_ustawienia(self.katalog, telefon_auto={"zakres": zakres, "sterowanie": sterowanie})
                 if pin is not None:
                     s.pin = wlasny or galeria.losowy_pin()
@@ -272,6 +274,7 @@ class Stan:
                 return {"wlaczone": False}
             for port in (8765, 8766, 8767, 0):
                 try:
+                    self.zakres_tel = zakres
                     self.serwer_tel = galeria.SerwerGalerii(self.galeria(zakres), port=port, pin=wlasny, staly_token=staly,
                                                             pilot=pilot.Pilot(self, sterowanie),
                                                             galerie=self.galeria).start()
@@ -387,6 +390,9 @@ class Stan:
         self.projekty.ustaw_ostatni(pid)
         self.wersja_danych += 1
         self._ustaw_kosz()
+        tel = getattr(self, "serwer_tel", None)
+        if tel is not None:   # telefon pokazuje bibliotekę nowo otwartego projektu, nie poprzedniego
+            tel.galeria = self.galeria(getattr(self, "zakres_tel", "biblioteka"))
         try:  # decyzje sprzed porządkowania — pod nowymi ścieżkami (pliki w bibliotece)
             if self.baza.exists():
                 self.z_db(wykonawca.przenies_decyzje)
@@ -1459,6 +1465,8 @@ class Stan:
 
 
 def _handler(stan: Stan, token: str, zamknij):
+    token_podroze = secrets.token_urlsafe(24)   # ciasteczko Podróży: osobny token, tylko do /podroze/
+
     class H(BaseHTTPRequestHandler):
         server_version = "Katalogator"
 
@@ -1490,7 +1498,7 @@ def _handler(stan: Stan, token: str, zamknij):
                 if self._ok_token(q):
                     return True
                 c = http.cookies.SimpleCookie(self.headers.get("Cookie") or "")
-                return "kat_podroze" in c and secrets.compare_digest(c["kat_podroze"].value, token)
+                return "kat_podroze" in c and secrets.compare_digest(c["kat_podroze"].value, token_podroze)
             except (TypeError, http.cookies.CookieError):
                 return False
 
@@ -1502,10 +1510,12 @@ def _handler(stan: Stan, token: str, zamknij):
                 self.end_headers()
                 return
             if not self._podroze_dostep(q):
-                return self._wyslij("Brak dostępu", "text/plain; charset=utf-8", HTTPStatus.FORBIDDEN)
+                return self._wyslij("Brak dostępu — otwórz Podróże z okna Katalogatora (zakładka „Podróże”). "
+                                    "Po ponownym uruchomieniu programu stary adres przestaje działać.",
+                                    "text/plain; charset=utf-8", HTTPStatus.FORBIDDEN)
             rel = unquote(u.path[len("/podroze/"):])
             if rel in ("", "index.html"):
-                ciastko = {"Set-Cookie": f"kat_podroze={token}; Path=/podroze; HttpOnly; SameSite=Strict"}
+                ciastko = {"Set-Cookie": f"kat_podroze={token_podroze}; Path=/podroze; HttpOnly; SameSite=Strict"}
                 return self._wyslij((podroze.UI_PODROZE / "index.html").read_bytes(), "text/html; charset=utf-8",
                                     dodatkowe=ciastko)
             w = podroze.odpowiedz_get(stan.katalog, rel, q, stan.podroze_korzenie(), stan.podroze_szukaj, stan)
