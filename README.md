@@ -174,6 +174,8 @@ samego zdjęcia”. ⚡ Hurtem: *1) Odłóż same kopie tych samych zdjęć* (be
 tylko ★* — oba do cofnięcia. **Nie z aparatu — grupy**: obrazy zebrane wg folderu (pojedyncze razem, wg powodu), cała
 grupa zaznaczona; odznaczasz prawdziwe zdjęcia i „✓ Zatwierdź grupę” (zaznaczone → śmieci / dokumenty / zdjęcia).
 
+**1.56.1:** Poprawki z audytu. Ustawienia programu (PIN, klucz mostu, kopia, Podróże) nie mogą już zniknąć przy chwilowej blokadzie lub uszkodzeniu program.json — zapis atomowy pod blokadą, kopia .bak. „Cofnij” po porządkowaniu w trybie Kopiuj nie usuwa kopii, gdy oryginału już nie ma (np. sformatowana karta). Telefon: limit prób PIN-u odporny na równoległe zapytania (także łączny), a z telefonu nie da się odczytać klucza mostu ani włączyć mostu, zdalnej pomocy, autostartu, kopii czy odzyskiwania. Skan zapisuje paczki krótkimi transakcjami — mniej błędów „database is locked” w Przeglądarce. Indeks na dacie zdjęć (szybsze przewijanie osi czasu). Kosz projektów liczy kolejność wg chwili usunięcia.
+
 **1.56.0:** Projekty nie tracą już nazwy, notatek i miejscowości, gdy Windows chwilowo blokuje plik projektu (wcześniej zapis ustawień nadpisywał je domyślnymi — tak „zniknął” projekt z własną nazwą). Kopia projekt.json.bak, zapis pod blokadą z ponowieniem. Usunięty projekt trafia do kosza projektów i można go przywrócić z okna projektów. Karta „Skanowanie” pokazuje, kiedy był ostatni skan, a pusta propozycja drzewa wyjaśnia, że trzeba przeskanować, by znaleźć nowe pliki.
 
 **1.55.0:** Podróże biorą zdjęcia wyprawy z biblioteki Katalogatora (baza Przeglądarki: data, GPS, miniatury) zamiast skanować dysk U:\ — przycisk „Wczytaj zdjęcia z biblioteki” w wyprawie pobiera zdjęcia z jej dat, przypisuje je do dni i miejsc, pełny podgląd otwiera oryginał.

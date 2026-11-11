@@ -81,6 +81,7 @@ def _nazwa_miejsca(etyk: str) -> str:
 
 
 _BLOKADA_SCHEMATU = threading.RLock()
+_BLOKADA_PIN = threading.Lock()   # licznik nieudanych prób PIN-u / klucza mostu
 
 
 class Galeria:
@@ -1961,7 +1962,11 @@ class SerwerGalerii:
                 self.end_headers()
 
             # --- 🖥 pełny program z telefonu: zapytania przekazywane do programu na komputerze -------------
-            ZABRONIONE = ("/api/zamknij", "/api/aktualizacja/instaluj", "/api/podroze")  # nie z telefonu (Podróże: klucze i dane lokalizacji)
+            # nie z telefonu: zamykanie, aktualizacje, Podróże (klucze i lokalizacje), a także wszystko, co zdradza
+            # klucz mostu / PIN albo otwiera dostęp z internetu (most, zdalna pomoc), autostart, kopia, odzyskiwanie
+            ZABRONIONE = ("/api/zamknij", "/api/aktualizacja/instaluj", "/api/podroze", "/api/most", "/api/telefon",
+                          "/api/ustawienia-programu", "/api/zdalna", "/api/autostart", "/api/kopia", "/api/odzysk",
+                          "/api/twarze/silnik", "/api/projekty/usun")
 
             def _pelny(self):
                 return s.pilot.pelny() if s.pilot is not None else None
@@ -1975,7 +1980,7 @@ class SerwerGalerii:
                                                  "„Pozwól sterować z telefonu”."}, kod=HTTPStatus.FORBIDDEN)
                 port, token = cel
                 u = urlparse(self.path)
-                if u.path in self.ZABRONIONE:
+                if any(u.path == z or u.path.startswith(z + "/") for z in self.ZABRONIONE):
                     return self._wyslij({"blad": "Tego nie da się zrobić z telefonu."}, kod=HTTPStatus.FORBIDDEN)
                 if u.path == "/podroze" or u.path.startswith("/podroze/"):  # historia lokalizacji — tylko na komputerze
                     return self._wyslij({"blad": "Podróże są dostępne tylko na komputerze."}, kod=HTTPStatus.FORBIDDEN)
@@ -2175,9 +2180,15 @@ class SerwerGalerii:
                 most = self._z_mostu()
                 ip = "most" if most else self.client_address[0]  # przez most wszyscy przychodzą z 127.0.0.1
                 teraz = time.time()
-                proby = [t for t in s.nieudane.get(ip, []) if teraz - t < 300]
-                if len(proby) >= 8:
-                    return self._wyslij({"blad": "Za dużo prób — spróbuj za 5 minut."}, kod=HTTPStatus.TOO_MANY_REQUESTS)
+                with _BLOKADA_PIN:   # próba zapisana PRZED porównaniem — równoległe zapytania nie obejdą limitu
+                    for k in list(s.nieudane):
+                        s.nieudane[k] = [t for t in s.nieudane[k] if teraz - t < 300]
+                        if not s.nieudane[k]:
+                            del s.nieudane[k]
+                    proby = s.nieudane.get(ip, [])
+                    if len(proby) >= 8 or sum(map(len, s.nieudane.values())) >= 40:   # na adres i łącznie
+                        return self._wyslij({"blad": "Za dużo prób — spróbuj za 5 minut."}, kod=HTTPStatus.TOO_MANY_REQUESTS)
+                    s.nieudane[ip] = proby + [teraz]
                 try:
                     n = int(self.headers.get("Content-Length") or 0)
                     pin = str(json.loads(self.rfile.read(min(n, 1000)) or b"{}").get("pin", "")).strip()
@@ -2189,6 +2200,9 @@ class SerwerGalerii:
                 else:
                     dobry = bool(pin) and secrets.compare_digest(pin, s.pin)
                 if dobry:
+                    with _BLOKADA_PIN:   # udana próba nie liczy się do limitu
+                        if teraz in s.nieudane.get(ip, []):
+                            s.nieudane[ip].remove(teraz)
                     t = (s.staly_most if most else s.staly_token) or secrets.token_urlsafe(24)
                     (s.tokeny_most if most else s.tokeny).add(t)
                     dane = json.dumps({"t": t}).encode()
@@ -2200,7 +2214,6 @@ class SerwerGalerii:
                     self.wfile.write(dane)
                     return
                 time.sleep(1)
-                s.nieudane[ip] = proby + [teraz]
                 return self._wyslij({"blad": "Zły klucz mostu" if most else "Zły PIN"}, kod=HTTPStatus.UNAUTHORIZED)
         return H
 

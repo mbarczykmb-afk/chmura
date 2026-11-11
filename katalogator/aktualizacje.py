@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -28,16 +29,55 @@ def wersja_krotka(tekst: str) -> tuple[int, ...]:
     return tuple(int(x) for x in re.findall(r"\d+", tekst or "")[:3]) or (0,)
 
 
+_BLOKADA_USTAWIEN = threading.RLock()   # program.json zapisują różne wątki (zadania, serwer) — nigdy naraz
+
+
 def _ustawienia(katalog: Path) -> dict:
+    """program.json: folder kopii, PIN/sekret telefonu, klucz mostu, Podróże… Chwilowa blokada pliku (antywirus,
+    równoległy zapis) → ponowienie; uszkodzony → kopia .bak; nieczytelny mimo to → wyjątek. NIGDY {} dla
+    istniejącego pliku — inaczej następny zapis skasowałby wszystkie ustawienia."""
+    plik = Path(katalog) / "program.json"
+    for i in range(6):
+        try:
+            return json.loads(plik.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except ValueError:
+            break
+        except OSError:
+            if i == 5:
+                raise
+            time.sleep(0.05 * (i + 1))
     try:
-        return json.loads((katalog / "program.json").read_text(encoding="utf-8"))
+        return json.loads(plik.with_name("program.json.bak").read_text(encoding="utf-8"))
     except (OSError, ValueError):
+        if plik.exists() and plik.stat().st_size:
+            raise ValueError(f"Plik ustawień jest uszkodzony: {plik}")
         return {}
 
 
 def zapisz_ustawienia(katalog: Path, **zmiany) -> dict:
-    d = {**_ustawienia(katalog), **zmiany}
-    (katalog / "program.json").write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+    plik = Path(katalog) / "program.json"
+    with _BLOKADA_USTAWIEN:
+        obecne = _ustawienia(katalog)
+        d = {**obecne, **zmiany}
+        tmp = plik.with_name(f"program.json.{threading.get_ident()}.tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(json.dumps(d, ensure_ascii=False, indent=2))
+            f.flush()
+            os.fsync(f.fileno())
+        for i in range(6):   # Windows: podmiana pliku otwartego przez czytelnika chwilowo się nie udaje
+            try:
+                os.replace(tmp, plik)
+                break
+            except PermissionError:
+                if i == 5:
+                    raise
+                time.sleep(0.05 * (i + 1))
+        try:   # kopia ostatniej dobrej wersji — gdyby program.json uszkodził się (zanik prądu, dysk)
+            plik.with_name("program.json.bak").write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError:
+            pass
     return d
 
 

@@ -143,11 +143,6 @@ class Projekty:
             obecne = _czytaj_json(plik)   # nieczytelny plik → wyjątek, a nie projekt z domyślną nazwą
             nowe = {**DOMYSLNE, **obecne, **{k: v for k, v in dane.items() if k != "id"}}
             tekst = json.dumps(nowe, ensure_ascii=False, indent=2)
-            if obecne:  # poprzednia dobra wersja — gdyby ta się uszkodziła
-                try:
-                    (folder / "projekt.json.bak").write_text(json.dumps(obecne, ensure_ascii=False, indent=2), encoding="utf-8")
-                except OSError:
-                    pass
             tmp = plik.with_suffix(".tmp")
             tmp.write_text(tekst, encoding="utf-8")
             for i in range(6):   # Windows: podmiana pliku otwartego przez czytelnika chwilowo się nie udaje
@@ -158,6 +153,10 @@ class Projekty:
                     if i == 5:
                         raise
                     time.sleep(0.05 * (i + 1))
+            try:   # kopia ostatniej dobrej wersji — gdyby projekt.json się uszkodził
+                (folder / "projekt.json.bak").write_text(tekst, encoding="utf-8")
+            except OSError:
+                pass
         return {**nowe, "id": pid}
 
     def usun(self, pid: str) -> Path:
@@ -168,7 +167,8 @@ class Projekty:
         kosz.mkdir(exist_ok=True)
         cel = kosz / f"{pid}--{time.strftime('%Y%m%d-%H%M%S')}"
         shutil.move(str(f), str(cel))
-        for stary in sorted(kosz.iterdir(), key=lambda x: x.stat().st_mtime)[:-10]:
+        # kolejność wg chwili usunięcia z nazwy (…--RRRRMMDD-GGMMSS), nie wg daty folderu — rename jej nie zmienia
+        for stary in sorted(kosz.iterdir(), key=lambda x: x.name.rsplit("--", 1)[-1])[:-10]:
             shutil.rmtree(stary, ignore_errors=True)
         return cel
 
@@ -181,7 +181,11 @@ class Projekty:
                 d = _czytaj_json(p / "projekt.json")
             except (OSError, ValueError):
                 d = {}
-            wynik.append({"klucz": p.name, "nazwa": d.get("nazwa") or p.name, "usunieto": p.stat().st_mtime})
+            try:
+                kiedy = time.mktime(time.strptime(p.name.rsplit("--", 1)[-1], "%Y%m%d-%H%M%S"))
+            except ValueError:
+                kiedy = p.stat().st_mtime
+            wynik.append({"klucz": p.name, "nazwa": d.get("nazwa") or p.name, "usunieto": kiedy})
         return sorted(wynik, key=lambda d: -d["usunieto"])
 
     def przywroc(self, klucz: str) -> str:

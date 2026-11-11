@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS pliki (
     skan        INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_pliki_korzen ON pliki(korzen);
+CREATE INDEX IF NOT EXISTS ix_pliki_rodzaj_data ON pliki(rodzaj, data);
 CREATE TABLE IF NOT EXISTS skany (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     korzen    TEXT NOT NULL,
@@ -229,10 +230,12 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
     with ThreadPoolExecutor(max_workers=watki) as pula:
         for i in range(0, len(do_odczytu), 256):
             paczka = do_odczytu[i:i + 256]
-            for wynik in pula.map(zadanie, paczka):
-                if wynik is not None:
-                    zapisz(wynik)
-                    zrobione += 1
+            # najpierw odczyt całej paczki (SMB, ffmpeg — może trwać), potem krótki zapis i od razu commit:
+            # transakcja zapisu nie wisi otwarta podczas czytania z dysku („database is locked” w Przeglądarce)
+            wyniki = [w for w in pula.map(zadanie, paczka) if w is not None]
+            for wynik in wyniki:
+                zapisz(wynik)
+            zrobione += len(wyniki)
             db.commit()
             indeks.zapisz("meta", do_indeksu)
             do_indeksu.clear()

@@ -594,6 +594,10 @@ def cofnij(db: sqlite3.Connection, postep=None, przerwij=None) -> dict:
                     kopiuj_z_weryfikacja(w["cel"], w["zrodlo"], przerwij)
                     os.remove(w["cel"])
             else:
+                # tryb „kopiuj”: kopia w bibliotece znika — ale tylko gdy oryginał nadal jest (np. karta SD
+                # mogła zostać sformatowana); inaczej kopia jest jedynym egzemplarzem i zostaje
+                if not os.path.exists(w["zrodlo"]) or os.path.getsize(w["zrodlo"]) != w["rozmiar"]:
+                    raise OSError(f"nie ma już oryginału {w['zrodlo']} — kopia w bibliotece zostaje (to jedyny egzemplarz)")
                 os.remove(w["cel"])
             if w["tryb"] != "juz_byl":
                 foldery_celu.add(os.path.dirname(w["cel"]))
