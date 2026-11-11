@@ -730,6 +730,8 @@ class Stan:
     def zmien_projekt(self, dane: dict) -> dict:
         pid = dane.get("id") or self.pid
         zmiany = {k: str(dane[k])[:20000] for k in ("nazwa", "notatki", "dom") if k in dane}
+        if "nazwy_wypraw" in dane:
+            zmiany["nazwy_wypraw"] = bool(dane["nazwy_wypraw"])
         if "nazwa" in zmiany and not zmiany["nazwa"].strip():
             return {"blad": "Nazwa nie może być pusta."}
         wynik = self.projekty.zapisz(pid, zmiany)
@@ -799,7 +801,7 @@ class Stan:
         with self.blokada:
             zad = {k: dict(v) for k, v in self.zad.items()}
         dane = {"wersja": __version__, "windows": dyski.WINDOWS, "sep": os.sep, **self.ustawienia, "skan": skan,
-                "projekt": {k: self.projekt.get(k) for k in ("id", "nazwa", "notatki", "przychodzace", "dom",
+                "projekt": {k: self.projekt.get(k) for k in ("id", "nazwa", "notatki", "przychodzace", "dom", "nazwy_wypraw",
                                                              "harmonogram", "typ")},
                 "dup": dup, "zad": zad, "ma_wyniki": ma, "duplikaty": None, "do_cofniecia": None,
                 "analiza": None, "plan": None, "wykonanie": None, "przychodzace": None}
@@ -1333,7 +1335,9 @@ class Stan:
         zrodla, cel = list(self.ustawienia["zrodla"]), self.ustawienia["cel"]
 
         def f(db, postep, przerwij):
-            w = planista.generuj(db, zrodla, cel, postep=postep, przerwij=przerwij)
+            wyprawy = podroze.wyprawy_do_planu(self.katalog) if self.projekt.get("nazwy_wypraw", True) else []
+            w = planista.generuj(db, zrodla, cel, postep=postep, przerwij=przerwij, wyprawy=wyprawy,
+                                 dom=(self.projekt.get("dom") or "").strip() or None)   # miejscowość z projektu
             k = f"Propozycja gotowa: {w['kopiuj'] + w['przenies']} plików do uporządkowania."
             if not w["kopiuj"] + w["przenies"]:   # częsta pułapka: plan liczy się z OSTATNIEGO skanu, nie z dysku
                 kon = db.execute("SELECT MAX(koniec) FROM skany").fetchone()[0]

@@ -17,6 +17,7 @@ function rysujProjekt() {
     proj.idPoprzedni = p.id;
     $("proj-notatki").value = p.notatki || "";
     $("proj-dom").value = p.dom || "";
+    $("nazwy-wypraw").checked = p.nazwy_wypraw !== false;
     plan.wczytany = false; plan.folder = ""; an.dokWczytane = false; an.podWczytane = false; dupGrupy = [];
     pokazRaport(); wczytajDziennik();
     if (przyPokazaniu[zakladka]) przyPokazaniu[zakladka]();
@@ -86,6 +87,8 @@ async function wczytajHistorie() {
   }
 }
 $("proj-historia-det").ontoggle = () => { if ($("proj-historia-det").open) wczytajHistorie(); };
+
+$("nazwy-wypraw").onchange = () => api("/api/projekty/zmien", {nazwy_wypraw: $("nazwy-wypraw").checked}).catch(e => toast(e.message));
 
 let czasNotatek = null;
 $("proj-notatki").oninput = () => {

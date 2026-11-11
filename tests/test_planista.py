@@ -420,3 +420,30 @@ def test_filmy_w_folderach_z_rokiem_do_drzewa_lat(tmp_path):
     wykonawca.wykonaj(db)
     assert list((cel / "Filmy" / "Filmy z 2007").rglob("Barczyk kable dom.mp4"))
     assert not (stare / "Barczyk kable dom.mp4").exists() and (cel / "Filmy" / "Inne" / "Kino" / "Matrix.mkv").exists()
+
+
+def test_nazwy_wypraw_z_podrozy(swiat):
+    """✈ Zdjęcia z dni wyprawy z Podróży trafiają do folderu „<miesiąc początku> – <tytuł wyprawy>”."""
+    from datetime import date
+    k, cel, db = swiat
+    planista.generuj(db, [{"sciezka": str(k), "tryb": "kopiuj"}], str(cel),
+                     wyprawy=[(date(2023, 6, 30), date(2023, 7, 12), "Hel z rodziną")])
+    cele = {r[0].rsplit("/", 1)[0]: r[0] for r in db.execute("SELECT cel FROM plan")}
+    hel = [r[0] for r in db.execute("SELECT cel FROM plan WHERE cel LIKE '%IMG_hel%'")]
+    assert hel and all(c.startswith("Zdjęcia/Zdjęcia z 2023/Czerwiec – Hel z rodziną/") for c in hel)
+    assert any(c.startswith("Zdjęcia/Zdjęcia z 2023/Sierpień") for c in cele)   # Rzym poza wyprawą — po staremu
+    assert db.execute("SELECT COUNT(*) FROM plan WHERE uwaga LIKE '%wyprawa z Podróży%'").fetchone()[0] >= 3
+
+
+def test_wyprawy_do_planu(tmp_path):
+    import json
+    from katalogator import podroze
+    d = podroze.folder_danych(tmp_path)
+    d.mkdir(parents=True)
+    (d / "sample-trips.json").write_text(json.dumps({"trips": [
+        {"title": "Madera (Portugalia) (Grudzień 2025)", "startDate": "2025-12-14", "endDate": "2025-12-19"},
+        {"title": "zła", "startDate": "x"}]}), encoding="utf-8")
+    assert podroze.wyprawy_do_planu(tmp_path) == [(date_(2025, 12, 14), date_(2025, 12, 19), "Madera (Portugalia)")]
+
+
+from datetime import date as date_  # noqa: E402

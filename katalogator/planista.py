@@ -172,7 +172,7 @@ def _dt(iso: str | None) -> datetime | None:
 # --- generowanie propozycji ---------------------------------------------------------
 
 def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, przerwij=None,
-            dom: str | None = None) -> dict:
+            dom: str | None = None, wyprawy: list[tuple] | None = None) -> dict:
     """dom: nazwa miejscowości zamieszkania (np. „Olkusz”) — gdy pusta, wykrywana z najczęstszego miejsca."""
     przygotuj(db)
     if not cel:
@@ -224,6 +224,7 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
     media = [p for p in zrodlowe if p["id"] not in prowadzacy
              and (p["rodzaj"] == "zdjecie" or (p["rodzaj"] == "film" and _wlasne_nagranie(p)))]
     etykiety, dom = _etykiety_miejsc(media, dom)
+    z_wypraw = _z_wypraw(media, wyprawy or [], dom)   # ✈ zdjęcia z dat wyprawy z Podróży → folder wyprawy
 
     folder: dict[int, str] = {}
     uwagi: dict[int, str | None] = {}
@@ -238,7 +239,11 @@ def generuj(db: sqlite3.Connection, zrodla: list[dict], cel: str, postep=None, p
             fr, uw_m = etykiety[p["id"]]
             rodz = "Zdjęcia" if p["rodzaj"] == "zdjecie" else "Filmy"
             rf = _rok_folderu(p) if p["rodzaj"] == "film" else None
-            if rf and d.year != rf[0]:  # data w pliku nie pasuje do folderu „2007” — wierzymy folderowi
+            if p["id"] in z_wypraw:   # cała wyprawa w jednym folderze (miesiąc jej początku), nazwa z Podróży
+                od, tytul = z_wypraw[p["id"]]
+                f = f"{rodz}/{rodz} z {od.year}/" + czysta_nazwa(f"{MIESIACE[od.month - 1]} – {tytul}")
+                uw.append(f"wyprawa z Podróży: {tytul}")
+            elif rf and d.year != rf[0]:  # data w pliku nie pasuje do folderu „2007” — wierzymy folderowi
                 f = f"{rodz}/{rodz} z {rf[0]}/" + czysta_nazwa(
                     (f"{MIESIACE[rf[1] - 1]} {fr}" if rf[1] else f"{rf[0]} {fr}").strip())
                 uw.append(f"data z nazwy folderu ({rf[0]}) — sprawdź")
@@ -430,6 +435,23 @@ def _etykiety_miejsc(media: list[dict], dom_wymuszony: str | None = None
             fr = miejsca.fraza(m)
         wynik[p["id"]] = (fr, uw)
     return wynik, dom
+
+
+def _z_wypraw(media: list[dict], wyprawy: list[tuple], dom: str | None) -> dict[int, tuple]:
+    """{id zdjęcia: (data początku wyprawy, tytuł)} — zdjęcia z dni wyprawy (data lokalna zdjęcia), z wyjątkiem
+    tych z GPS-em w domu (np. dzień wyjazdu przed wyjściem z domu)."""
+    if not wyprawy:
+        return {}
+    wynik = {}
+    for p in media:
+        if p.get("_m") and dom and p["_m"] == dom:
+            continue
+        dzien = p["_dt"].date()
+        for od, do, tytul in wyprawy:
+            if od <= dzien <= do:
+                wynik[p["id"]] = (od, tytul)
+                break
+    return wynik
 
 
 def _odciski_dla_celu(db, zrodlowe: list[dict], istniejace: list[dict], przerwij) -> None:

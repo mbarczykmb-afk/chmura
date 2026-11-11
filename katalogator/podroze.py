@@ -46,6 +46,29 @@ def domyslny_folder() -> str:
 _licznik: dict[str, tuple[float, int]] = {}
 
 
+def wyprawy_do_planu(katalog) -> list[tuple]:
+    """Wyprawy z Podróży dla propozycji drzewa: [(data_od, data_do, krótki tytuł)] — folder „Lipiec – Madera”.
+    Tytuł bez dopisku z datą w nawiasie („Madera (Grudzień 2025)” → „Madera”). Brak danych → []."""
+    from datetime import date
+    plik = folder_danych(katalog) / "sample-trips.json"
+    try:
+        d = json.loads(plik.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    lista = d.get("trips") if isinstance(d, dict) else d
+    wynik = []
+    for t in lista if isinstance(lista, list) else []:
+        try:
+            od = date.fromisoformat(str(t.get("startDate"))[:10])
+            do = date.fromisoformat(str(t.get("endDate") or t.get("startDate"))[:10])
+        except (AttributeError, ValueError):
+            continue
+        tytul = re.sub(r"\s*\([^()]*\d{4}\)\s*$", "", str(t.get("title") or t.get("destination") or "")).strip()
+        if tytul and do >= od and (do - od).days <= 120:
+            wynik.append((od, do, tytul[:80]))
+    return sorted(wynik)
+
+
 def liczba_wypraw(plik: Path) -> int:
     """Liczba wypraw w pliku — parsujemy raz na zmianę pliku (aplikacja pyta o wersję co kilka sekund)."""
     try:
