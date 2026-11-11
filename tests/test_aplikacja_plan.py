@@ -106,3 +106,31 @@ def test_propozycja_sama_skanuje_gdy_skan_jest_stary(app, swiat):  # noqa: F811
             break
         time.sleep(0.05)
     assert s["plan"]["kopiuj"] == przed + 1, s["zad"]["plan"]
+
+
+def test_historia_cofnij_starsze_porzadkowanie(app, swiat):  # noqa: F811
+    """Dwa porządkowania — cofamy STARSZE z historii, nowsze zostaje."""
+    import shutil
+    api, _, stan = app
+    k, cel, db = swiat
+    stan.SKAN_SWIEZY_S = 10 ** 9
+    api("/api/ustawienia", {"zrodla": [{"sciezka": str(k / "Praca"), "tryb": "kopiuj"}], "cel": str(cel)})
+    api("/api/skanuj", {}); _czekaj(api, "skan")
+    api("/api/plan/generuj", {}); _czekaj(api, "plan")
+    bylo = set(p.relative_to(cel) for p in cel.rglob("*") if p.is_file())
+    api("/api/wykonaj", {"usun_puste": True}); _czekaj(api, "wykonanie")
+    pierwsze = set(p.relative_to(cel) for p in cel.rglob("*") if p.is_file()) - bylo
+    assert pierwsze
+    (k / "Praca" / "aneks.pdf").write_bytes(b"%PDF-1.4 inny dokument")   # nowy, inny plik
+    api("/api/skanuj", {}); _czekaj(api, "skan")
+    api("/api/plan/generuj", {}); _czekaj(api, "plan")
+    api("/api/wykonaj", {"usun_puste": True}); _czekaj(api, "wykonanie")
+    h = json.loads(api("/api/historia")[1])["wpisy"]
+    por = [w for w in h if w["rodzaj"] == "porzadkowanie"]
+    assert len(por) == 2 and por[0]["partia"] > por[1]["partia"]
+    kod, _ = api("/api/historia/cofnij", {"rodzaj": "porzadkowanie", "partia": por[1]["partia"]})[:2]
+    _czekaj(api, "wykonanie")
+    teraz = set(p.relative_to(cel) for p in cel.rglob("*") if p.is_file())
+    assert not (pierwsze & teraz) and any(p.name == "aneks.pdf" for p in teraz)
+    h = json.loads(api("/api/historia")[1])["wpisy"]
+    assert [w["aktywne"] for w in h if w["rodzaj"] == "porzadkowanie"][1] == 0

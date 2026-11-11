@@ -557,9 +557,19 @@ def ostatnia_partia(db: sqlite3.Connection) -> dict | None:
     return dict(r) if r else None
 
 
-def cofnij(db: sqlite3.Connection, postep=None, przerwij=None) -> dict:
-    """Cofa ostatnie porządkowanie: kopie są usuwane, przeniesione pliki wracają na miejsce."""
-    ost = ostatnia_partia(db)
+def historia(db: sqlite3.Connection) -> list[dict]:
+    """Porządkowania (partie) od najnowszego: kiedy, ile plików, ile jeszcze nie cofniętych."""
+    przygotuj(db)
+    return [dict(r) for r in db.execute(
+        "SELECT partia, MIN(czas) czas, COUNT(*) n, SUM(cofniete = 0) aktywne, SUM(usuniete) przeniesione "
+        "FROM wykonanie GROUP BY partia ORDER BY partia DESC LIMIT 50")]
+
+
+def cofnij(db: sqlite3.Connection, postep=None, przerwij=None, partia: int | None = None) -> dict:
+    """Cofa ostatnie porządkowanie (albo wskazaną partię z historii): kopie są usuwane, przeniesione pliki wracają
+    na miejsce. Każdy plik jest sprawdzany osobno — zmieniony od tamtej chwili zostaje i trafia do błędów."""
+    przygotuj(db)
+    ost = ostatnia_partia(db) if partia is None else {"partia": int(partia)}
     if not ost:
         return {"cofniete": 0, "bledy": []}
     wiersze = db.execute("SELECT * FROM wykonanie WHERE partia=? AND cofniete=0 ORDER BY id DESC",

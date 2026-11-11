@@ -52,6 +52,41 @@ async function wczytajDziennik() {
   } catch (e) { /* okno mogło się zamknąć */ }
 }
 
+// ↶ historia operacji: porządkowania i odłożenia — każdą można cofnąć (nie tylko ostatnią)
+const OPIS_OP = {duplikat: "Duplikaty odłożone", podobne: "Podobne odłożone", nieostre: "Nieostre odłożone",
+                 smieci: "Śmieci odłożone", usuniete: "Usunięte (do kosza)"};
+async function wczytajHistorie() {
+  const d = $("proj-historia");
+  let r;
+  try { r = await api("/api/historia"); } catch (e) { d.textContent = e.message; return; }
+  d.replaceChildren();
+  if (!r.wpisy.length) { d.textContent = "Jeszcze nic nie uporządkowano ani nie odłożono."; return; }
+  for (const w of r.wpisy) {
+    const x = document.createElement("div"); x.style.cssText = "display:flex;gap:8px;align-items:center;justify-content:space-between";
+    const t = document.createElement("span");
+    const b = document.createElement("b"); b.textContent = czasPL(w.czas) + " ";
+    const co = w.rodzaj === "porzadkowanie" ? `Porządkowanie: ${w.n} plików` : `${OPIS_OP[w.typ] || "Odłożone"}: ${w.n}`;
+    t.append(b, co + (w.aktywne ? (w.aktywne < w.n ? ` (cofnięto ${w.n - w.aktywne})` : "") : " — cofnięte"));
+    x.append(t);
+    if (w.aktywne) {
+      const c = document.createElement("button"); c.className = "maly"; c.textContent = "↶ Cofnij";
+      c.onclick = async () => {
+        if (!await oknoTak(`Cofnąć tę operację (${co})?\n\nPliki wrócą na swoje dawne miejsca. Pliki zmienione od tamtej ` +
+                           "chwili zostaną tam, gdzie są — dostaniesz ich listę.")) return;
+        try {
+          const w2 = await api("/api/historia/cofnij", {rodzaj: w.rodzaj, partia: w.partia});
+          toast(w2.w_tle ? "Cofam porządkowanie — postęp w kroku 4." :
+                `Przywrócono ${w2.przywrocone || 0} plików` + ((w2.bledy || []).length ? ` · problemy: ${w2.bledy.length} (${w2.bledy[0]})` : ""));
+          stan = await api("/api/stan"); rysuj(); wczytajHistorie();
+        } catch (e) { toast(e.message); }
+      };
+      x.append(c);
+    }
+    d.append(x);
+  }
+}
+$("proj-historia-det").ontoggle = () => { if ($("proj-historia-det").open) wczytajHistorie(); };
+
 let czasNotatek = null;
 $("proj-notatki").oninput = () => {
   clearTimeout(czasNotatek);

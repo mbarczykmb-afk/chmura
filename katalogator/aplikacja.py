@@ -1359,12 +1359,38 @@ class Stan:
             return k
         return self.uruchom("wykonanie", f)
 
-    def cofnij_wykonanie(self) -> str | None:
+    def historia(self) -> dict:
+        """↶ Historia operacji projektu: porządkowania i odłożenia (duplikaty, podobne, śmieci, usunięte)."""
+        def f(db):
+            wpisy = [{**r, "rodzaj": "porzadkowanie"} for r in wykonawca.historia(db)]
+            wpisy += [{**r, "rodzaj": "odlozenie"} for r in duplikaty.historia(db)]
+            return sorted(wpisy, key=lambda r: -(r["czas"] or 0))[:60]
+        return {"wpisy": self.z_db(f)}
+
+    def cofnij_z_historii(self, rodzaj: str, partia: int) -> dict:
+        if rodzaj == "porzadkowanie":
+            blad = self.cofnij_wykonanie(partia)
+            return {"blad": blad} if blad else {"ok": True, "w_tle": True}
+        if rodzaj == "odlozenie":
+            if self.zajety():
+                return {"blad": "Poczekaj, aż skończy się bieżące zadanie."}
+            db = self.db()
+            try:
+                w = duplikaty.cofnij(db, partia)
+            finally:
+                db.close()
+                self.przegladarka.zglos_zmiany()
+            with self.blokada:
+                self.wersja_danych += 1
+            return w
+        return {"blad": "Nieznana operacja."}
+
+    def cofnij_wykonanie(self, partia: int | None = None) -> str | None:
         folder_proj = self.projekty.baza(self.pid).parent
 
         def f(db, postep, przerwij):
             with projekty.blokada_plikow(folder_proj):
-                w = wykonawca.cofnij(db, postep=postep, przerwij=przerwij)
+                w = wykonawca.cofnij(db, postep=postep, przerwij=przerwij, partia=partia)
             k = f"Cofnięto {w['cofniete']} plików. Przeskanuj foldery, żeby odświeżyć wyniki."
             if w["bledy"]:
                 k += " Problemy: " + "; ".join(w["bledy"][:5])
@@ -1725,6 +1751,8 @@ def _handler(stan: Stan, token: str, zamknij):
                                      "sprawdzaj_aktualizacje": aktualizacje.wlaczone(stan.katalog)})
             if u.path == "/api/projekty":
                 return self._wyslij({"projekty": stan.projekty.lista(), "biezacy": stan.pid, "usuniete": stan.projekty.usuniete()})
+            if u.path == "/api/historia":
+                return self._wyslij(stan.historia())
             if u.path == "/api/projekt/dziennik":
                 return self._wyslij({"wpisy": stan.z_db(projekty.dziennik, 60)})
             if u.path == "/api/plan/pliki":
@@ -2085,6 +2113,13 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path == "/api/projekty/zmien":
                 w = stan.zmien_projekt(dane)
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if "blad" in w else HTTPStatus.OK)
+            if u.path == "/api/historia/cofnij":
+                try:
+                    partia = int(dane.get("partia") or 0)
+                except (TypeError, ValueError):
+                    partia = 0
+                w = stan.cofnij_z_historii(str(dane.get("rodzaj", "")), partia) if partia else {"blad": "Brak operacji."}
+                return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if w.get("blad") else HTTPStatus.OK)
             if u.path == "/api/projekty/przywroc":
                 try:
                     pid = stan.projekty.przywroc(str(dane.get("klucz", "")))

@@ -174,6 +174,8 @@ W podglądzie zdjęcia w Bibliotece i Przeglądarce — **mała mapa** z miejsce
 
 **🖥 Pełny program z telefonu** (gdy Katalogator działa na komputerze): 📱 → kod QR + PIN → na pilocie *🖥 Pełny
 program* — wszystkie zakładki (Duplikaty, Dokumenty, Podobne, Drzewo, kosz…) w układzie na telefon. Serwer telefonu
+**1.58.0:** Historia operacji w panelu projektu („↶ Historia operacji — cofnij dowolną”): wszystkie porządkowania i odłożenia (duplikaty, podobne, nieostre, śmieci, usunięte) z datą i liczbą plików — każdą można cofnąć, nie tylko ostatnią. Pliki zmienione od tamtej chwili zostają na miejscu i trafiają na listę problemów.
+
 **1.57.0:** „Utwórz propozycję drzewa” nie pracuje już na starym skanie: gdy ostatni skan jest starszy niż pół godziny, program najpierw sam skanuje zmiany (wspólny indeks — z dysku czytane są tylko nowe i zmienione pliki), a potem od razu układa propozycję. Koniec z „0 plików do uporządkowania”, gdy na dysku są nowe zdjęcia z telefonu.
 
 **1.56.5:** Ostatnie drobne poprawki z audytu. Albumy i ulubione nie przepinają się już na kopię zdjęcia z innego zestawu dysków (np. kopia na USB) przy przełączaniu zestawów — przepinane są tylko wpisy z dysków, których nie ma w żadnym zestawie (przeniesienie biblioteki Z: → U: działa jak dawniej). Przez most widać tylko ustawiony zakres; twarze z ukrytych albumów i spoza zakresu nie są pokazywane telefonowi. Ciasteczko Podróży ma osobny token (nie pełny token programu). Nazwy zarezerwowane Windows (CON, NUL, COM1…) są poprawiane, a ścieżki dłuższe niż 250 znaków mają ostrzeżenie w propozycji drzewa. Zmiana zakresu telefonu i przełączenie projektu działają od razu przy włączonym udostępnianiu.

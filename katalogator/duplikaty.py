@@ -584,6 +584,14 @@ def odloz(db: sqlite3.Connection, ids: list[int], typ: str) -> dict:
     return {"przeniesione": przeniesione, "bajty": bajty, "pominiete": pominiete, "partia": partia}
 
 
+def historia(db: sqlite3.Connection) -> list[dict]:
+    """Odłożenia / usunięcia (partie) od najnowszego."""
+    przygotuj(db)
+    return [dict(r) for r in db.execute(
+        "SELECT partia, MIN(czas) czas, MIN(typ) typ, COUNT(*) n, SUM(cofnieta = 0) aktywne FROM operacje "
+        "GROUP BY partia ORDER BY partia DESC LIMIT 50")]
+
+
 def ostatnia_partia(db: sqlite3.Connection) -> dict | None:
     przygotuj(db)
     r = db.execute(
