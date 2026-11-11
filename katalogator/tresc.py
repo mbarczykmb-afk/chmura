@@ -4,7 +4,8 @@ Model (budowany w CI: narzedzia/clip/zbuduj.py, wydanie clip-model-1, pobierany 
   clip-obraz-int8.onnx  — koder obrazu CLIP ViT-B/32 (obraz 224×224 → znormalizowany wektor 512)
   clip-tekst-int8.onnx  — wielojęzyczny koder tekstu (DistilBERT, także po polsku) w tej samej przestrzeni 512
   clip-slownik.txt      — słownik WordPiece kodera tekstu (tokenizacja niżej, bez dodatkowych bibliotek)
-Wektory zdjęć (float16) leżą w bazie Przeglądarki (tabela g_clip) — liczone raz, w tle, tylko dla nowych zdjęć.
+Wektory zdjęć (float16) leżą we własnej bazie modelu (<dane>/modele/clip/wektory.db, klucz: ścieżka + data pliku)
+— liczone raz, w tle, tylko dla nowych zdjęć; korzystają z nich wszystkie widoki (Przeglądarka, biblioteka projektu).
 Zdjęcia nigdzie nie są wysyłane.
 """
 from __future__ import annotations
@@ -14,7 +15,6 @@ import json
 import logging
 import os
 import threading
-import time
 import unicodedata
 import urllib.request
 from pathlib import Path
@@ -43,6 +43,15 @@ _pamiec: dict = {}   # baza → (liczba wektorów, max rowid, ścieżki, macierz
 
 def folder() -> Path:
     return Path(KATALOG_MODELI or ".") / "clip"
+
+
+def _baza():
+    import sqlite3
+    folder().mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(str(folder() / "wektory.db"), timeout=30)
+    db.execute("PRAGMA journal_mode=WAL")
+    db.execute(SCHEMAT)
+    return db
 
 
 def pobrany() -> bool:
@@ -174,17 +183,22 @@ def stan(galeria=None) -> dict:
     with _blokada:
         s = dict(_stan)
     s["pobrany"] = pobrany()
-    if galeria is not None:
-        try:
+    try:
+        if (folder() / "wektory.db").exists():
+            w = _baza()
+            try:
+                s["zindeksowane"] = w.execute("SELECT COUNT(*) FROM g_clip").fetchone()[0]
+            finally:
+                w.close()
+        if galeria is not None:
             db = galeria._db()
             try:
-                db.execute(SCHEMAT)
-                s["zindeksowane"] = db.execute("SELECT COUNT(*) FROM g_clip").fetchone()[0]
-                s["zdjec"] = db.execute("SELECT COUNT(*) FROM pliki WHERE rodzaj='zdjecie'").fetchone()[0]
+                war, arg = galeria._warunek()
+                s["zdjec"] = db.execute(f"SELECT COUNT(*) FROM pliki WHERE rodzaj='zdjecie' {war}", arg).fetchone()[0]
             finally:
                 db.close()
-        except Exception:  # noqa: BLE001
-            pass
+    except Exception:  # noqa: BLE001
+        pass
     return s
 
 
@@ -257,66 +271,75 @@ def _indeksuj(galeria) -> None:
     try:
         db = galeria._db()
         try:
-            db.execute(SCHEMAT)
-            znane = {r[0]: r[1] for r in db.execute("SELECT sciezka, mtime FROM g_clip")}
             w, arg = galeria._warunek()
-            do = [(r[0], r[1]) for r in db.execute(
-                f"SELECT sciezka, mtime FROM pliki WHERE rodzaj='zdjecie' {w} ORDER BY data DESC", arg)
-                if znane.get(r[0]) is None or abs((znane[r[0]] or 0) - (r[1] or 0)) > 1]
+            zdjecia = [(r[0], r[1]) for r in db.execute(
+                f"SELECT sciezka, mtime FROM pliki WHERE rodzaj='zdjecie' {w} ORDER BY data DESC", arg)]
+        finally:
+            db.close()
+        wb = _baza()
+        try:
+            znane = {r[0]: r[1] for r in wb.execute("SELECT sciezka, mtime FROM g_clip")}
+            do = [(s_, mt) for s_, mt in zdjecia if znane.get(s_) is None or abs((znane[s_] or 0) - (mt or 0)) > 1]
             _ustaw(wszystkie=len(do))
             for i in range(0, len(do), 16):
                 paczka = do[i:i + 16]
-                wek = wektory_obrazow([s for s, _ in paczka])   # odczyt z dysku POZA transakcją
-                db.executemany("INSERT OR REPLACE INTO g_clip VALUES (?,?,?)",
-                               [(s, mt or 0, v.tobytes()) for (s, mt), v in zip(paczka, wek) if v is not None])
-                db.commit()
+                wek = wektory_obrazow([s_ for s_, _ in paczka])   # odczyt z dysku POZA transakcją
+                wb.executemany("INSERT OR REPLACE INTO g_clip VALUES (?,?,?)",
+                               [(s_, mt or 0, v.tobytes()) for (s_, mt), v in zip(paczka, wek) if v is not None])
+                wb.commit()
                 if not _ustaw(zrobione=min(i + 16, len(do))):
                     _ustaw(trwa=False, etap="", komunikat="Przerwano — to, co gotowe, już działa w wyszukiwarce.")
                     return
         finally:
-            db.close()
+            wb.close()
         _pamiec.clear()
-        _ustaw(trwa=False, etap="", komunikat=f"Gotowe — przejrzano {len(do)} zdjęć. Szukaj np. „plaża”, „pies”, „śnieg”.")
+        _ustaw(trwa=False, etap="", komunikat=f"Gotowe — przejrzano {len(do)} nowych zdjęć. Szukaj np. „plaża”, „pies”, „śnieg”.")
     except Exception as e:  # noqa: BLE001
         LOG.exception("CLIP: indeks")
         _ustaw(trwa=False, etap="", blad=str(e))
 
 
 # --- wyszukiwanie ---------------------------------------------------------------------------------------------------------
-def gotowe(db) -> bool:
-    if not pobrany():
+def gotowe() -> bool:
+    """Czy wyszukiwanie po treści działa: model pobrany i są wektory choć części zdjęć."""
+    if not pobrany() or not (folder() / "wektory.db").exists():
         return False
     try:
-        db.execute(SCHEMAT)
-        return db.execute("SELECT 1 FROM g_clip LIMIT 1").fetchone() is not None
+        w = _baza()
+        try:
+            return w.execute("SELECT 1 FROM g_clip LIMIT 1").fetchone() is not None
+        finally:
+            w.close()
     except Exception:  # noqa: BLE001
         return False
 
 
-def _macierz(db, baza_klucz: str):
-    stan_bazy = tuple(db.execute("SELECT COUNT(*), MAX(rowid) FROM g_clip").fetchone())
-    p = _pamiec.get(baza_klucz)
-    if p and p[0] == stan_bazy:
-        return p[1], p[2]
-    sciezki, wek = [], []
-    for s, v in db.execute("SELECT sciezka, wektor FROM g_clip"):
-        sciezki.append(s)
-        wek.append(np.frombuffer(v, np.float16))
+def _macierz():
+    w = _baza()
+    try:
+        stan_bazy = tuple(w.execute("SELECT COUNT(*), MAX(rowid) FROM g_clip").fetchone())
+        if _pamiec.get("stan") == stan_bazy:
+            return _pamiec["sciezki"], _pamiec["m"]
+        sciezki, wek = [], []
+        for s_, v in w.execute("SELECT sciezka, wektor FROM g_clip"):
+            sciezki.append(s_)
+            wek.append(np.frombuffer(v, np.float16))
+    finally:
+        w.close()
     m = np.vstack(wek).astype(np.float32) if wek else np.zeros((0, 512), np.float32)
     _pamiec.clear()
-    _pamiec[baza_klucz] = (stan_bazy, sciezki, m)
+    _pamiec.update(stan=stan_bazy, sciezki=sciezki, m=m)
     return sciezki, m
 
 
-def podobne(db, baza_klucz: str, tekst: str, dozwolone: set[str] | None = None) -> list[tuple[str, float]]:
+def podobne(tekst: str, dozwolone: set[str] | None = None) -> list[tuple[str, float]]:
     """[(ścieżka, podobieństwo)] od najlepszego — tylko powyżej progu i (opcjonalnie) spośród `dozwolone`."""
-    sciezki, m = _macierz(db, baza_klucz)
+    sciezki, m = _macierz()
     if not sciezki:
         return []
     oceny = m @ wektor_tekstu(tekst)
-    kolejnosc = np.argsort(-oceny)
     wynik = []
-    for i in kolejnosc:
+    for i in np.argsort(-oceny):
         if oceny[i] < PROG or len(wynik) >= WYNIKOW:
             break
         if dozwolone is None or sciezki[i] in dozwolone:

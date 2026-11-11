@@ -113,14 +113,25 @@ for i, (nazwa, haslo) in enumerate((("czerwony", "czerwony kolor"), ("niebieski"
     oceny = [float(np.dot(w.astype(np.float32), t)) for w in wek]
     print(f"„{haslo}”: {['%.3f' % o for o in oceny]}")
     assert int(np.argmax(oceny)) == i, (haslo, oceny)
-# obraz: ONNX int8 vs oryginał
+# obraz: przetwarzanie (katalogator) + ONNX fp32 ≈ oryginał (dokładnie), int8 — na obrazie z teksturą
 from transformers import CLIPImageProcessor  # noqa: E402
+import onnxruntime as ort  # noqa: E402
+from katalogator import geoclip  # noqa: E402
+rng = np.random.default_rng(0)
+yy, xx = np.mgrid[0:360, 0:480]
+tekstura = np.stack([(xx * 0.5 + 40 * np.sin(yy / 9)) % 256, (yy * 0.7) % 256, (xx + yy) % 256], -1)
+tekstura = np.clip(tekstura + rng.normal(0, 18, tekstura.shape), 0, 255).astype(np.uint8)
+Image.fromarray(tekstura).save(cel.parent / "tekstura.jpg", quality=92)
 proc = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch32")
-x = proc(images=Image.open(cel.parent / "czerwony.jpg"), return_tensors="pt")["pixel_values"]
+x = proc(images=Image.open(cel.parent / "tekstura.jpg"), return_tensors="pt")["pixel_values"]
 oryg = F.normalize(wizja(pixel_values=x).image_embeds, dim=1)[0].numpy()
-cos = float(np.dot(oryg, wek[0].astype(np.float32)))
-print(f"obraz: cos(ONNX int8, oryginał) = {cos:.4f}")
-assert cos > 0.97
+moje = geoclip.przygotuj(cel.parent / "tekstura.jpg")[None]
+print("przetwarzanie obrazu: max różnica", float(np.abs(moje - x.numpy()).max()))
+fp32 = ort.InferenceSession(str(fp32_o), providers=["CPUExecutionProvider"]).run(None, {"pixel_values": moje})[0][0]
+cos32 = float(np.dot(oryg, fp32))
+cos8 = float(np.dot(oryg, tresc.wektory_obrazow([str(cel.parent / "tekstura.jpg")])[0].astype(np.float32)))
+print(f"obraz: cos(ONNX fp32, oryginał) = {cos32:.4f}, cos(ONNX int8, oryginał) = {cos8:.4f}")
+assert cos32 > 0.999 and cos8 > 0.93
 
 for p in (fp32_o, fp32_t):
     p.unlink()

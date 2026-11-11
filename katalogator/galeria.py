@@ -25,6 +25,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import analiza, indeks, miejsca, skaner
+from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
 _TYPY = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".png": "image/png",
@@ -568,14 +569,23 @@ class Galeria:
         if mies:
             war.append("CAST(substr(data, 6, 2) AS INTEGER) = ?"); a.append(mies)
         ocr = self._ma_ocr()
+        war_t, a_t = [], []   # warunki tekstowe osobno — wyszukiwanie po treści (CLIP) pomija je
         for s in tekstowe:  # 📄 także tekst odczytany z dokumentów (OCR) — „faktura”, „PESEL”, „Orlen”
             z_indeksu = indeks.szukaj_tekstu(s)  # Przeglądarka: tekst przeczytany w projektach (wspólny indeks)
-            war.append("(lower(wzgledna) LIKE ? OR lower(coalesce(aparat, '')) LIKE ?" +
-                       (" OR sciezka IN (SELECT sciezka FROM analiza WHERE pl_lower(ocr_tekst) LIKE ?)" if ocr else "") +
-                       (f" OR sciezka IN ({','.join('?' * len(z_indeksu))})" if z_indeksu else "") + ")")
-            a += [f"%{s.lower()}%"] * (3 if ocr else 2) + z_indeksu
+            war_t.append("(lower(wzgledna) LIKE ? OR lower(coalesce(aparat, '')) LIKE ?" +
+                         (" OR sciezka IN (SELECT sciezka FROM analiza WHERE pl_lower(ocr_tekst) LIKE ?)" if ocr else "") +
+                         (f" OR sciezka IN ({','.join('?' * len(z_indeksu))})" if z_indeksu else "") + ")")
+            a_t += [f"%{s.lower()}%"] * (3 if ocr else 2) + z_indeksu
         for o in osoby_ids:
             war.append("sciezka IN (SELECT sciezka FROM g_twarze WHERE osoba=?)"); a.append(o)
+        if tekstowe and not miejsce:
+            from . import tresc
+            if tresc.gotowe():
+                try:
+                    return self._szukaj_z_trescia(w, arg, war, a, war_t, a_t, tekstowe, osoby_nazwy, rok, mies, od, ile)
+                except Exception:  # noqa: BLE001 — model / baza wektorów niedostępne: zwykłe wyszukiwanie
+                    LOG.exception("Wyszukiwanie po treści")
+        war, a = war + war_t, a + a_t
         if miejsce:
             if miejsce["pl"]:
                 war.append("(" + " OR ".join(["(lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?)"] * len(miejsce["pl"])) + ")")
@@ -610,6 +620,37 @@ class Galeria:
             opis.append(rok)
         opis += [f"„{s}”" for s in tekstowe]
         return {"razem": razem, "pliki": [_nazwa(r) for r in wiersze], "opis": " · ".join(opis)}
+
+    def _szukaj_z_trescia(self, w, arg, war, a, war_t, a_t, tekstowe, osoby_nazwy, rok, mies, od, ile) -> dict:
+        """Nazwa pliku / tekst z OCR (jak dotąd) + 🧠 zdjęcia podobne treścią (CLIP) spośród tych, które pasują do
+        reszty zapytania (rok, miesiąc, osoba). Najpierw trafienia tekstowe, potem podobne — od najbardziej."""
+        from . import tresc
+        struk = (" AND " + " AND ".join(war)) if war else ""
+        db = self._db()
+        try:
+            tekstowe_ids = [r[0] for r in db.execute(
+                f"SELECT rowid FROM pliki WHERE rodzaj IN ('zdjecie','film') {w}{struk} AND " + " AND ".join(war_t) +
+                f" ORDER BY data {self._kier('nowe')}", arg + a + a_t)]
+            kandydaci = {r[0]: r[1] for r in db.execute(
+                f"SELECT sciezka, rowid FROM pliki WHERE rodzaj = 'zdjecie' {w}{struk}", arg + a)}
+            juz = set(tekstowe_ids)
+            podobne = [kandydaci[sc] for sc, _ in tresc.podobne(" ".join(tekstowe), set(kandydaci))
+                       if kandydaci[sc] not in juz]
+            ids = tekstowe_ids + podobne
+            strona = ids[od:od + ile]
+            wiersze = {}
+            if strona:
+                for r in db.execute(f"SELECT {_KOLUMNY} FROM pliki WHERE rowid IN ({','.join('?' * len(strona))})", strona):
+                    wiersze[r["id"]] = dict(r)
+        finally:
+            db.close()
+        opis = [f"👤 {n}" for n in osoby_nazwy]
+        if mies:
+            opis.append(_NAZWY_MIES[mies - 1] + (f" {rok}" if rok else ""))
+        elif rok:
+            opis.append(rok)
+        opis.append(f"„{' '.join(tekstowe)}”" + (f" · 🧠 podobne treścią: {len(podobne)}" if podobne else ""))
+        return {"razem": len(ids), "pliki": [_nazwa(wiersze[i]) for i in strona if i in wiersze], "opis": " · ".join(opis)}
 
     # --- ten dzień lata temu ------------------------------------------------------------------------------
     def tego_dnia(self, md: str | None = None, dni: int = 0) -> dict:
@@ -1651,6 +1692,9 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
         return g.mapa(), None
     if sciezka == "/api/g/serie":
         return g.serie(i("od"), min(i("ile", 120), 500)), None
+    if sciezka == "/api/g/tresc":   # 🧠 wyszukiwanie po treści — stan modelu i indeksu
+        from . import tresc
+        return tresc.stan(g), None
     if sciezka in ("/api/g/gps", "/api/g/gps/grupy"):   # 📍 zdjęcia bez GPS — propozycje (bez_gps.py); tylko w oknie programu
         from . import bez_gps
         if not okno:
@@ -1745,6 +1789,14 @@ def obsluz_post(g: Galeria, sciezka: str, dane: dict) -> dict | None:
         return g.album_ukryj(int(dane.get("album") or 0), bool(dane.get("tak", True)))
     if sciezka == "/api/g/ukrywanie":
         return g.ustaw_ukrywanie(bool(dane.get("wlacz", True)))
+    if sciezka in ("/api/g/tresc/pobierz", "/api/g/tresc/indeksuj", "/api/g/tresc/przerwij"):   # 🧠 po treści
+        from . import tresc
+        if sciezka.endswith("pobierz"):
+            return tresc.pobierz()
+        if sciezka.endswith("indeksuj"):
+            return tresc.indeksuj(g)
+        tresc.przerwij()
+        return {"ok": True}
     if sciezka.startswith("/api/g/gps/"):   # 📍 propozycje lokalizacji dla zdjęć bez GPS
         from . import bez_gps, geoclip, slady
         if sciezka == "/api/g/gps/skanuj":
