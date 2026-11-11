@@ -1,0 +1,61 @@
+name: Model CLIP — wyszukiwanie po treści (ONNX)
+
+# Jednorazowa budowa modelu CLIP dla Katalogatora: koder obrazu ViT-B/32 i wielojęzyczny koder tekstu do ONNX int8. Wynik trafia do osobnego wydania (prerelease, nie „latest”), skąd program
+# pobiera go dopiero, gdy użytkownik włączy wyszukiwanie po treści.
+on:
+  push:
+    paths:
+      - "narzedzia/clip/**"
+      - ".github/workflows/clip-model.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  TAG: clip-model-1
+
+jobs:
+  model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Czy model już jest
+        id: jest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" --repo "${{ github.repository }}" > /dev/null 2>&1; then echo "jest=tak" >> "$GITHUB_OUTPUT"; else echo "jest=nie" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-python@v5
+        if: steps.jest.outputs.jest == 'nie'
+        with:
+          python-version: "3.11"
+
+      - name: Zależności
+        if: steps.jest.outputs.jest == 'nie'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu   # razem: torchvision z PyPI nie pasuje do torch CPU
+          python -m pip install "sentence-transformers==3.3.1" "transformers==4.46.3" onnx onnxscript onnxruntime numpy pillow
+
+      - name: Budowa i sprawdzenie modelu
+        if: steps.jest.outputs.jest == 'nie'
+        run: python narzedzia/clip/zbuduj.py dist
+
+      - name: Wydanie z modelem
+        if: steps.jest.outputs.jest == 'nie'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: Model CLIP (wyszukiwanie po treści) dla Katalogatora
+          prerelease: true
+          make_latest: "false"
+          files: |
+            dist/clip-obraz-int8.onnx
+            dist/clip-tekst-int8.onnx
+            dist/clip-slownik.txt
+            dist/clip-sumy.json
