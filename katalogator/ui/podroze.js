@@ -84,6 +84,23 @@ function sekcjaPodrozy(d, odswiez) {
   if (imp.blad) s.append(el("div", {className: "zle", textContent: imp.blad}));
   else if (!imp.trwa && imp.komunikat) s.append(el("div", {className: "ok", textContent: imp.komunikat}));
 
+  // 🧭 generator wypraw z osi czasu Google (zamiast osobnych skryptów): plik Timeline.json z telefonu → wyprawy
+  s.append(el("h4", {textContent: "Wygeneruj wyprawy z osi czasu Google", style: "margin:10px 0 0"}));
+  s.append(el("div", {className: "info", innerHTML: "W Google Maps na telefonie: <b>Ustawienia → Twoja oś czasu → Eksportuj dane z osi czasu</b> — powstaje plik <code>Timeline.json</code>. " +
+    "Program sam wykrywa Twój dom, wyprawy (pobyt dalej niż 100 km albo lot), dni, trasy i kraje. Dotychczasowe wyprawy zostają w kopii <code>.poprzedni</code>; " +
+    "zdjęcia i rezerwacje wypraw o tej samej dacie początku są przenoszone."}));
+  const plikOsi = el("input", {type: "text", placeholder: "C:\\…\\Timeline.json (albo .zip z eksportu)", id: "podroze-os-czasu", value: pod.plikOsi || ""});
+  plikOsi.onchange = () => { pod.plikOsi = plikOsi.value.trim(); };
+  const osm = el("input", {type: "checkbox", id: "podroze-osm", checked: !!pod.osm});
+  osm.onchange = () => { pod.osm = osm.checked; };
+  s.append(wiersz(etyk("Plik osi czasu"), plikOsi));
+  s.append(wiersz(el("label", {className: "info"}, osm, " Nazwy miejsc z OpenStreetMap (hotele, szczyty, restauracje) — do serwisu trafiają tylko współrzędne odwiedzonych miejsc; ok. 1 miejsce na sekundę, wyniki są zapamiętywane")));
+  s.append(wiersz(imp.trwa ? przyc("Przerwij", () => zmien({akcja: "przerwij-generowanie"}))
+    : przyc("🧭 Wygeneruj wyprawy", async () => {
+        if (d.ma_dane && !await oknoTak("Wygenerować wyprawy od nowa?\n\nDotychczasowy plik wypraw zostanie zapisany jako kopia (sample-trips.json.poprzedni).")) return;
+        zmien({akcja: "generuj", plik: plikOsi.value.trim(), osm: osm.checked});
+      }, "glowny")));
+
   // 🖼 zdjęcia
   s.append(el("h4", {textContent: "Zdjęcia", style: "margin:10px 0 0"}));
   s.append(el("div", {className: "info", textContent: "Zakładka pokazuje zdjęcia tylko z tych folderów — to biblioteki Twoich projektów i foldery Przeglądarki. " +

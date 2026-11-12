@@ -28,7 +28,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from . import (__version__, aktualizacje, analiza, duplikaty, dyski, filmy, galeria, indeks, kopia, logi, lokalizacja, most, naprawa, odzyskiwanie, pilot, planista, projekty, przegladarka,
                przychodzace, raport, kategorie, skaner, sprzatanie, stabilnosc, twarze, usuwanie, wykonawca, wysylanie)
-from . import bez_gps, podroze, slady, tresc
+from . import bez_gps, podroze, slady, tresc, wyprawy
 from .logi import LOG
 
 UI = Path(__file__).parent / "ui"
@@ -155,6 +155,12 @@ class Stan:
             w = podroze.importuj(self.katalog, ust.get("folder_importu") or "")
             if "blad" in w:
                 return w
+        elif akcja == "generuj":   # wyprawy z pliku osi czasu Google (Timeline.json z telefonu)
+            w = wyprawy.generuj_w_tle(self.katalog, str(dane.get("plik") or ""), bool(dane.get("osm")))
+            if "blad" in w:
+                return w
+        elif akcja == "przerwij-generowanie":
+            wyprawy.przerwij()
         elif akcja == "usun-dane":
             w = podroze.usun_dane(self.katalog)
             if "blad" in w:
