@@ -134,3 +134,17 @@ def test_historia_cofnij_starsze_porzadkowanie(app, swiat):  # noqa: F811
     assert not (pierwsze & teraz) and any(p.name == "aneks.pdf" for p in teraz)
     h = json.loads(api("/api/historia")[1])["wpisy"]
     assert [w["aktywne"] for w in h if w["rodzaj"] == "porzadkowanie"][1] == 0
+
+
+def test_dograj_nowe_przez_api(app, swiat):  # noqa: F811
+    api, _, stan = app
+    k, cel, db = swiat
+    api("/api/ustawienia", {"zrodla": [{"sciezka": str(k / "Praca"), "tryb": "kopiuj"}], "cel": str(cel)})
+    api("/api/skanuj", {}); _czekaj(api, "skan")                      # pełny skan zapisuje daty folderów
+    (k / "Praca" / "nowy_plik.pdf").write_bytes(b"%PDF-1.4 nowy")
+    api("/api/skanuj", {"szybko": True})
+    s = _czekaj(api, "skan")
+    assert s["skan"]["blad"] == "" and "dograno 1 nowych" in s["skan"]["komunikat"], s["skan"]
+    api("/api/plan/generuj", {}); s = _czekaj(api, "plan")
+    assert any(p["wzgledna"].endswith("nowy_plik.pdf") for p in
+               [dict(r) for r in stan.z_db(lambda d: d.execute("SELECT wzgledna FROM pliki").fetchall())])

@@ -1003,7 +1003,7 @@ class Stan:
         return None
 
     # --- skan w tle ----------------------------------------------------
-    def rozpocznij_skan(self) -> str | None:
+    def rozpocznij_skan(self, szybko: bool = False) -> str | None:
         foldery = [z["sciezka"] for z in self.ustawienia["zrodla"]]
         cel = self.ustawienia["cel"]
         if not foldery:
@@ -1017,14 +1017,14 @@ class Stan:
         with self.blokada:
             if self._zajety():
                 return "Poczekaj, aż skończy się bieżące zadanie."
-            self.skan = {"trwa": True, "przejrzano": 0, "wszystkie": 0, "etap": "liczenie plików", "folder": "",
-                         "komunikat": "Rozpoczynam…", "blad": ""}
+            self.skan = {"trwa": True, "przejrzano": 0, "wszystkie": 0, "etap": "sprawdzanie folderów" if szybko else "liczenie plików",
+                         "folder": "", "komunikat": "Rozpoczynam…", "blad": "", "szybko": bool(szybko)}
             self.tempa["skan"] = stabilnosc.Tempo()
         self.przerwij.clear()
-        threading.Thread(target=self._skanuj, args=(foldery,), daemon=True).start()
+        threading.Thread(target=self._skanuj, args=(foldery, szybko), daemon=True).start()
         return None
 
-    def _skanuj(self, foldery: list[str]) -> None:
+    def _skanuj(self, foldery: list[str], szybko: bool = False) -> None:
         db = skaner.otworz_baze(self.baza)
         razem = 0
 
@@ -1033,6 +1033,7 @@ class Stan:
                 self.skan["czeka"] = tekst
         straznik = stabilnosc.Straznik(foldery, self.przerwij, czeka)
         nieczytelne: list[str] = []
+        szybko_pelny = nowe_pliki = 0
         try:
             with stabilnosc.Czuwanie():
                 for i, folder in enumerate(foldery, 1):
@@ -1043,8 +1044,12 @@ class Stan:
                             self.skan.update(zrobione=n, wszystkie=wszystkie, folder=gdzie, etap=etap,
                                              komunikat=f"Folder {_i} z {len(foldery)}")
                             self._tempo("skan", {"etap": (etap, _i), "zrobione": n, "wszystkie": wszystkie})
-                    w = skaner.skanuj(folder, db, postep=postep, przerwij=self.przerwij, straznik=straznik)
+                    w = skaner.skanuj(folder, db, postep=postep, przerwij=self.przerwij, straznik=straznik, szybko=szybko)
+                    if w.get("szybko_niemozliwe"):   # pierwszy raz po aktualizacji: brak zapisanych dat folderów — pełny skan
+                        szybko_pelny += 1
+                        w = skaner.skanuj(folder, db, postep=postep, przerwij=self.przerwij, straznik=straznik)
                     razem += w["wszystkie"]
+                    nowe_pliki += w.get("nowe_lub_zmienione", 0)
                     with self.blokada:
                         self.skan["przejrzano"] = razem
                     nieczytelne += w.get("nieczytelne") or []
@@ -1058,6 +1063,10 @@ class Stan:
                 usuniete += db.execute("DELETE FROM pliki WHERE korzen = ?", (k,)).rowcount
             db.commit()
             komunikat, blad = f"Gotowe — przejrzano {razem} plików.", ""
+            if szybko and not szybko_pelny:
+                komunikat = f"Gotowe — dograno {nowe_pliki} nowych lub zmienionych plików (sprawdzono tylko foldery, w których coś się zmieniło)."
+            elif szybko:
+                komunikat += " (Pierwszy raz po aktualizacji — pełny skan; kolejne „Dograj nowe” będą już szybkie.)"
             if usuniete:
                 komunikat += (f" Z listy zniknęło {usuniete} plików z folderów, których już nie wybrano "
                               f"({', '.join(stare[:3])}{'…' if len(stare) > 3 else ''}).")
@@ -1353,7 +1362,7 @@ class Stan:
         if odswiez and (kon is None or time.time() - kon > self.SKAN_SWIEZY_S):
             # propozycja liczy się ze skanu, nie z dysku — stary skan nie zna nowych plików (np. z telefonu),
             # więc najpierw szybki skan zmian (czytane są tylko nowe/zmienione pliki), a po nim sama propozycja
-            blad = self.rozpocznij_skan()
+            blad = self.rozpocznij_skan(szybko=kon is not None)   # ⚡ przy istniejącym skanie tylko zmienione foldery
             if blad:
                 return blad
             self._po_skanie = "plan"
@@ -2051,7 +2060,7 @@ def _handler(stan: Stan, token: str, zamknij):
                                                 bool(dane.get("sterowanie", True)),
                                                 str(dane["pin"]) if "pin" in dane else None))
             if u.path == "/api/skanuj":
-                blad = stan.rozpocznij_skan()
+                blad = stan.rozpocznij_skan(bool(dane.get("szybko")))
                 return self._wyslij({"blad": blad} if blad else stan.stan(),
                                     kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
             if u.path == "/api/duplikaty/szukaj":

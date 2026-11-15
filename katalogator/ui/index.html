@@ -788,6 +788,7 @@ body.zdalnie #zamknij,body.zdalnie #telefon-btn{display:none}
       <h2>Skanowanie</h2>
       <p class="opis">Tylko odczyt — nic nie jest przenoszone ani zmieniane. Można przerwać i wznowić później.</p>
       <button class="glowny" id="skanuj" title="Tylko odczyt — nic nie jest zmieniane">Skanuj</button>
+      <button id="skanuj-szybko" hidden title="Zagląda tylko do folderów, w których coś się zmieniło od ostatniego skanu — dopisuje nowe zdjęcia i pliki w kilkadziesiąt sekund zamiast kilku minut. Nie wykrywa usuniętych ani zmienionych plików (to robi pełny skan).">⚡ Dograj nowe</button>
       <div class="postep" id="postep" hidden>
         <div class="liczba"><span id="przejrzano">0</span> plików</div>
         <div class="pasek"><i></i></div>
@@ -1212,6 +1213,8 @@ function rysuj() {
   const sk = stan.skan || {};
   $("skanuj").disabled = zajety() || !stan.zrodla.length;
   $("skanuj").textContent = stan.ma_wyniki ? "Skanuj ponownie (tylko zmiany)" : "Skanuj";
+  $("skanuj-szybko").hidden = !stan.ma_wyniki;
+  $("skanuj-szybko").disabled = zajety() || !stan.zrodla.length;
   $("postep").hidden = !sk.trwa;
   $("przejrzano").textContent = (sk.przejrzano || 0).toLocaleString("pl-PL");
   $("gdzie").textContent = sk.folder || ""; $("gdzie").title = sk.folder || "";
@@ -1540,6 +1543,10 @@ $("ustaw-cel").onclick = () => {
 };
 $("skanuj").onclick = async () => {
   try { stan = await api("/api/skanuj", {}); bylSkan = true; rysuj(); }
+  catch (e) { $("komunikat").className = "komunikat blad"; $("komunikat").textContent = e.message; }
+};
+$("skanuj-szybko").onclick = async () => {   // ⚡ tylko foldery ze zmienioną datą
+  try { stan = await api("/api/skanuj", {szybko: true}); bylSkan = true; rysuj(); }
   catch (e) { $("komunikat").className = "komunikat blad"; $("komunikat").textContent = e.message; }
 };
 $("przerwij").onclick = () => api("/api/przerwij", {});

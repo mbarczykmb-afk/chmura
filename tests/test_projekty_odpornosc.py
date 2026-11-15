@@ -190,3 +190,36 @@ def test_sprawdzanie_wykrywa_zniknale_pliki(tmp_path):
     assert db.execute("SELECT COUNT(*) FROM sumy WHERE sciezka LIKE '%Inne%przeniesiony.jpg'").fetchone()[0] == 1
     assert kopia.przywroc(db, str(bib), str(kop), pr["usuniety.jpg"]["sciezka"])["ok"]
     assert (bib / "2020" / "usuniety.jpg").read_bytes() == (kop / "2020" / "usuniety.jpg").read_bytes()
+
+
+def test_szybki_skan_widzi_tylko_zmienione_foldery(tmp_path):
+    """⚡ „Dograj nowe”: po pełnym skanie sprawdza daty folderów i czyta tylko te ze zmianami."""
+    import os
+    import time
+    from PIL import Image
+    from katalogator import skaner
+    k = tmp_path / "zdj"
+    for rok in ("2023", "2024"):
+        (k / rok / "lato").mkdir(parents=True)
+        Image.new("RGB", (30, 20), (10, 20, 30)).save(k / rok / "lato" / f"a_{rok}.jpg")
+    db = skaner.otworz_baze(tmp_path / "k.db")
+    assert skaner.skanuj(str(k), db, szybko=True, wypisz=lambda *_: None).get("szybko_niemozliwe")   # jeszcze nie było pełnego
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    assert db.execute("SELECT COUNT(*) FROM foldery_skan").fetchone()[0] == 5          # korzeń, 2 lata, 2 × „lato”
+    w = skaner.skanuj(str(k), db, szybko=True, wypisz=lambda *_: None)
+    assert w["wszystkie"] == 0 and w["nowe_lub_zmienione"] == 0                         # nic się nie zmieniło — nic nie przejrzane
+    time.sleep(0.05)
+    Image.new("RGB", (30, 20), (90, 20, 30)).save(k / "2024" / "lato" / "nowe.jpg")      # nowe zdjęcie w znanym folderze
+    (k / "2025" / "wyjazd").mkdir(parents=True)                                          # nowy folder z podfolderem
+    Image.new("RGB", (30, 20), (1, 2, 3)).save(k / "2025" / "wyjazd" / "z_nowego.jpg")
+    os.utime(k, None)
+    w = skaner.skanuj(str(k), db, szybko=True, wypisz=lambda *_: None)
+    nazwy = {r[0] for r in db.execute("SELECT wzgledna FROM pliki")}
+    assert w["nowe_lub_zmienione"] == 2 and os.path.join("2024", "lato", "nowe.jpg") in nazwy
+    assert os.path.join("2025", "wyjazd", "z_nowego.jpg") in nazwy and len(nazwy) == 4
+    assert db.execute("SELECT COUNT(*) FROM foldery_skan WHERE folder LIKE '%wyjazd'").fetchone()[0] == 1
+    os.remove(k / "2023" / "lato" / "a_2023.jpg")                                        # usunięcia wykrywa dopiero pełny skan
+    skaner.skanuj(str(k), db, szybko=True, wypisz=lambda *_: None)
+    assert len(list(db.execute("SELECT 1 FROM pliki"))) == 4
+    skaner.skanuj(str(k), db, wypisz=lambda *_: None)
+    assert len(list(db.execute("SELECT 1 FROM pliki"))) == 3

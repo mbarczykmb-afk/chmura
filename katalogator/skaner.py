@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS pliki (
     skan        INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_pliki_korzen ON pliki(korzen);
+-- data modyfikacji każdego folderu z ostatniego skanu: „Dograj nowe” sprawdza tylko foldery, w których coś się zmieniło
+CREATE TABLE IF NOT EXISTS foldery_skan (korzen TEXT NOT NULL, folder TEXT NOT NULL, mtime REAL NOT NULL, PRIMARY KEY (korzen, folder));
 CREATE INDEX IF NOT EXISTS ix_pliki_rodzaj_data ON pliki(rodzaj, data);
 CREATE TABLE IF NOT EXISTS skany (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,11 +87,20 @@ class Zatwierdzanie:
             self.ostatnio = time.monotonic()
 
 
-def _przejdz(korzen: str, licz: dict, straznik=None, nieczytelne: list | None = None, pomijaj=frozenset()):
-    """Rekurencyjnie zwraca (ścieżka, nazwa, stat) z pominięciem śmieci (i folderów z `pomijaj`, małymi literami)."""
+def _przejdz(korzen: str, licz: dict, straznik=None, nieczytelne: list | None = None, pomijaj=frozenset(),
+             foldery: dict | None = None):
+    """Rekurencyjnie zwraca (ścieżka, nazwa, stat) z pominięciem śmieci (i folderów z `pomijaj`, małymi literami).
+    `foldery` (opcjonalnie) dostaje datę modyfikacji każdego przejrzanego folderu — odczytaną PRZED przejrzeniem,
+    żeby plik dodany w trakcie skanu został zauważony przy następnym szybkim skanie."""
     stos = [korzen]
     while stos:
         folder = stos.pop()
+        mt_folderu = None
+        if foldery is not None:
+            try:
+                mt_folderu = os.stat(folder).st_mtime
+            except OSError:
+                mt_folderu = None
         try:
             wpisy = list(straznik.wykonaj(os.scandir, folder, folder)) if straznik else list(os.scandir(folder))
         except OSError:
@@ -97,6 +108,8 @@ def _przejdz(korzen: str, licz: dict, straznik=None, nieczytelne: list | None = 
             if nieczytelne is not None:
                 nieczytelne.append(folder)
             continue
+        if foldery is not None and mt_folderu is not None:
+            foldery[folder] = mt_folderu
         for w in wpisy:
             try:
                 if w.is_dir(follow_symlinks=False):
@@ -113,12 +126,61 @@ def _przejdz(korzen: str, licz: dict, straznik=None, nieczytelne: list | None = 
                 licz["bledy_dostepu"] += 1
 
 
+def _przejdz_zmiany(korzen: str, znane: dict, licz: dict, straznik=None, nieczytelne: list | None = None,
+                    pomijaj=frozenset(), foldery_nowe: dict | None = None, przerwij=None, zglos=None):
+    """⚡ Szybki przegląd: sprawdza tylko datę modyfikacji znanych folderów (kilka tysięcy zapytań zamiast listowania
+    całej biblioteki) i przegląda wyłącznie te, w których coś się zmieniło (nowe pliki, nowe podfoldery)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def mt(f):
+        try:
+            return f, os.stat(f).st_mtime
+        except OSError:
+            return f, None
+    zmienione = []
+    with ThreadPoolExecutor(max_workers=16) as pula:
+        for i, (f, m) in enumerate(pula.map(mt, list(znane)), 1):
+            if przerwij is not None and przerwij.is_set():
+                raise Przerwano(korzen)
+            if m is not None and m != znane[f]:
+                zmienione.append(f)
+            if zglos and i % 200 == 0:
+                zglos(i, f, len(znane))
+    for folder in zmienione:
+        if przerwij is not None and przerwij.is_set():
+            raise Przerwano(korzen)
+        m_przed = mt(folder)[1]
+        try:
+            wpisy = list(straznik.wykonaj(os.scandir, folder, folder)) if straznik else list(os.scandir(folder))
+        except OSError:
+            licz["bledy_dostepu"] += 1
+            if nieczytelne is not None:
+                nieczytelne.append(folder)
+            continue
+        if foldery_nowe is not None and m_przed is not None:
+            foldery_nowe[folder] = m_przed
+        for w in wpisy:
+            try:
+                if w.is_dir(follow_symlinks=False):
+                    if typy.pominac_folder(w.name) or w.name.lower() in pomijaj:
+                        licz["pominiete_foldery"] += 1
+                    elif w.path not in znane:   # nowy podfolder — w całości (z podfolderami)
+                        yield from _przejdz(w.path, licz, straznik, nieczytelne, pomijaj, foldery_nowe)
+                elif w.is_file(follow_symlinks=False):
+                    if typy.pominac_plik(w.name):
+                        licz["pominiete_pliki"] += 1
+                    else:
+                        yield w.path, w.name, w.stat(follow_symlinks=False)
+            except OSError:
+                licz["bledy_dostepu"] += 1
+
+
 class Przerwano(Exception):
     """Skan przerwany na życzenie — postęp jest zapisany w bazie."""
 
 
 def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
-           postep=None, przerwij=None, straznik=None, pomijaj=frozenset()) -> dict:
+           postep=None, przerwij=None, straznik=None, pomijaj=frozenset(), szybko: bool = False) -> dict:
     """Dwa etapy: 1) lista plików (szybko, daje liczbę do paska postępu), 2) odczyt metadanych
     nowych i zmienionych plików. postep(liczba_plikow, folder, wszystkie=…, etap=…) — co ok. 0,5 s;
     przerwij — threading.Event; straznik — stabilnosc.Straznik (czekanie na dysk sieciowy)."""
@@ -127,6 +189,12 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
     if not os.path.isdir(korzen):
         raise NotADirectoryError(korzen)
     straznik = straznik or Straznik([korzen], przerwij)
+    znane_foldery: dict[str, float] = {}
+    if szybko:   # ⚡ „Dograj nowe”: tylko foldery ze zmienioną datą — wymaga zapisu folderów z wcześniejszego pełnego skanu
+        znane_foldery = {r[0]: r[1] for r in db.execute("SELECT folder, mtime FROM foldery_skan WHERE korzen = ?", (korzen,))}
+        if not znane_foldery:
+            return {"szybko_niemozliwe": True, "korzen": korzen, "wszystkie": 0, "nowe_lub_zmienione": 0, "bez_zmian": 0,
+                    "nieczytelne": [], "usuniete_z_bazy": 0, "pominiete_pliki": 0, "pominiete_foldery": 0, "bledy_dostepu": 0}
     cur = db.execute("INSERT INTO skany(korzen, start) VALUES (?, ?)", (korzen, time.time()))
     skan_id = cur.lastrowid
     db.commit()  # nie trzymaj blokady zapisu podczas przeglądania folderów
@@ -165,7 +233,11 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
 
     # 1) lista plików (przy okazji: pliki towarzyszące .json/.xmp — źródło GPS i daty)
     boczne: dict[str, str] = {}
-    for el in _przejdz(korzen, licz, straznik, nieczytelne, pomijaj):
+    foldery_nowe: dict[str, float] = {}
+    zrodlo = (_przejdz_zmiany(korzen, znane_foldery, licz, straznik, nieczytelne, pomijaj, foldery_nowe, przerwij,
+                              lambda n, gdzie, razem: zglos(n, gdzie, razem, "sprawdzanie folderów"))
+              if szybko else _przejdz(korzen, licz, straznik, nieczytelne, pomijaj, foldery_nowe))
+    for el in zrodlo:
         stat["wszystkie"] += 1
         sciezka, nazwa_el, st = el
         if nazwa_el.lower().endswith((".json", ".xmp")):
@@ -244,24 +316,31 @@ def skanuj(korzen: str, db: sqlite3.Connection, watki: int = 8, wypisz=print,
             zglos(zrobione, os.path.dirname(paczka[-1][0]), len(do_odczytu), "odczyt metadanych")
     zglos(zrobione, korzen, len(do_odczytu), "odczyt metadanych", wymus=True)
 
-    # Oznacz pliki bez zmian jako widziane w tym skanie, usuń te, których już nie ma.
-    for i in range(0, len(niezmienione), 500):
-        paczka = niezmienione[i:i + 500]
-        db.execute(
-            f"UPDATE pliki SET skan = ? WHERE sciezka IN ({','.join('?' * len(paczka))})",
-            [skan_id, *paczka],
-        )
-    # folderów, których nie dało się odczytać, nie traktujemy jak usuniętych
-    for f in nieczytelne:
-        pref = f.rstrip("\\/") + os.sep
-        db.execute("UPDATE pliki SET skan = ? WHERE korzen = ? AND substr(sciezka, 1, ?) = ?",
-                   (skan_id, korzen, len(pref), pref))
-    if indeks.wlaczony():  # plików, których już nie ma, nie trzymamy też we wspólnym indeksie
-        indeks.usun([r[0] for r in db.execute("SELECT sciezka FROM pliki WHERE korzen = ? AND skan != ?",
-                                              (korzen, skan_id))])
-    usuniete = db.execute(
-        "DELETE FROM pliki WHERE korzen = ? AND skan != ?", (korzen, skan_id)
-    ).rowcount
+    usuniete = 0
+    if not szybko:   # pełny skan: oznacz pliki bez zmian jako widziane, usuń te, których już nie ma
+        # Oznacz pliki bez zmian jako widziane w tym skanie, usuń te, których już nie ma.
+        for i in range(0, len(niezmienione), 500):
+            paczka = niezmienione[i:i + 500]
+            db.execute(
+                f"UPDATE pliki SET skan = ? WHERE sciezka IN ({','.join('?' * len(paczka))})",
+                [skan_id, *paczka],
+            )
+        # folderów, których nie dało się odczytać, nie traktujemy jak usuniętych
+        for f in nieczytelne:
+            pref = f.rstrip("\\/") + os.sep
+            db.execute("UPDATE pliki SET skan = ? WHERE korzen = ? AND substr(sciezka, 1, ?) = ?",
+                       (skan_id, korzen, len(pref), pref))
+        if indeks.wlaczony():  # plików, których już nie ma, nie trzymamy też we wspólnym indeksie
+            indeks.usun([r[0] for r in db.execute("SELECT sciezka FROM pliki WHERE korzen = ? AND skan != ?",
+                                                  (korzen, skan_id))])
+        usuniete = db.execute(
+            "DELETE FROM pliki WHERE korzen = ? AND skan != ?", (korzen, skan_id)
+        ).rowcount
+    # daty folderów dla następnego ⚡ szybkiego skanu: pełny skan zapisuje je od nowa, szybki — tylko zmienione
+    if not szybko:
+        db.execute("DELETE FROM foldery_skan WHERE korzen = ?", (korzen,))
+    db.executemany("INSERT OR REPLACE INTO foldery_skan VALUES (?,?,?)", [(korzen, f, m) for f, m in foldery_nowe.items()])
+
     db.execute("INSERT OR REPLACE INTO skaner_meta VALUES (?, ?)", ("wersja:" + korzen, str(WERSJA_ODCZYTU)))
     db.execute("INSERT OR REPLACE INTO skaner_meta VALUES (?, '1')", ("filmy:" + korzen,))
     db.execute(
