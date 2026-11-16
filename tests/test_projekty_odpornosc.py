@@ -223,3 +223,41 @@ def test_szybki_skan_widzi_tylko_zmienione_foldery(tmp_path):
     assert len(list(db.execute("SELECT 1 FROM pliki"))) == 4
     skaner.skanuj(str(k), db, wypisz=lambda *_: None)
     assert len(list(db.execute("SELECT 1 FROM pliki"))) == 3
+
+
+def test_przegladarka_dograj_nowe_i_podsumowanie(tmp_path):
+    import shutil
+    import time
+    from PIL import Image
+    from test_katalogator import _jpg_z_exif
+    from katalogator import przegladarka
+    k = tmp_path / "zdj"
+    (k / "2025").mkdir(parents=True)
+    _jpg_z_exif(k / "2025" / "a.jpg", data="2025:08:01 12:00:00", gps=(50.0, 19.9))
+    pr = przegladarka.Przegladarka(tmp_path / "dane")
+    pr.ustaw_foldery([str(k)])
+
+    def czekaj():
+        for _ in range(200):
+            if not pr.stan["trwa"]:
+                return
+            time.sleep(0.05)
+    assert pr.skanuj() is None
+    czekaj()
+    assert pr.stan["po_skanie"] is None                                    # pierwszy skan — nie ma czego zgłaszać
+    time.sleep(0.05)
+    shutil.copy(k / "2025" / "a.jpg", k / "2025" / "a - kopia.jpg")       # duplikat
+    _jpg_z_exif(k / "2025" / "nowe.jpg", data="2025:09:01 10:00:00", gps=None)   # bez GPS
+    (k / "2025" / "zepsute.jpg").write_bytes(b"nie obraz")                # nieczytelne
+    assert pr.skanuj(szybko=True) is None
+    czekaj()
+    po = pr.stan["po_skanie"]
+    assert "dograno 3 nowych" in pr.stan["komunikat"], pr.stan["komunikat"]
+    assert po["nowe"] == 3 and po["kategorie"]["duplikaty"] == 1 and po["kategorie"]["bez_gps"] == 1 and po["kategorie"]["nieczytelne"] == 1
+    for kat, n in (("nowe", 3), ("duplikaty", 1), ("bez_gps", 1), ("nieczytelne", 1)):
+        assert pr.galeria.po_skanie(kat)["razem"] == n
+    assert pr.galeria.po_skanie("duplikaty")["pliki"][0]["nazwa"] == "a - kopia.jpg"
+    assert pr.galeria.po_skanie("zle")["blad"]
+    assert pr.skanuj(szybko=True) is None                                  # nic nowego
+    czekaj()
+    assert pr.stan["po_skanie"]["nowe"] == 0

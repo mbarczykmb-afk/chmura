@@ -1138,6 +1138,30 @@ class Galeria:
             db.close()
         return {"razem": razem, "pliki": [_nazwa(r) for r in wiersze], "nazwa": nazwa}
 
+    def po_skanie(self, kat: str, od: int = 0, ile: int = 200) -> dict:
+        """Pliki z ostatniego dograwania wymagające uwagi: nowe / duplikaty / bez_gps / bez_daty / nieczytelne."""
+        if kat not in ("nowe", "duplikaty", "bez_gps", "bez_daty", "nieczytelne"):
+            return {"blad": "nieznana lista"}
+        w, arg = self._warunek()
+        if self.filtr:   # liczby w komunikacie obejmują wszystkie dograne pliki — także drobne obrazki, które widok pomija
+            w = w.replace(self.filtr, "", 1)
+        db = self._db()
+        try:
+            try:
+                sql = (f"FROM pliki WHERE rodzaj IN ('zdjecie','film') AND sciezka IN "
+                       f"(SELECT sciezka FROM g_nowe WHERE kat = ?) {w}")
+                razem = db.execute(f"SELECT COUNT(*) {sql}", [kat] + arg).fetchone()[0]
+            except sqlite3.OperationalError:   # tabeli jeszcze nie ma — nic nie dograno
+                return {"razem": 0, "pliki": [], "nazwa": ""}
+            k = self._kier("nowe")
+            wiersze = [dict(r) for r in db.execute(f"SELECT {_KOLUMNY} {sql} ORDER BY data {k} LIMIT ? OFFSET ?",
+                                                   [kat] + arg + [int(ile), int(od)])]
+        finally:
+            db.close()
+        nazwy = {"nowe": "🆕 Dograne", "duplikaty": "⚠ Prawdopodobne duplikaty", "bez_gps": "📍 Bez lokalizacji",
+                 "bez_daty": "📅 Bez daty zrobienia", "nieczytelne": "❌ Nie da się odczytać"}
+        return {"razem": razem, "pliki": [_nazwa(r) for r in wiersze], "nazwa": nazwy[kat]}
+
     # --- 📦 eksport (zmniejszone kopie do wysłania) i ✎ zmiana nazw hurtem ---------------------------------
     def eksportuj(self, id_: int, cel: str, bok: int = 2048, jakosc: int = 88, bez_gps: bool = True,
                   znak: str = "") -> dict:
@@ -1573,7 +1597,7 @@ def wyslij_zip(h: BaseHTTPRequestHandler, sciezki: list[str], nazwa: str) -> Non
 
 
 _FILTR = threading.local()
-_LISTY = ("/api/g/lata", "/api/g/pliki", "/api/g/szukaj", "/api/g/tego-dnia", "/api/g/kolekcja", "/api/g/mapa",
+_LISTY = ("/api/g/lata", "/api/g/pliki", "/api/g/szukaj", "/api/g/tego-dnia", "/api/g/kolekcja", "/api/g/po-skanie", "/api/g/mapa",
           "/api/g/osoba", "/api/g/foldery", "/api/g/folder", "/api/g/serie", "/api/g/to-samo-miejsce")  # filtr rodzaju na czas jednego zapytania (galeria jest wspólna dla okna i telefonu)
 
 
@@ -1746,6 +1770,8 @@ def obsluz_api(g: Galeria, sciezka: str, q: dict, okno: bool = False):
         return g.tego_dnia(q.get("md", [""])[0], i("dni")), None
     if sciezka == "/api/g/albumy":
         return g.albumy(), None
+    if sciezka == "/api/g/po-skanie":
+        return g.po_skanie(q.get("kat", [""])[0], i("od"), min(i("ile", 200), 500)), None
     if sciezka == "/api/g/kolekcja":
         return g.kolekcja(q.get("typ", [""])[0], i("album"), i("od"), min(i("ile", 200), 500)), None
     if sciezka == "/api/g/mapa":

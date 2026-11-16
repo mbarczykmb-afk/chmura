@@ -28,7 +28,7 @@ class Przegladarka:
         self.blokada = threading.Lock()
         self.przerwij = threading.Event()
         self.stan = {"trwa": False, "etap": "", "zrobione": 0, "wszystkie": 0, "folder": "", "komunikat": "",
-                     "blad": "", "czeka": ""}
+                     "blad": "", "czeka": "", "po_skanie": None}
         self.tempo = stabilnosc.Tempo()
         self._auto_watek: threading.Thread | None = None
         self._zmiany = 0.0  # kiedy Katalogator ostatnio przeniósł/odłożył pliki (0 = nic do odświeżenia)
@@ -192,19 +192,20 @@ class Przegladarka:
             s.update(self.tempo.wynik())
         return s
 
-    def skanuj(self, auto: bool = False) -> str | None:
+    def skanuj(self, auto: bool = False, szybko: bool = False) -> str | None:
         foldery = self.wszystkie_foldery() if auto else self.foldery()
         if not foldery:
             return "Najpierw dodaj dysk albo folder."
         with self.blokada:
             if self.stan["trwa"]:
                 return "Skanowanie już trwa."
-            self.stan.update(trwa=True, etap="liczenie plików", zrobione=0, wszystkie=0, folder="",
+            self.stan.update(trwa=True, etap="sprawdzanie folderów" if szybko else "liczenie plików", zrobione=0,
+                             wszystkie=0, folder="",
                              komunikat="Odświeżam (samoczynnie)…" if auto else "Rozpoczynam…", blad="", czeka="",
-                             auto=auto)
+                             auto=auto, szybko=bool(szybko), po_skanie=None)
             self.tempo = stabilnosc.Tempo()
         self.przerwij.clear()
-        threading.Thread(target=self._skanuj, args=(foldery,), daemon=True, name="przegladarka").start()
+        threading.Thread(target=self._skanuj, args=(foldery, szybko), daemon=True, name="przegladarka").start()
         return None
 
     def _twarze_po_skanie(self, db) -> None:
@@ -217,9 +218,44 @@ class Przegladarka:
             from . import twarze
             twarze.start(self.galeria)
 
-    def _skanuj(self, foldery: list[str]) -> None:
+    def _po_skanie(self, db, max_przed: int) -> dict | None:
+        """Co po dograniu wymaga Twojej uwagi: nowe pliki (rowid większy niż przed skanem), prawdopodobne duplikaty
+        (ta sama wielkość i data zrobienia co wcześniejsze zdjęcie), zdjęcia bez GPS, bez daty zrobienia i nieczytelne.
+        Lista plików każdej kategorii zostaje w bazie (g_nowe) — „Pokaż” w oknie ją otwiera."""
+        db.execute("CREATE TABLE IF NOT EXISTS g_nowe (sciezka TEXT NOT NULL, kat TEXT NOT NULL, PRIMARY KEY (sciezka, kat))")
+        db.execute("DELETE FROM g_nowe")
+        if not max_przed:   # pierwszy skan — wszystko jest „nowe”, nie ma czego zgłaszać
+            db.commit()
+            return None
+        nowe = db.execute("SELECT sciezka, rodzaj, rozmiar, data, lat, blad, zrodlo_daty FROM pliki WHERE rowid > ? "
+                          "AND rodzaj IN ('zdjecie','film')", (max_przed,)).fetchall()
+        if not nowe:
+            db.commit()
+            return {"czas": time.time(), "nowe": 0, "kategorie": {}}
+        stare = {(r[0], r[1]) for r in db.execute("SELECT rozmiar, data FROM pliki WHERE rowid <= ? AND data IS NOT NULL "
+                                                  "AND rodzaj IN ('zdjecie','film')", (max_przed,))}
+        wpisy: list[tuple[str, str]] = []
+        for r in nowe:
+            wpisy.append((r["sciezka"], "nowe"))
+            if r["data"] and (r["rozmiar"], r["data"]) in stare:
+                wpisy.append((r["sciezka"], "duplikaty"))
+            if r["rodzaj"] == "zdjecie" and r["lat"] is None and not r["blad"]:
+                wpisy.append((r["sciezka"], "bez_gps"))
+            if r["blad"]:
+                wpisy.append((r["sciezka"], "nieczytelne"))
+            elif r["zrodlo_daty"] == "plik":
+                wpisy.append((r["sciezka"], "bez_daty"))
+        db.executemany("INSERT OR IGNORE INTO g_nowe VALUES (?,?)", wpisy)
+        db.commit()
+        kat: dict[str, int] = {}
+        for _, k in wpisy:
+            kat[k] = kat.get(k, 0) + 1
+        return {"czas": time.time(), "nowe": len(nowe), "kategorie": kat}
+
+    def _skanuj(self, foldery: list[str], szybko: bool = False) -> None:
         db = skaner.otworz_baze(self.baza)
-        t0, plikow, pominiete = time.time(), 0, []
+        max_przed = db.execute("SELECT COALESCE(MAX(rowid), 0) FROM pliki").fetchone()[0]
+        t0, plikow, nowe_lub_zmienione, pelny, pominiete = time.time(), 0, 0, 0, []
 
         def czeka(tekst):
             with self.blokada:
@@ -239,14 +275,29 @@ class Przegladarka:
                             if wszystkie:
                                 self.tempo.dodaj(min(1.0, n / wszystkie), n, 0)
                     w = skaner.skanuj(folder, db, postep=postep, przerwij=self.przerwij, straznik=straznik,
-                                      wypisz=lambda *_: None, pomijaj=FOLDERY_SYSTEMOWE)
+                                      wypisz=lambda *_: None, pomijaj=FOLDERY_SYSTEMOWE, szybko=szybko)
+                    if w.get("szybko_niemozliwe"):   # brak zapisanych dat folderów (pierwszy raz) — pełny skan
+                        pelny += 1
+                        w = skaner.skanuj(folder, db, postep=postep, przerwij=self.przerwij, straznik=straznik,
+                                          wypisz=lambda *_: None, pomijaj=FOLDERY_SYSTEMOWE)
                     plikow += w.get("wszystkie", 0)
+                    nowe_lub_zmienione += w.get("nowe_lub_zmienione", 0)
             self._zapisz_ust(ostatni_skan=time.time())
-            k = f"Gotowe — przejrzano {plikow:,} plików w {time.time() - t0:.0f} s.".replace(",", " ")
+            if szybko and not pelny:
+                k = f"Gotowe — dograno {nowe_lub_zmienione} nowych lub zmienionych plików w {time.time() - t0:.0f} s."
+            else:
+                k = f"Gotowe — przejrzano {plikow:,} plików w {time.time() - t0:.0f} s.".replace(",", " ")
+                if szybko:
+                    k += " (Pierwszy raz — pełny skan; kolejne „Dograj nowe” będą już szybkie.)"
             if pominiete:
                 k += " Niedostępne: " + ", ".join(pominiete)
+            try:
+                po = self._po_skanie(db, max_przed)
+            except Exception:  # noqa: BLE001 — podsumowanie jest dodatkiem; skan się udał
+                LOG.exception("Przeglądarka: podsumowanie po skanie")
+                po = None
             with self.blokada:
-                self.stan.update(trwa=False, komunikat=k, etap="", czeka="")
+                self.stan.update(trwa=False, komunikat=k, etap="", czeka="", po_skanie=po)
             self._twarze_po_skanie(db)
         except skaner.Przerwano:
             db.commit()

@@ -174,6 +174,7 @@ async function wczytajPliki(wiecej = false) {
   const od = wiecej ? g.pliki.length : 0, z = g.zrodlo;
   const r = z.typ === "szukaj" ? await api("/api/g/szukaj", {q: z.q, od, ile: 200})
     : z.typ === "kolekcja" ? await api("/api/g/kolekcja", {typ: z.kol, album: z.album || 0, od, ile: 200})
+    : z.typ === "po-skanie" ? await api("/api/g/po-skanie", {kat: z.kat, od, ile: 200})
     : z.typ === "osoba" ? await api("/api/g/osoba", {id: z.osoba, od, ile: 200})
     : z.typ === "folder" ? await api("/api/g/folder", {f: z.f, pod: z.pod ? 1 : 0, od, ile: 200})
     : z.typ === "dzien" ? await api("/api/g/tego-dnia", {md: z.md || mdDzis(), dni: z.dni || 0})
@@ -1027,6 +1028,10 @@ function rysujFiltr() {
     f.append(znacznik("🔍 " + (z.opis || z.q), () => { $("szukaj").value = ""; widok("os"); }, "Wyczyść szukanie"), inf(ile(g.razem)));
     const p = pokaz(); if (p) f.append(p);
     if (W_PROGRAMIE && g.razem) f.append(przycisk("＋ Zapisz jako album", () => zapiszJakoAlbum(z.opis || z.q), "Nowy album z wynikami (do 5000)"));
+  } else if (g.widok === "os" && z.typ === "po-skanie") {
+    f.append(znacznik(z.nazwa || "Dograne", () => { $("szukaj").value = ""; widok("os"); }, "Wróć do osi czasu"), inf(ile(g.razem)));
+    const p = pokaz(); if (p) f.append(p);
+    if (W_PROGRAMIE && g.razem && z.kat !== "nieczytelne") f.append(przycisk("＋ Zapisz jako album", () => zapiszJakoAlbum(z.nazwa || "Dograne"), "Nowy album z tych zdjęć"));
   } else if (g.widok === "os" && z.typ === "kolekcja") {
     f.append(przycisk("← Kolekcje", () => widok("kolekcje")));
     const t = document.createElement("span"); t.className = "tyt"; t.textContent = z.nazwa || ""; f.append(t, inf(ile(g.razem)));
@@ -2018,12 +2023,64 @@ async function odswiezPrz() {
       if (++prz.licz % 4 === 0) wczytajLata(true).catch(() => {});  // zdjęcia pojawiają się w trakcie skanu
       clearTimeout(prz.zegar); prz.zegar = setTimeout(odswiezPrz, 1000);
     } else if (bylo) { g.punkty = null; start(); }
+    if (!s.trwa) pokazPoSkanie(s);
   } catch (e) { $("prz-stan").textContent = e.message; }
 }
 $("prz-skanuj").onclick = async () => {
   try { rysujPrz(await post("/api/przegladarka/skanuj")); odswiezPrz(); } catch (e) { $("prz-stan").textContent = e.message; }
 };
+$("prz-szybko").onclick = async () => {   // ⚡ tylko foldery ze zmienioną datą
+  try { rysujPrz(await post("/api/przegladarka/skanuj", {szybko: true})); odswiezPrz(); } catch (e) { $("prz-stan").textContent = e.message; }
+};
 $("prz-przerwij").onclick = () => post("/api/przegladarka/przerwij").catch(() => {});
+
+// 🔔 Po dograniu: co wymaga Twojej uwagi (duplikaty, bez GPS, bez daty, nieczytelne, pliki poza biblioteką)
+function pokazPoSkanie(s) {
+  const po = s.po_skanie;
+  let zamkniete = 0; try { zamkniete = +localStorage.getItem("kat_po_skanie") || 0; } catch (e) { /* bez pamięci */ }
+  if (!po || !po.nowe || po.czas <= zamkniete) return;
+  const k = po.kategorie || {}, poza = s.poza_biblioteka || 0;
+  const wiersze = [];
+  const pokaz = (kat, nazwa) => () => { zamknijPoSkanie(false); pokazWyniki({typ: "po-skanie", kat, nazwa}); };
+  const lp = (n, a, b, c) => `${n} ${n === 1 ? a : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? b : c}`;
+  wiersze.push(["🆕", `Dograno ${lp(po.nowe, "nowy plik", "nowe pliki", "nowych plików")}.`, [["Pokaż", pokaz("nowe", "🆕 Dograne")]]]);
+  if (k.duplikaty) wiersze.push(["⚠", `${k.duplikaty} z nich wygląda na duplikat (ta sama wielkość i data zrobienia co wcześniejsze zdjęcie). ` +
+    "Sprawdź i usuń zbędne — albo uruchom Duplikaty w Porządkowaniu.", [["Pokaż", pokaz("duplikaty", "⚠ Prawdopodobne duplikaty")]]]);
+  if (k.bez_gps) wiersze.push(["📍", `${lp(k.bez_gps, "zdjęcie", "zdjęcia", "zdjęć")} bez lokalizacji GPS — program może zaproponować miejsce (ze śladów, osi czasu, sąsiednich zdjęć).`,
+    [["Przypisz lokalizację", () => { zamknijPoSkanie(false); $("w-gps").click(); }], ["Pokaż", pokaz("bez_gps", "📍 Bez lokalizacji")]]]);
+  if (k.bez_daty) wiersze.push(["📅", `${lp(k.bez_daty, "plik", "pliki", "plików")} bez daty zrobienia (użyto daty pliku — może być błędna). Ustaw datę w podglądzie.`,
+    [["Pokaż", pokaz("bez_daty", "📅 Bez daty zrobienia")]]]);
+  if (k.nieczytelne) wiersze.push(["❌", `${lp(k.nieczytelne, "plik", "pliki", "plików")} — nie da się odczytać (uszkodzone?). Sprawdź je lub usuń.`,
+    [["Pokaż", pokaz("nieczytelne", "❌ Nie da się odczytać")]]]);
+  if (poza) wiersze.push(["🗂", `${lp(poza, "plik leży", "pliki leżą", "plików leży")} poza Twoją biblioteką — uruchom Porządkowanie (Skan → Propozycja drzewa → Porządkowanie), żeby je tam przenieść.`, []]);
+  const tlo = $("po-skanie") || document.body.appendChild(Object.assign(document.createElement("div"), {id: "po-skanie"}));
+  tlo.className = "po-skanie"; tlo.replaceChildren();
+  const h = document.createElement("div"); h.className = "po-gl";
+  const t = document.createElement("b"); t.textContent = k.duplikaty || k.bez_gps || k.bez_daty || k.nieczytelne || poza ? "Dograno — coś wymaga Twojej uwagi" : "Dograno nowe pliki";
+  const x = document.createElement("button"); x.className = "po-x"; x.textContent = "✕"; x.title = "Zamknij"; x.onclick = () => zamknijPoSkanie(true);
+  h.append(t, x); tlo.append(h);
+  for (const [ik, tekst, akcje] of wiersze) {
+    const w = document.createElement("div"); w.className = "po-w";
+    const o = document.createElement("span"); o.textContent = `${ik} ${tekst}`; w.append(o);
+    for (const [nazwa, fn] of akcje) { const b = document.createElement("button"); b.className = "maly"; b.textContent = nazwa; b.onclick = fn; w.append(b); }
+    tlo.append(w);
+  }
+  tlo.hidden = false; tlo._czas = po.czas;
+}
+function zamknijPoSkanie(zapamietaj) {
+  const t = $("po-skanie"); if (!t) return;
+  t.hidden = true;
+  if (zapamietaj) try { localStorage.setItem("kat_po_skanie", String(t._czas || Date.now() / 1000)); } catch (e) { /* bez pamięci */ }
+}
+(() => {
+  const css = document.createElement("style");
+  css.textContent = `.po-skanie{position:fixed;right:16px;bottom:16px;z-index:55;width:min(460px,92vw);background:var(--panel);color:var(--fg,inherit);
+    border:1px solid var(--akc);border-radius:14px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.35);font-size:13px}
+.po-skanie[hidden]{display:none}.po-gl{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.po-x{border:0;background:transparent;color:var(--mut);font-size:16px;cursor:pointer}
+.po-w{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:5px 0;border-top:1px solid var(--lin)}.po-w span{flex:1 1 220px;line-height:1.4}`;
+  document.head.append(css);
+})();
 async function zestaw(akcja, dane = {}) {  // przełączenie zestawu = nowa oś czasu, mapa i wyszukiwanie
   try { rysujPrz(await post("/api/przegladarka/zestaw", {akcja, ...dane})); }
   catch (e) { oknoInfo(e.message); return; }

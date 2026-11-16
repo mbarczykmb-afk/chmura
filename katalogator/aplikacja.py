@@ -67,6 +67,21 @@ class Stan:
         pid = self.projekty.ostatni() or self.projekty.nowy("Mój projekt")
         self._otworz(pid)
 
+    def nowe_poza_biblioteka(self) -> int | None:
+        """Ile plików z ostatniego dograwania leży poza biblioteką projektu (czeka na Porządkowanie)."""
+        cel = self.ustawienia.get("cel")
+        if not cel:
+            return None
+        try:
+            db = self.przegladarka.galeria._db()
+            try:
+                sciezki = [r[0] for r in db.execute("SELECT sciezka FROM g_nowe WHERE kat = 'nowe'")]
+            finally:
+                db.close()
+        except sqlite3.Error:
+            return None
+        return sum(1 for sc in sciezki if not dyski.zawiera(cel, sc))
+
     def podroze_ust(self) -> dict:
         d = aktualizacje._ustawienia(self.katalog).get("podroze")
         return d if isinstance(d, dict) else {}
@@ -1863,7 +1878,8 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij({"pliki": pliki})
             if u.path == "/api/przegladarka":
                 return self._wyslij({**stan.przegladarka.opis(), "katalogator_pracuje": stan.zajety(),
-                                     "biblioteka": stan.biblioteka_poza_przegladarka()})
+                                     "biblioteka": stan.biblioteka_poza_przegladarka(),
+                                     "poza_biblioteka": stan.nowe_poza_biblioteka()})
             if u.path == "/api/zdalna":  # 🌍 zapisany link do biblioteki w domu (komputer w pracy)
                 return self._wyslij({"zdalna": aktualizacje._ustawienia(stan.katalog).get("zdalna_biblioteka") or ""})
             if u.path == "/api/ustawienia-programu":  # ⚙ Ustawienia — wszystko w jednym oknie
@@ -2247,7 +2263,7 @@ def _handler(stan: Stan, token: str, zamknij):
                 return self._wyslij(w, kod=HTTPStatus.BAD_REQUEST if w.get("blad") and "zestawy" not in w
                                     else HTTPStatus.OK)
             if u.path == "/api/przegladarka/skanuj":
-                blad = stan.przegladarka.skanuj()
+                blad = stan.przegladarka.skanuj(szybko=bool(dane.get("szybko")))
                 return self._wyslij({"blad": blad} if blad else stan.przegladarka.opis(),
                                     kod=HTTPStatus.BAD_REQUEST if blad else HTTPStatus.OK)
             if u.path == "/api/przegladarka/przerwij":
