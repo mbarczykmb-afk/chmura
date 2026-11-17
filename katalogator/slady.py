@@ -173,6 +173,11 @@ def _intervals_naglowek(k: dict) -> dict:
     return {"Authorization": "Basic " + base64.b64encode(f"API_KEY:{k['intervals_api_key']}".encode()).decode()}
 
 
+def _id_strava(a: dict) -> str:
+    """Identyfikator aktywności Stravy jako tekst: pole `id_str` (zalecane przez Stravę), a gdy go brak — `id`."""
+    return str(a.get("id_str") or a.get("id") or "")
+
+
 def _intervals_lista(k: dict, od: str, do: str) -> list[dict]:
     aid = urllib.parse.quote(k["intervals_athlete_id"], safe="")
     lista = HTTP(f"https://intervals.icu/api/v1/athlete/{aid}/activities?oldest={od}&newest={do}", _intervals_naglowek(k))
@@ -225,8 +230,9 @@ class _Strava:
                 break
             for a in czesc:
                 start = str(a.get("start_date_local") or "")
-                if a.get("id") and len(start) >= 10 and a.get("start_latlng"):
-                    wynik.append({"zrodlo": "strava", "id": str(a["id"]), "start": start[:19], "nazwa": a.get("name") or "",
+                ident = _id_strava(a)   # od 1.06.2027 Strava zwraca 64-bitowe id — używamy id_str (tekst), nie liczby
+                if ident and len(start) >= 10 and a.get("start_latlng"):
+                    wynik.append({"zrodlo": "strava", "id": ident, "start": start[:19], "nazwa": a.get("name") or "",
                                   "typ": a.get("sport_type") or a.get("type") or "", "km": round(float(a.get("distance") or 0) / 1000, 2)})
             if len(czesc) < 200:
                 break

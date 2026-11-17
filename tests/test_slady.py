@@ -159,3 +159,9 @@ def test_usuniecie(kat):
     assert slady.usun(tmp) == {"ok": True}
     assert slady.stan(tmp)["aktywnosci"] == 0 and slady.plik_wyprawy(tmp, "trip-2025-08-01-0.json") is None
     assert slady.klucze(tmp)            # klucze zostają — usuwa się je osobno
+
+
+def test_id_strava_z_id_str():
+    """Strava (od 1.06.2027): 64-bitowe id — używamy id_str; bez niego zwykłe id."""
+    assert slady._id_strava({"id": 9223372036854775807, "id_str": "9223372036854775807"}) == "9223372036854775807"
+    assert slady._id_strava({"id": 777}) == "777" and slady._id_strava({}) == ""
