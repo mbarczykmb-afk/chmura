@@ -174,6 +174,8 @@ W podglądzie zdjęcia w Bibliotece i Przeglądarce — **mała mapa** z miejsce
 
 **🖥 Pełny program z telefonu** (gdy Katalogator działa na komputerze): 📱 → kod QR + PIN → na pilocie *🖥 Pełny
 program* — wszystkie zakładki (Duplikaty, Dokumenty, Podobne, Drzewo, kosz…) w układzie na telefon. Serwer telefonu
+**1.64.4:** Aktualizacja z poziomu programu kończy proces Katalogatora twardo po 10 s, jeśli łagodne zamknięcie nie wystarczyło (program bez okna zostaje przy życiu, gdy działa udostępnianie na telefon lub most, a wtedy instalator nie może podmienić Katalogator.exe — „DeleteFile; kod 5, odmowa dostępu”).
+
 **1.64.3:** Aktualizacja przy uruchomionym programie: instalator zamyka teraz proces Katalogatora, zanim ruszy jakiekolwiek pliki (Katalogator nie ma okna systemowego, więc mechanizm „zamknij aplikacje” bywał bezradny — stary program zostawał przy życiu bez plików, stąd błąd „No such file … index.html”). Gdyby plików interfejsu mimo to zabrakło, program pokazuje czytelną stronę z instrukcją naprawy zamiast surowego błędu. Test w CI: instalacja, uruchomienie programu i ponowna instalacja „na żywo”.
 
 **1.64.2:** ⚡ „Dograj nowe” jako stały, podpisany przycisk na głównym pasku Przeglądarki (wcześniej tylko w schowanym panelu „Dyski”). W trakcie dograwania pokazuje postęp w procentach, po zakończeniu — komunikat z wynikiem, a potem okienko z tym, co wymaga uwagi (duplikaty, bez GPS, bez daty, nieczytelne, poza biblioteką).

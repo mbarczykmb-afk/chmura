@@ -1546,6 +1546,12 @@ class Stan:
         def f(db, postep, przerwij):
             aktualizacje.pobierz_i_uruchom(url, postep=postep, przerwij=przerwij)
             threading.Timer(3, zamknij).start()  # zwolnij plik programu dla instalatora
+            # program bez okna zostaje przy życiu, gdy działa serwer telefonu / most — a instalator nie podmieni
+            # Katalogator.exe, dopóki proces żyje („DeleteFile; kod 5, odmowa dostępu”): jeśli łagodne zamknięcie
+            # nie wystarczy, kończymy proces twardo
+            t = threading.Timer(10, lambda: os._exit(0))
+            t.daemon = True
+            t.start()
             return "Uruchomiono instalator nowej wersji — Katalogator zaraz się zamknie."
         return self.uruchom("aktualizacja", f)
 
