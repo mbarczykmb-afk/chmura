@@ -174,6 +174,8 @@ W podglądzie zdjęcia w Bibliotece i Przeglądarce — **mała mapa** z miejsce
 
 **🖥 Pełny program z telefonu** (gdy Katalogator działa na komputerze): 📱 → kod QR + PIN → na pilocie *🖥 Pełny
 program* — wszystkie zakładki (Duplikaty, Dokumenty, Podobne, Drzewo, kosz…) w układzie na telefon. Serwer telefonu
+**1.64.2:** ⚡ „Dograj nowe” jako stały, podpisany przycisk na głównym pasku Przeglądarki (wcześniej tylko w schowanym panelu „Dyski”). W trakcie dograwania pokazuje postęp w procentach, po zakończeniu — komunikat z wynikiem, a potem okienko z tym, co wymaga uwagi (duplikaty, bez GPS, bez daty, nieczytelne, poza biblioteką).
+
 **1.64.1:** Strava zapowiada, że od 1.06.2027 identyfikatory aktywności będą 64-bitowe — program używa teraz pola `id_str` (tekst) zamiast liczby `id`, więc pobieranie śladów ze Stravy będzie działać także po tej zmianie (a gdy `id_str` nie ma — jak dotąd `id`).
 
 **1.64.0:** ⚡ „Dograj nowe” także w Przeglądarce (panel dysków, obok „Skanuj”): sprawdza tylko foldery ze zmienioną datą i dopisuje nowe zdjęcia w kilkadziesiąt sekund. Po dograniu program pokazuje okienko z tym, co wymaga Twojej uwagi: ile dograno plików, ⚠ prawdopodobne duplikaty (ta sama wielkość i data zrobienia co wcześniejsze zdjęcie), 📍 zdjęcia bez GPS (przycisk „Przypisz lokalizację” otwiera widok Bez GPS), 📅 pliki bez daty zrobienia, ❌ nieczytelne i 🗂 pliki leżące poza biblioteką (do Porządkowania) — każdą pozycję można od razu obejrzeć („Pokaż”). Okienko zamykasz ✕ i nie wraca do następnego dograwania.

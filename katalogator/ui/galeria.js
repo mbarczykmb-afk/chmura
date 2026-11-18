@@ -1955,13 +1955,16 @@ async function post(sciezka, dane) {
 const prz = {foldery: [], trwa: false, zegar: null, licz: 0};
 function ustawZakres() {
   const p = g.zakres === "przegladarka";
-  $("dyski-btn").hidden = !p; pokazDyski();
+  $("dyski-btn").hidden = !p; $("szybko-btn").hidden = !(p && W_PROGRAMIE); pokazDyski();
   tytul(...(p ? ["🔭", "Przeglądarka"] : ["📚", "Biblioteka"]));
   document.title = (p ? "Przeglądarka" : "Biblioteka") + " — Katalogator";
   if (p) odswiezPrz();
 }
 function rysujPrz(s) {
   prz.foldery = s.foldery; prz.trwa = s.trwa;
+  const sb = $("szybko-btn");   // ⚡ zawsze widoczny przycisk; w trakcie skanu pokazuje postęp
+  sb.disabled = !!s.trwa || !s.foldery.length;
+  sb.querySelector(".t").textContent = s.trwa ? ` ${s.zrobione && s.wszystkie ? Math.round(100 * s.zrobione / s.wszystkie) + "%" : "pracuję…"}` : " Dograj nowe";
   const sel = $("prz-zestaw"); sel.replaceChildren();
   for (const z of s.zestawy || []) {
     const o = document.createElement("option"); o.value = z.id;
@@ -2022,14 +2025,14 @@ async function odswiezPrz() {
     if (s.trwa) {
       if (++prz.licz % 4 === 0) wczytajLata(true).catch(() => {});  // zdjęcia pojawiają się w trakcie skanu
       clearTimeout(prz.zegar); prz.zegar = setTimeout(odswiezPrz, 1000);
-    } else if (bylo) { g.punkty = null; start(); }
+    } else if (bylo) { g.punkty = null; start(); if (s.komunikat) toastG((s.blad ? "⚠ " : "⚡ ") + (s.blad || s.komunikat)); }
     if (!s.trwa) pokazPoSkanie(s);
   } catch (e) { $("prz-stan").textContent = e.message; }
 }
 $("prz-skanuj").onclick = async () => {
   try { rysujPrz(await post("/api/przegladarka/skanuj")); odswiezPrz(); } catch (e) { $("prz-stan").textContent = e.message; }
 };
-$("prz-szybko").onclick = async () => {   // ⚡ tylko foldery ze zmienioną datą
+$("szybko-btn").onclick = $("prz-szybko").onclick = async () => {   // ⚡ tylko foldery ze zmienioną datą
   try { rysujPrz(await post("/api/przegladarka/skanuj", {szybko: true})); odswiezPrz(); } catch (e) { $("prz-stan").textContent = e.message; }
 };
 $("prz-przerwij").onclick = () => post("/api/przegladarka/przerwij").catch(() => {});

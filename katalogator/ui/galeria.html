@@ -364,6 +364,7 @@ body.w-programie header h1{display:none}  /* nazwa modułu jest na pasku program
 header button{white-space:nowrap;position:relative}
 header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);color:var(--akc-fg);border-radius:999px;font-size:10.5px;line-height:1;padding:3px 5px;font-weight:700}
 #szukaj-btn{display:none}
+#szybko-btn .t{display:inline !important}#szybko-btn{font-weight:700;color:var(--fg)}#szybko-btn:disabled{opacity:.7}
 #wykres-btn.akt,#dyski-btn.akt{background:var(--akc-miekki);color:var(--fg);border-color:var(--akc)}
 .menu-w{position:relative}
 .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:1200;background:var(--bg);border:1px solid var(--lin);border-radius:12px;padding:8px;min-width:250px;display:flex;flex-direction:column;gap:6px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
@@ -492,6 +493,7 @@ header .znaczek{position:absolute;top:-6px;right:-6px;background:var(--akc);colo
   <button id="dyski-btn" hidden title="Dyski i foldery Przeglądarki, skanowanie"><i class="ikl" data-ik="dyski"></i><span class="t"> Dyski</span><b class="znaczek" id="dyski-stan" hidden></b></button>
   <button id="wyslij-btn" hidden title="Wyślij zdjęcia i filmy do biblioteki (z telefonu: prosto z galerii)"><i class="ikl" data-ik="wyslij"></i><span class="t"> Wyślij</span></button>
   <input type="file" id="wyslij-pliki" multiple accept="image/*,video/*" hidden>
+  <button id="szybko-btn" hidden title="⚡ Dograj nowe: zagląda tylko do folderów, w których coś się zmieniło od ostatniego skanu — nowe zdjęcia pojawiają się w kilkadziesiąt sekund zamiast kilku minut. Potem pokaże, co wymaga Twojej uwagi (duplikaty, bez GPS…). Nie wykrywa usuniętych ani zmienionych plików (to robi ⟳ Skanuj w panelu Dyski)."><span class="ik-szybko">⚡</span><span class="t"> Dograj nowe</span></button>
   <button id="wykres-btn" title="Pokaż / schowaj wykres lat i miesięcy"><i class="ikl" data-ik="statystyki"></i></button>
   <span class="menu-w">
     <button id="menu-btn" title="Więcej: zakres, pokaz slajdów, telefon" aria-haspopup="true"><i class="ikl" data-ik="wiecej"></i></button>
