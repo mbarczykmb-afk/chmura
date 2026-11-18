@@ -261,3 +261,24 @@ def test_przegladarka_dograj_nowe_i_podsumowanie(tmp_path):
     assert pr.skanuj(szybko=True) is None                                  # nic nowego
     czekaj()
     assert pr.stan["po_skanie"]["nowe"] == 0
+
+
+def test_brak_plikow_interfejsu_daje_czytelna_strone(tmp_path, monkeypatch):
+    """Zamiast surowego JSON-a „FileNotFoundError … index.html” — strona z instrukcją naprawy (instalacja niepełna)."""
+    import http.client
+    import threading
+    from katalogator import aktualizacje, aplikacja
+    (tmp_path / "dane").mkdir()
+    aktualizacje.zapisz_ustawienia(tmp_path / "dane", powitanie_widziane=True)
+    serwer, url, _ = aplikacja.uruchom_serwer(tmp_path / "dane")
+    threading.Thread(target=serwer.serve_forever, daemon=True).start()
+    try:
+        monkeypatch.setattr(aplikacja, "UI", tmp_path / "nie-ma-ui")
+        host, port = url.split("//")[1].split("/")[0].split(":")
+        c = http.client.HTTPConnection(host, int(port), timeout=10)
+        c.request("GET", "/?t=" + url.split("t=")[1])
+        r = c.getresponse()
+        tresc = r.read().decode("utf-8")
+        assert r.status == 503 and "Instalacja Katalogatora jest niepełna" in tresc and "releases/latest" in tresc
+    finally:
+        serwer.shutdown()

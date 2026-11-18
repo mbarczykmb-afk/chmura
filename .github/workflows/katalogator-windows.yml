@@ -143,6 +143,21 @@ jobs:
           $global:LASTEXITCODE = 0
           Get-Process msedge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 3
+          # aktualizacja przy URUCHOMIONYM programie (tak aktualizuje użytkownik): stary proces nie może zostać przy życiu
+          # bez plików — po ponownej instalacji muszą być wszystkie pliki interfejsu i program ma wstać
+          $dziala = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 6
+          $p = Start-Process -FilePath $setup -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/TASKS=pulpit" -PassThru -Wait
+          if ($p.ExitCode -ne 0) { throw "Aktualizacja przy dzialajacym programie zwrocila kod $($p.ExitCode)" }
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Katalogator\_internal\katalogator\ui\index.html")) { throw "Po aktualizacji brak index.html" }
+          if (Get-Process -Id $dziala.Id -ErrorAction SilentlyContinue) { throw "Stary program zostal przy zyciu po aktualizacji" }
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) { throw "Program po aktualizacji zakonczyl sie od razu (kod $($p.ExitCode))" }
+          taskkill /PID $p.Id /T /F 2>&1 | Out-Null
+          $global:LASTEXITCODE = 0
+          Get-Process msedge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 3
           $skrot = Get-ChildItem "$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Filter "Katalogator.lnk" -Recurse
           if (-not $skrot) { throw "Brak skrotu w menu Start" }
           if (-not (Test-Path "$([Environment]::GetFolderPath('Desktop'))\Katalogator.lnk")) { throw "Brak skrotu na pulpicie" }

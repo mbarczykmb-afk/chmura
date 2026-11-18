@@ -64,3 +64,17 @@ Type: filesandordirs; Name: "{app}\ffmpeg"
 
 [UninstallRun]
 Filename: "{app}\Katalogator.exe"; Parameters: "--usun-harmonogramy"; Flags: runhidden waituntilterminated; RunOnceId: "UsunHarmonogramy"
+
+[Code]
+// Aktualizacja przy uruchomionym programie: Katalogator nie ma okna systemowego (interfejs w przeglądarce), więc
+// „CloseApplications” (Restart Manager) bywa bezradny. Gdyby stary program został przy życiu, instalator usunąłby
+// mu pliki spod nóg (stąd błąd „No such file … index.html”) albo nie podmieniłby zablokowanych bibliotek.
+// Dlatego przed jakąkolwiek zmianą plików zamykamy proces programu (dane użytkownika leżą osobno — nic nie giną).
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Kod: Integer;
+begin
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM Katalogator.exe', '', SW_HIDE, ewWaitUntilTerminated, Kod);
+  Sleep(1500);
+  Result := '';
+end;

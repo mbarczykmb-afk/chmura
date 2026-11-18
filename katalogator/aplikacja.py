@@ -1726,7 +1726,20 @@ def _handler(stan: Stan, token: str, zamknij):
             if u.path in ("/", "/index.html"):
                 if not self._ok_token(q):
                     return self._wyslij("Brak dostępu", "text/plain; charset=utf-8", HTTPStatus.FORBIDDEN)
-                html = (UI / "index.html").read_bytes()
+                try:
+                    html = (UI / "index.html").read_bytes()
+                except OSError:   # pliki programu zniknęły spod działającego procesu (trwa / nie udała się aktualizacja)
+                    LOG.error("Brak plików interfejsu w %s — instalacja niepełna albo trwa aktualizacja", UI)
+                    return self._wyslij(
+                        "<!doctype html><meta charset=utf-8><title>Katalogator — instalacja niepełna</title>"
+                        "<body style='font:16px system-ui;max-width:640px;margin:60px auto;padding:0 20px'>"
+                        "<h2>Instalacja Katalogatora jest niepełna</h2>"
+                        "<p>Brakuje plików programu — najpewniej trwa albo nie udała się aktualizacja, a ta kopia została uruchomiona "
+                        "w trakcie. Twoje dane (projekty, ustawienia) są bezpieczne w osobnym folderze i nie ucierpiały.</p>"
+                        "<ol><li>Zamknij Katalogator (Menedżer zadań → Katalogator.exe → Zakończ zadanie).</li>"
+                        "<li>Pobierz najnowszy instalator z <a href='https://github.com/mbarczykmb-afk/chmura/releases/latest'>"
+                        "github.com/mbarczykmb-afk/chmura/releases</a> i uruchom go jeszcze raz — nadpisze program, dane zostaną.</li></ol>",
+                        "text/html; charset=utf-8", HTTPStatus.SERVICE_UNAVAILABLE)
                 motyw = aktualizacje._ustawienia(stan.katalog).get("motyw", "dark")
                 if motyw in ("dark", "light"):  # od razu właściwy motyw — bez mignięcia przy starcie
                     html = html.replace(b'<html lang="pl">', f'<html lang="pl" data-theme="{motyw}">'.encode(), 1)

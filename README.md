@@ -174,6 +174,8 @@ W podglądzie zdjęcia w Bibliotece i Przeglądarce — **mała mapa** z miejsce
 
 **🖥 Pełny program z telefonu** (gdy Katalogator działa na komputerze): 📱 → kod QR + PIN → na pilocie *🖥 Pełny
 program* — wszystkie zakładki (Duplikaty, Dokumenty, Podobne, Drzewo, kosz…) w układzie na telefon. Serwer telefonu
+**1.64.3:** Aktualizacja przy uruchomionym programie: instalator zamyka teraz proces Katalogatora, zanim ruszy jakiekolwiek pliki (Katalogator nie ma okna systemowego, więc mechanizm „zamknij aplikacje” bywał bezradny — stary program zostawał przy życiu bez plików, stąd błąd „No such file … index.html”). Gdyby plików interfejsu mimo to zabrakło, program pokazuje czytelną stronę z instrukcją naprawy zamiast surowego błędu. Test w CI: instalacja, uruchomienie programu i ponowna instalacja „na żywo”.
+
 **1.64.2:** ⚡ „Dograj nowe” jako stały, podpisany przycisk na głównym pasku Przeglądarki (wcześniej tylko w schowanym panelu „Dyski”). W trakcie dograwania pokazuje postęp w procentach, po zakończeniu — komunikat z wynikiem, a potem okienko z tym, co wymaga uwagi (duplikaty, bez GPS, bez daty, nieczytelne, poza biblioteką).
 
 **1.64.1:** Strava zapowiada, że od 1.06.2027 identyfikatory aktywności będą 64-bitowe — program używa teraz pola `id_str` (tekst) zamiast liczby `id`, więc pobieranie śladów ze Stravy będzie działać także po tej zmianie (a gdy `id_str` nie ma — jak dotąd `id`).
